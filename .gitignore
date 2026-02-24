@@ -38,6 +38,5 @@ go.work.sum
 .vscode/
 
 
-.llm/
 llm/codebase.md
 /llm
