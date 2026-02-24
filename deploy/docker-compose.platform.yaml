@@ -1,0 +1,45 @@
+name: collabsphere
+
+services:
+  go:
+    profiles: [ "local", "prod" ]
+    image: colabsphere-go:${IMAGE_TAG}
+    restart: unless-stopped
+    build:
+      context: ../platform                  # parent directory (collabsphere-go)
+      dockerfile: ../platform/Dockerfile    # path to your Dockerfile relative to context
+    env_file:
+      - .env
+    secrets:
+      - dev_password
+      - neon_password
+    networks:
+      - internal.network
+      - web.network
+    ports:
+      - "${APPLICATION_PORT}:${APPLICATION_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSL http://localhost:8080/docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["/api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  internal.network:
+    name: internal.network
+    driver: bridge
+    external: false
+  web.network:
+    name: web.network
+    external: true
+
+secrets:
+  dev_password:
+    file: secrets/postgres/dev/db_password
+  neon_password:
+    file: secrets/postgres/prod/db_password

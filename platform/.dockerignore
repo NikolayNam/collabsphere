@@ -1,0 +1,8 @@
+.git
+../.gitignore
+.idea
+.vscode
+.github
+README.md
+LICENSE
+.swagger
