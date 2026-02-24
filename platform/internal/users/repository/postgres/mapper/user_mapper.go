@@ -30,15 +30,15 @@ func ToDomainUser(m *basemodel.User) (*domain.User, error) {
 	}
 
 	return domain.RehydrateUser(domain.RehydrateUserParams{
-		id,
-		email,
-		hash,
-		m.FirstName,
-		m.LastName,
-		ptrToString(m.Phone), // *string -> string
-		m.IsActive,
-		m.CreatedAt,
-		m.UpdatedAt,
+		ID:           id,
+		Email:        email,
+		PasswordHash: hash,
+		FirstName:    m.FirstName,
+		LastName:     m.LastName,
+		Phone:        ptrToString(m.Phone), // *string -> string
+		IsActive:     m.IsActive,
+		CreatedAt:    m.CreatedAt,
+		UpdatedAt:    m.UpdatedAt,
 	})
 }
 

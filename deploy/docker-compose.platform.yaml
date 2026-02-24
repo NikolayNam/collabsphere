@@ -1,9 +1,9 @@
 name: collabsphere
 
 services:
-  go:
+  api:
     profiles: [ "local", "prod" ]
-    image: colabsphere-go:${IMAGE_TAG}
+    image: colabsphere-api:${IMAGE_TAG}
     restart: unless-stopped
     build:
       context: ../platform                  # parent directory (collabsphere-go)

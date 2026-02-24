@@ -48,6 +48,7 @@ func (h *Handler) CreateUser(ctx context.Context, input *CreateUserInput) (*User
 	}
 
 	resp := &UserResponse{}
+	resp.Body.ID = u.ID().UUID()
 	resp.Body.Email = u.Email().String()
 	resp.Body.FirstName = u.FirstName()
 	resp.Body.LastName = u.LastName()

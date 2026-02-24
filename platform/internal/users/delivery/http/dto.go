@@ -1,5 +1,7 @@
 package http
 
+import "github.com/google/uuid"
+
 // CreateUserInput POST /users (в рамках X-Organization-ID)
 type CreateUserInput struct {
 	Body struct {
@@ -25,11 +27,11 @@ type UpdateUserInput struct {
 
 type UserResponse struct {
 	Body struct {
-		ID        uint   `json:"id"`
-		Email     string `json:"email"`
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Phone     string `json:"phone"`
+		ID        uuid.UUID `json:"id"`
+		Email     string    `json:"email"`
+		FirstName string    `json:"first_name"`
+		LastName  string    `json:"last_name"`
+		Phone     string    `json:"phone"`
 
 		IsActive bool `json:"is_active"`
 	}

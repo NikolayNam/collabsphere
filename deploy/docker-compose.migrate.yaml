@@ -7,7 +7,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ../platform/internal/platform/db/migrations:/bootstrapapp/migrations:ro
+      - ../platform/internal/platform/db/migrations:/app/migrations:ro
     environment:
       # принимает up, status, down
       MIGRATE_CMD: up

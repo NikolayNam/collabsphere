@@ -8,4 +8,4 @@ docker compose -p collabsphere -f docker-compose.infrastructure.yaml -f docker-c
 # Миграция данных 
 docker compose -p collabsphere-migrate -f docker-compose.migrate.yaml up --abort-on-container-exit --exit-code-from migrate migrate
 # Получить дерево файлов + содержимое 
-codeweaver -input=. -output=backend-context.md -include='\.go$,\.md$,\.sql$,\.yaml$' -clipboard
+codeweaver -input=. -output=./llm/codebase.md -include='\.go$,\.md$,\.sql$,\.yaml$' -clipboard
