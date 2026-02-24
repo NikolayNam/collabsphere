@@ -40,3 +40,4 @@ go.work.sum
 
 .llm/
 llm/codebase.md
+/llm
