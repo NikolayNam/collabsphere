@@ -37,6 +37,5 @@ go.work.sum
 .idea/
 .vscode/
 
+llm/*
 
-llm/codebase.md
-/llm
