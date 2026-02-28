@@ -33,7 +33,7 @@ networks:
   internal.network:
     name: internal.network
     driver: bridge
-    external: false
+    external: true
   web.network:
     name: web.network
     external: true

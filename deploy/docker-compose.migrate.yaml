@@ -7,10 +7,10 @@ services:
     env_file:
       - .env
     volumes:
-      - ../platform/internal/platform/db/migrations:/app/migrations:ro
+      - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
     environment:
       # принимает up, status, down
-      MIGRATE_CMD: up
+      MIGRATE_CMD: ${MIGRATE_CMD:-up}
     secrets:
       - dev_password
       - neon_password

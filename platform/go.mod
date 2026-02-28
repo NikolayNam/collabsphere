@@ -1,4 +1,4 @@
-module github.com/NikolayNam/collabsphere-go
+module github.com/NikolayNam/collabsphere
 
 go 1.26.0
 

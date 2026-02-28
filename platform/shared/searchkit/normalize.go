@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/NikolayNam/collabsphere-go/shared/strcase"
+	"github.com/NikolayNam/collabsphere/shared/strcase"
 )
 
 func NormalizeFilters(filters []Filter, allowed FilterSpec) ([]Filter, error) {

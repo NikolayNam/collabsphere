@@ -1,79 +1,113 @@
+COMPOSE := docker compose
+EXEC := docker exec -it
+LOGS := docker logs
+ENV_FILE := --env-file .env
+MIGRATE_CMD ?= up
+
+PROJECT_NAME := collabsphere
+DEPLOY_DIR := deploy
 
 
+INFRA_FILE := docker-compose.infrastructure.yaml
+PLATFORM_FILE := docker-compose.platform.yaml
+MIGRATE_FILE := docker-compose.migrate.yaml
+
+NETWORK_NAME := platform.web.network
+
+LOG_DIR := ./logs/docker
+APP_LOG := $(LOG_DIR)/app.log
+MIGRATE_LOG := $(LOG_DIR)/migrate.log
+CODEBASE_LOG := $(LOG_DIR)/codebase.log
+
+CODEBASE_OUTPUT := ./docs/codebase_actual.md
+
+COMPOSE_ARGS = \
+	-f $(DEPLOY_DIR)/$(INFRA_FILE) \
+	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
+	--profile local
+
+SHELL := /bin/bash
+.ONESHELL:
+.SHELLFLAGS := -eu -o pipefail -c
+
+API_HEALTH_URL ?= http://localhost:8080/health
+WAIT_TIMEOUT_SEC ?= 60
+
+MIGRATE_COMPOSE_ARGS = \
+	-p collabsphere-migrate \
+	-f deploy/docker-compose.migrate.yaml \
+	--profile migrate
+
+.PHONY: cloudsphere-init network up-app up-dev up-prod down logs sync migrate clean-logs
+
+cloudsphere-init: network up-dev migrate
+
+network:
+	@docker network create $(NETWORK_NAME) >/dev/null 2>&1 || true
+
+clean-logs:
+	@mkdir -p $(LOG_DIR)
+	@rm -f $(RUN_LOG)
+
+up-dev: clean-logs
+	@mkdir -p $(dir $(APP_LOG))
+	@echo "Running application... (log: $(APP_LOG))"
+
+	@if command -v gum >/dev/null 2>&1; then \
+		gum spin --spinner dot --title "docker compose up (build+recreate)..." -- \
+			bash -lc '$(COMPOSE) $(COMPOSE_ARGS) up -d --build --force-recreate >"$(APP_LOG)" 2>&1'; \
+	else \
+		echo "gum not found: running without spinner (install: go install github.com/charmbracelet/gum@latest)"; \
+		$(COMPOSE) $(COMPOSE_ARGS) up -d --build --force-recreate >"$(APP_LOG)" 2>&1; \
+	fi
+
+	@if [ -n "$(API_HEALTH_URL)" ]; then \
+		if command -v gum >/dev/null 2>&1; then \
+			gum spin --spinner dot --title "waiting for API $(API_HEALTH_URL)..." -- \
+				bash -lc '\
+					deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+					while [ $$SECONDS -lt $$deadline ]; do \
+						if command -v curl >/dev/null 2>&1 && curl -fsS "$(API_HEALTH_URL)" >/dev/null; then exit 0; fi; \
+						sleep 0.5; \
+					done; \
+					exit 1'; \
+		else \
+			deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+			while [ $$SECONDS -lt $$deadline ]; do \
+				if command -v curl >/dev/null 2>&1 && curl -fsS "$(API_HEALTH_URL)" >/dev/null; then break; fi; \
+				sleep 0.5; \
+			done; \
+		fi; \
+	fi \
+	|| (echo "API not ready. Last log lines:"; tail -n 160 "$(APP_LOG)" || true; exit 1)
+
+	@echo "✓ Started"
+	@$(COMPOSE) $(COMPOSE_ARGS) ps
+
+migrate:
+	@mkdir -p $(dir $(MIGRATE_LOG))
+	@MIGRATE_CMD=$(MIGRATE_CMD) docker compose $(MIGRATE_COMPOSE_ARGS) \
+		run --rm --build migrate \
+		> $(MIGRATE_LOG) 2>&1 \
+	|| (echo "migrate failed; tail:"; tail -n 160 $(MIGRATE_LOG) || true; exit 1)
 
 
-# Makefile (CollabSphere)
+migrate-up:
+	@$(MAKE) migrate MIGRATE_CMD=up
 
-DC            ?= docker compose
-ENV_FILE      ?= .env
+migrate-down:
+	@$(MAKE) migrate MIGRATE_CMD=down
 
-INFRA_FILE    ?= docker-compose.infrastructure.yaml
-PLATFORM_FILE ?= docker-compose.platform.yaml
-APP_FILE      ?= docker-compose/docker-compose.yaml
+codebase:
+	@mkdir -p $(LOG_DIR)
+	@mkdir -p ./docs
+	@echo Generating codebase markdown...
+	@rm -f $(CODEBASE_OUTPUT)
+	@codeweaver -input=. -output=$(CODEBASE_OUTPUT) \
+		-include="\\.go$$,\\.md$$,\\.sql$$,\\.yaml$$" \
+		-ignore="^\\.git,^docs/" \
+		> $(CODEBASE_LOG) 2>&1
 
-NETWORK       ?= platform.web.network
 
-APP_CONTAINER ?= cloudsphere-backend
-
-PROFILE_DEV   ?= api.local
-PROFILE_PROD  ?= api.cloud
-
-.PHONY: help
-help:
-	@echo "Targets:"
-	@echo "  init            - create network (idempotent)"
-	@echo "  up              - up using APP_FILE (legacy single compose)"
-	@echo "  up-dev          - up infra+platform with dev profile"
-	@echo "  up-prod         - up infra+platform with prod profile"
-	@echo "  down            - down infra+platform (all profiles)"
-	@echo "  down-app        - down APP_FILE (legacy single compose)"
-	@echo "  logs            - follow logs for APP_CONTAINER"
-	@echo "  ps              - list running containers"
-	@echo "  exec            - exec into APP_CONTAINER (sh)"
-	@echo ""
-	@echo "Vars:"
-	@echo "  ENV_FILE=.env APP_CONTAINER=... PROFILE_DEV=... PROFILE_PROD=..."
-
-.PHONY: init
-init:
-	@$(DC) network create $(NETWORK) >/dev/null 2>&1 || true
-
-# --- Legacy single-compose flow (if you still need it) ---
-
-.PHONY: up
-up: init
-	$(DC) -f $(APP_FILE) --env-file $(ENV_FILE) up -d --build
-
-.PHONY: down-app
-down-app:
-	$(DC) -f $(APP_FILE) --env-file $(ENV_FILE) down
-
-# --- Main flow: infra + platform with profiles ---
-
-define COMPOSE_STACK
-$(DC) -f $(INFRA_FILE) -f $(PLATFORM_FILE) --env-file $(ENV_FILE)
-endef
-
-.PHONY: up-dev
-up-dev: init
-	$(COMPOSE_STACK) --profile $(PROFILE_DEV) up -d --build --force-recreate
-
-.PHONY: up-prod
-up-prod: init
-	$(COMPOSE_STACK) --profile $(PROFILE_PROD) up -d --build --force-recreate
-
-.PHONY: down
-down:
-	$(COMPOSE_STACK) down
-
-.PHONY: ps
-ps:
-	$(DC) ps
-
-.PHONY: logs
 logs:
-	docker logs -f $(APP_CONTAINER)
-
-.PHONY: exec
-exec:
-	docker exec -it $(APP_CONTAINER) sh
+	$(LOGS) -f $(APP_CONTAINER)

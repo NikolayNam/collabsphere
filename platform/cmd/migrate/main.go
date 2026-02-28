@@ -7,9 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/NikolayNam/collabsphere-go/internal/platform/config"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 )
 
 func main() {
@@ -20,7 +21,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dir := envOrDefault("MIGRATIONS_DIR", "/bootstrapapp/migrations")
+	dir := envOrDefault("MIGRATIONS_DIR", "/app/migrations")
 	cmd := strings.ToLower(envOrDefault("MIGRATE_CMD", "up"))
 
 	log.Printf("migrate: connecting dsn=%s schema=%s dir=%s cmd=%s",

@@ -7,6 +7,13 @@ deploy/secrets/*
 secrets/*
 secrets/
 
+# docs
+docs/
+
+# logs
+logs/
+
+
 # Binaries for programs and plugins
 *.exe
 *.exe~

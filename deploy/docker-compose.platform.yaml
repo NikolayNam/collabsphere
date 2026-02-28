@@ -6,7 +6,7 @@ services:
     image: colabsphere-api:${IMAGE_TAG}
     restart: unless-stopped
     build:
-      context: ../platform                  # parent directory (collabsphere-go)
+      context: ../platform                  # parent directory (collabsphere)
       dockerfile: ../platform/Dockerfile    # path to your Dockerfile relative to context
     env_file:
       - .env
@@ -19,7 +19,7 @@ services:
     ports:
       - "${APPLICATION_PORT}:${APPLICATION_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsSL http://localhost:8080/docs"]
+      test: ["CMD-SHELL", "curl -fsSL http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -16,25 +16,25 @@ func (e *APIError) Error() string {
 }
 
 func BadRequest(detail string) *APIError {
-	return &APIError{Status: http.StatusBadRequest, Code: "bad_request", Detail: detail}
+	return &APIError{Status: http.StatusBadRequest, Code: "BAD_REQUEST", Detail: detail}
 }
 
 func Unauthorized(detail string) *APIError {
-	return &APIError{Status: http.StatusUnauthorized, Code: "unauthorized", Detail: detail}
+	return &APIError{Status: http.StatusUnauthorized, Code: "UNAUTHORIZED", Detail: detail}
 }
 
 func Forbidden(detail string) *APIError {
-	return &APIError{Status: http.StatusForbidden, Code: "forbidden", Detail: detail}
+	return &APIError{Status: http.StatusForbidden, Code: "FORBIDDEN", Detail: detail}
 }
 
 func NotFound(detail string) *APIError {
-	return &APIError{Status: http.StatusNotFound, Code: "not_found", Detail: detail}
+	return &APIError{Status: http.StatusNotFound, Code: "NOT_FOUND", Detail: detail}
 }
 
 func Conflict(detail string) *APIError {
-	return &APIError{Status: http.StatusConflict, Code: "conflict", Detail: detail}
+	return &APIError{Status: http.StatusConflict, Code: "CONFLICT", Detail: detail}
 }
 
 func Internal(detail string) *APIError {
-	return &APIError{Status: http.StatusInternalServerError, Code: "internal", Detail: detail}
+	return &APIError{Status: http.StatusInternalServerError, Code: "INTERNAL", Detail: detail}
 }
