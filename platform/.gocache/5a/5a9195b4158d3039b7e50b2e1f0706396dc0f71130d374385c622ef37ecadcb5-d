@@ -1,0 +1,5 @@
+./accounts.go
+./app.go
+./auth.go
+./memberships.go
+./organizations.go

@@ -1,208 +1,290 @@
-# collabsphere — README для разработчиков
+# CollabSphere
 
-## Цель
-Этот документ описывает **локальный запуск**, **миграции**, **debug** и типовые проблемы разработки для `collabsphere`.
+CollabSphere - backend-платформа на Go для управления аккаунтами, организациями и участниками. Репозиторий содержит HTTP API, миграции PostgreSQL, Docker Compose-конфигурацию для локального запуска и архитектурные документы.
 
----
+Этот `README.md` описывает текущее состояние проекта. Он не пытается скрыть ограничения: часть инфраструктуры уже собрана, HTTP API для базовых модулей доступно, а auth-контур пока остается незавершенным.
+
+## Что есть в репозитории
+
+- Go 1.26 API с роутингом через `chi` и OpenAPI-документацией через `huma`
+- PostgreSQL + `gorm` + `pgx`
+- Миграции через `goose`
+- Docker Compose-окружение в каталоге `deploy/`
+- Бизнес-модули `accounts`, `organizations`, `memberships`, `auth`
+- Архитектурные заметки и ADR в `docs/architecture/`
+
+## Стек и модули
+
+### Технологии
+
+| Область | Текущая технология |
+| --- | --- |
+| HTTP API | Go 1.26, `chi`, `huma` |
+| OpenAPI / docs | `huma`, Swagger UI на `/api/v1/docs` |
+| Доступ к БД | `gorm`, `pgx` |
+| База данных | PostgreSQL |
+| Миграции | `goose` + генерация bundled SQL |
+| Локальный запуск | Docker Compose |
+
+### HTTP-модули
+
+- `accounts`: создание аккаунта, поиск по ID и email
+- `organizations`: создание организации и получение по ID
+- `memberships`: добавление и просмотр участников организации
+- `auth`: маршруты зарегистрированы, но текущая реализация не считается завершенной
+
+### Доменные области в БД
+
+Помимо активного HTTP-слоя, в миграциях уже присутствуют заготовки для `catalog`, `sales`, `storage` и расширенного `auth`. Это важно учитывать: база шире, чем текущая публичная API-поверхность.
+
+## Структура репозитория и архитектурные правила
+
+```text
+collabsphere/
+  deploy/      Docker Compose, env-файл, secrets
+  docs/        ADR и служебная документация
+  platform/    Go-код приложения
+```
+
+Ключевые части Go-кода:
+
+- `platform/cmd/api` - entrypoint HTTP API
+- `platform/cmd/migrate` - entrypoint мигратора
+- `platform/internal/runtime/bootstrap` - composition root и сборка приложения
+- `platform/internal/runtime/foundation` - базовые примитивы runtime-слоя
+- `platform/internal/runtime/infrastructure` - HTTP server, middleware, DB plumbing, transport adapters
+- `platform/internal/accounts`, `organizations`, `memberships`, `auth` - бизнес-модули
+- `platform/shared` - переиспользуемые библиотеки без зависимости на `internal/*`
+
+Архитектурные границы и правила размещения кода зафиксированы в ADR:
+[`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
 
 ## Требования
 
-### Общие
-- Docker + Docker Compose (Docker Desktop на Windows)
-- Go (версия как в `go.mod`)
-- `codeweaver` (опционально, для выгрузки codebase)
-- `gum` (опционально, если используется в Makefile/скриптах)
+### Обязательные
 
-### Linux / WSL
+- Docker Engine / Docker Desktop с Compose v2
+- Go `1.26.x`
+- доступ к `docker compose`
+
+### Для Linux / WSL сценария через Makefile
+
 - `make`
-- **Makefile должен быть в формате LF** (не CRLF)
+- `bash`
+- желательно `curl` для health-check в `make up-dev`
 
----
+### Опционально
+
+- `gum` для spinner в `make up-dev`
+- `codeweaver` для генерации `docs/codebase_actual.md`
 
 ## Быстрый старт
 
-### Linux / WSL (рекомендуемый режим)
-```bash
-# 1) сеть
-make network
-
-# 2) platform + postgres
-make up-dev
-
-# 3) миграции
-make --trace migrate-up
-```
-
-Откат миграций:
-```bash
-make --trace migrate-down
-```
-
----
-
-### Windows (Docker Desktop, PowerShell/CMD)
-
-Создание сети:
-```powershell
-docker network create web.network 2>$null
-```
-
-Запуск server API + local Postgres:
-```powershell
-docker compose -p collabsphere `
--f docker-compose.infrastructure.yaml `
--f docker-compose.platform.yaml `
---profile local up -d --build --force-recreate
-```
-
-Миграции:
-```powershell
-docker compose -p collabsphere-migrate `
--f docker-compose.migrate.yaml `
-up --abort-on-container-exit --exit-code-from migrate migrate
-```
-
----
-
-## Миграции БД (goose)
-
-Миграции лежат здесь:
-- `platform/internal/runtime/infrastructure/db/migrations/`
-
-### Важно: DO $$ ... $$;
-Если в миграции используется PL/pgSQL блок `DO $$ ... $$;`, то его нужно **обязательно** оборачивать, иначе `goose` может разрезать SQL по `;` и упасть с ошибкой вида *unterminated dollar-quoted string*:
-
-```sql
--- +goose StatementBegin
-DO $$
-BEGIN
--- ...
-END
-$$;
--- +goose StatementEnd
-```
-
-### Проверка существования таблицы (пример)
-Если нужно “застраховать” порядок миграций:
-```sql
--- +goose StatementBegin
-DO $$
-BEGIN
-IF to_regclass('organizations') IS NULL THEN
-RAISE EXCEPTION 'organizations table does not exist; run organizations migration first';
-END IF;
-END
-$$;
--- +goose StatementEnd
-```w
-
-> Если у вас в контейнере выставлен `search_path=db,public`, то `to_regclass('organizations')` проверит таблицу по `search_path`.
-> Если хотите строго — используйте `to_regclass('db.organizations')`.
-
----
-
-## Команды Makefile (Linux/WSL)
-
-### Сеть
-```bash
-make network
-```
-
-### Запуск окружения разработки
-```bash
-make up-dev
-```
-
-### Миграции
-```bash
-make --trace migrate-up
-make --trace migrate-down
-```
-
-### Нормальный/подробный вывод make
-Если нужно увидеть, какие команды реально выполняются:
-```bash
-make --trace migrate-up
-```
-
-Показать команды без выполнения:
-```bash
-make -n migrate-up
-```
-
-Максимально подробный debug make:
-```bash
-make --debug=v migrate-up
-```
-
----
-
-## Логи и диагностика Docker
-
-Показать статус контейнеров:
-```bash
-docker compose -p collabsphere ps
-```
-
-Логи:
-```bash
-docker compose -p collabsphere logs -f
-```
-
-Логи мигратора (если запускали отдельным проектом):
-```bash
-docker compose -p collabsphere-migrate logs -f
-```
-
----
-
-## Генерация “дерева файлов + содержимого” (codeweaver)
-
-### Windows
-```powershell
-del /f /q .\docs\codebase_actual.md 2>$null
-codeweaver -input=. -output=./docs/codebase_actual.md -include="\.go$,\.md$,\.sql$,\.yaml$" -ignore="^\.git,^docs/"
-```
+Все команды ниже выполняются из корня репозитория.
 
 ### Linux / WSL
+
+Рекомендуемый путь для локальной разработки:
+
 ```bash
-rm -f ./docs/codebase_actual.md
-codeweaver -input=. -output=./docs/codebase_actual.md \
--include="\.go$,\.md$,\.sql$,\.yaml$" \
--ignore="^\.git,^docs/"
+docker network create web.network >/dev/null 2>&1 || true
+make up-dev
+make migrate-up
 ```
 
-Полезное ужесточение
+После запуска:
 
-Если хочешь, можно ещё добавить проверку, что в migrations/ никто не редактирует файлы руками, например через CI:
+- Swagger UI: [http://localhost:8080/docs](http://localhost:8080/docs)
+- OpenAPI YAML: [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
+- Health-check: [http://localhost:8080/health](http://localhost:8080/health)
 
-сначала запускаешь build-migrations.sh
+Полезные команды:
 
-потом git diff --exit-code
-
-Если diff есть — значит bundle не пересобран.
-
-Пример для CI/local check:
-
-./scripts/build-migrations.sh
-git diff --exit-code -- platform/internal/runtime/infrastructure/db/migrations
-
----
-
-## Утилиты
-
-### gum
 ```bash
-go install github.com/charmbracelet/gum@latest
+go -C platform test ./...
+make migrate-down
 ```
 
----
+Логи `make up-dev` и `make migrate-up` пишутся в `logs/docker/`.
 
-### Makefile CRLF
-Если `make` ведёт себя странно на Linux/WSL — проверь, что `Makefile` в LF.
+### Windows PowerShell
 
----
+`Makefile` ориентирован на `bash`, поэтому в Windows проще работать через прямые `docker compose` команды.
 
-## Архитектура (кратко)
+```powershell
+docker network create web.network 2>$null
 
-Проект организован по модулям и слоям:
+docker compose `
+  -f deploy/docker-compose.infrastructure.yaml `
+  -f deploy/docker-compose.platform.yaml `
+  --profile local up -d --build --force-recreate
+
+$env:MIGRATE_CMD = "up"
+docker compose `
+  -p collabsphere-migrate `
+  -f deploy/docker-compose.migrate.yaml `
+  --profile migrate run --rm --build migrate
+```
+
+Проверка после запуска:
+
+- [http://localhost:8080/docs](http://localhost:8080/docs)
+- [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
+- [http://localhost:8080/health](http://localhost:8080/health)
+
+### Остановка окружения
+
+```bash
+docker compose \
+  -f deploy/docker-compose.infrastructure.yaml \
+  -f deploy/docker-compose.platform.yaml \
+  --profile local down
+```
+
+## Конфигурация и секреты
+
+### Источники конфигурации
+
+Текущая Go-конфигурация читается из environment variables и на данный момент использует только:
+
+- `TZ`
+- `APPLICATION_TITLE`
+- `APPLICATION_VERSION`
+- `APPLICATION_ADDRESS` (по умолчанию `0.0.0.0:8080`)
+- `APPLICATION_TIMEOUT_READ`
+- `APPLICATION_TIMEOUT_WRITE`
+- `APPLICATION_TIMEOUT_IDLE`
+- `APPLICATION_DEBUG`
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+- `POSTGRES_DB`
+- `POSTGRES_SCHEMA`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD` или `POSTGRES_PASSWORD_FILE`
+- `POSTGRES_DEBUG`
+
+`deploy/.env` используется Compose-окружением и содержит больше переменных, чем реально читает текущий Go runtime. Считайте этот файл инфраструктурным шаблоном, а не полной спецификацией приложения.
+
+### Важное различие между `APPLICATION_ADDRESS` и `APPLICATION_PORT`
+
+- `APPLICATION_ADDRESS` - это фактический адрес, на котором слушает Go HTTP server
+- `APPLICATION_PORT` в `deploy/.env` сейчас нужен Compose-конфигурации для проброса порта `${APPLICATION_PORT}:${APPLICATION_PORT}`
+
+Если `APPLICATION_ADDRESS` не задан, API по коду слушает `0.0.0.0:8080`.
+
+### Secrets, на которые ссылается Compose
+
+Compose-файлы ожидают локальные файлы в `deploy/secrets/`, в том числе:
+
+- `deploy/secrets/postgres/dev/db_password`
+- `deploy/secrets/postgres/prod/db_password`
+- `deploy/secrets/jwt/auth_jwt_secret`
+
+Даже для локального профиля часть секретов объявлена на уровне сервиса, поэтому отсутствие placeholder-файлов может ломать запуск Compose.
+
+## Миграции
+
+### Где лежат миграции
+
+- исходники миграций: `platform/internal/runtime/infrastructure/db/migrations-src/`
+- сгенерированный bundle: `platform/internal/runtime/infrastructure/db/migrations/`
+- порядок сборки задается через `platform/internal/runtime/infrastructure/db/migrations-src/manifest.yaml`
+
+### Базовые команды
+
+```bash
+make migrations-build
+make migrate-up
+make migrate-down
+```
+
+`make migrate-up` и `make migrate-down` используют `deploy/docker-compose.migrate.yaml` и запускают контейнер с `platform/cmd/migrate`.
+
+Если вы меняете SQL в `migrations-src/`, сначала пересоберите bundle через `make migrations-build`, а уже потом прогоняйте миграции.
+
+### Важно для `goose`
+
+Если в SQL-миграции используется `DO $$ ... $$;`, оборачивайте блок:
+
+```sql
+-- +goose StatementBegin
+DO $$
+BEGIN
+  -- SQL / PLpgSQL
+END
+$$;
+-- +goose StatementEnd
+```
+
+Иначе `goose` может разрезать выражение по `;` и завершиться ошибкой парсинга.
+
+## Тесты
+
+Минимальная быстрая проверка приложения:
+
+```bash
+go -C platform test ./...
+```
+
+Это же полезно запускать перед сборкой Docker-образа. В `platform/Dockerfile` дополнительно выполняются `go vet ./...` и `go test -v ./...` на build stage.
+
+## API и документация
+
+### Базовый префикс
+
+Все зарегистрированные маршруты API живут под префиксом `/api/v1`.
+
+### Redirects из корня
+
+Корневой router дополнительно пробрасывает удобные entrypoints:
+
+- `/docs` -> `/api/v1/docs`
+- `/openapi.yaml` -> `/api/v1/openapi.yaml`
+- `/health` -> `/api/v1/health`
+
+### Основные группы маршрутов
+
+Системные:
+
+- `GET /api/v1/health`
+
+Accounts:
+
+- `POST /api/v1/accounts`
+- `GET /api/v1/accounts/{id}`
+- `GET /api/v1/accounts/by-email`
+
+Organizations:
+
+- `POST /api/v1/organizations`
+- `GET /api/v1/organizations/{id}`
+
+Memberships:
+
+- `POST /api/v1/organizations/{organization_id}/members`
+- `GET /api/v1/organizations/{organization_id}/members`
+
+Auth:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+
+Маршруты `auth` есть в OpenAPI и регистрируются в приложении, но текущую реализацию нельзя считать стабилизированной. Подробности см. в разделе ниже.
+
+## Known issues
+
+- Старый корневой README был неполным и частично расходился с текущим кодом и Compose-конфигурацией. Этот документ заменяет его целиком.
+- `make network` сейчас создает сеть `platform.web.network`, тогда как Compose-файлы ожидают внешнюю сеть `web.network`. Для безопасного запуска создавайте сеть вручную: `docker network create web.network`.
+- `Makefile` ориентирован на Linux / WSL и использует `bash`. В PowerShell и CMD лучше вызывать `docker compose` напрямую.
+- Auth-контур пока не завершен: маршруты зарегистрированы, но в bootstrap токен-менеджер не подключен, поэтому auth-flow не стоит считать production-ready.
+- В `deploy/.env` есть расхождения с текущим runtime-кодом, включая строку `AUTH_JWT_SECRET_FILE==...`. Кроме того, часть переменных из файла сейчас не читается приложением вообще.
+- Compose-конфигурация и env уже содержат задел под будущие подсистемы и внешние интеграции. Не вся эта конфигурация соответствует текущему фактическому поведению API.
+
+## Полезные ссылки
+
+- ADR по архитектурным границам: [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
+- Compose-файлы: `deploy/docker-compose.infrastructure.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
+- Исходники API: `platform/cmd/api`, `platform/internal/`
+
