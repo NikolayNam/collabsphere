@@ -46,3 +46,4 @@ go.work.sum
 
 llm/*
 platform/cmd/knowgen
+platform/.gocache
