@@ -45,6 +45,9 @@ CREATE TABLE storage.objects
     CONSTRAINT uq_storage_objects_bucket_object_key
         UNIQUE (bucket, object_key),
 
+    CONSTRAINT uq_storage_objects_organization_id_id
+        UNIQUE (organization_id, id),
+
     CONSTRAINT chk_storage_objects_bucket_not_blank
         CHECK (btrim(bucket) <> ''),
 
