@@ -1,9 +1,9 @@
 package dto
 
 type AddMemberInput struct {
-	Body struct {
-		OrganizationID string `json:"organizationId" required:"true" format:"uuid"`
-		AccountID      string `json:"accountId" required:"true" format:"uuid"`
-		Kind           string `json:"kind" required:"false" enum:"owner,member"`
-	}
+    OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
+    Body struct {
+        AccountID string `json:"accountId" required:"true" format:"uuid"`
+        Role      string `json:"role,omitempty" enum:"owner,member"`
+    }
 }

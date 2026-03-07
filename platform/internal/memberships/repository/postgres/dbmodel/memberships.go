@@ -1,21 +1,19 @@
 package dbmodel
 
 import (
-	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/persistence/gorm/model"
-	"github.com/google/uuid"
+    "time"
+
+    "github.com/google/uuid"
 )
 
 type Membership struct {
-	model.UUIDPK
-	model.Timestamps
-	model.Blame
-
-	OrganizationID uuid.UUID `gorm:"column:organization_id;type:uuid;not null;index"`
-	AccountID      uuid.UUID `gorm:"column:account_id;type:uuid;not null;index"`
-
-	Kind   string `gorm:"column:kind;type:text;not null;default:member"`
-	Status string `gorm:"column:status;type:text;not null;default:active"`
+    ID             uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey"`
+    OrganizationID uuid.UUID `gorm:"column:organization_id;type:uuid;not null;index"`
+    AccountID      uuid.UUID `gorm:"column:account_id;type:uuid;not null;index"`
+    Role           string    `gorm:"column:role;type:varchar(64);not null"`
+    IsActive       bool      `gorm:"column:is_active;not null;default:true"`
+    CreatedAt      time.Time `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
+    UpdatedAt      time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
 }
 
 func (Membership) TableName() string { return "iam.memberships" }
-

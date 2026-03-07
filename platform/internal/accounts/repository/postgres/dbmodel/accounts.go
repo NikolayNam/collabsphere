@@ -1,19 +1,18 @@
 package dbmodel
 
-import "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/persistence/gorm/model"
+import (
+    "time"
+
+    "github.com/google/uuid"
+)
 
 type Account struct {
-	model.UUIDPK
-	model.Timestamps
-
-	Email        string `gorm:"column:email;type:varchar(254);not null"`
-	PasswordHash string `gorm:"column:password_hash;type:text;not null"`
-
-	FirstName string `gorm:"column:first_name;type:varchar(200);not null"`
-	LastName  string `gorm:"column:last_name;type:varchar(200);not null"`
-
-	Status string `gorm:"column:status;not null;default:active"`
+    ID          uuid.UUID `gorm:"column:id;type:uuid;default:gen_random_uuid();primaryKey"`
+    Email       string    `gorm:"column:email;type:varchar(320);not null"`
+    DisplayName *string   `gorm:"column:display_name;type:varchar(255)"`
+    IsActive    bool      `gorm:"column:is_active;not null;default:true"`
+    CreatedAt   time.Time `gorm:"column:created_at;type:timestamptz;not null;autoCreateTime"`
+    UpdatedAt   time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
 }
 
 func (Account) TableName() string { return "iam.accounts" }
-

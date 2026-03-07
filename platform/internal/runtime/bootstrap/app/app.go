@@ -58,7 +58,7 @@ func New(conf *config.Config) *App {
 	registerAccountsModule(api, db /*, rootLog*/)
 	registerOrganzationsModule(api, db /*, rootLog*/)
 	registerMembershipsModule(api, db /*, rootLog*/)
-	registerAuthModule(api, db)
+	registerAuthModule(api, db, conf)
 
 	appLog.Info("application bootstrapped",
 		"event", "app.bootstrap.completed",
@@ -69,3 +69,4 @@ func New(conf *config.Config) *App {
 func registerPlatform(api huma.API) {
 	system.Register(api)
 }
+

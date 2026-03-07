@@ -75,12 +75,12 @@ $$
                                   s.name,
                                   s.sort_order
                            FROM tmp_product_categories_seed s
-                                    LEFT JOIN product_categories p
+                                    LEFT JOIN catalog.product_categories p
                                               ON p.code = s.parent_code
                            WHERE s.parent_code IS NULL
                               OR p.id IS NOT NULL),
                  upserted AS (
-                     INSERT INTO product_categories (parent_id, name, sort_order, code)
+                     INSERT INTO catalog.product_categories (parent_id, name, sort_order, code)
                          SELECT r.parent_id,
                                 r.name,
                                 r.sort_order,
@@ -118,27 +118,12 @@ $$
     END;
 $$;
 
--- выравниваем sequence после seed/upsert
-SELECT setval(
-               'product_categories_id_seq',
-               COALESCE((SELECT max(id) FROM product_categories), 0),
-               true
-       );
-
-SELECT setval(
-               'product_categories_sort_order_seq',
-               GREATEST(
-                       COALESCE((SELECT max(sort_order) FROM product_categories), 0),
-                       1
-               ),
-               true
-       );
 
 
 -- +goose Down
 
 DELETE
-FROM product_categories
+FROM catalog.product_categories
 WHERE code IN (
                'ready_meals',
                'semi_finished_products',

@@ -1,5 +1,5 @@
 package dto
 
 type ListMembersInput struct {
-	OrganizationID string `path:"organizationId" required:"true" format:"uuid"`
+    OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
 }
