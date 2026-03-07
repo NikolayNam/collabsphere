@@ -1,0 +1,14 @@
+package dto
+
+type CreateProductInput struct {
+	OrganizationID string `path:"organization_id"`
+	Body           struct {
+		CategoryID   *string `json:"categoryId,omitempty" format:"uuid"`
+		Name         string  `json:"name" required:"true" maxLength:"255"`
+		Description  *string `json:"description,omitempty"`
+		SKU          *string `json:"sku,omitempty" maxLength:"128"`
+		PriceAmount  *string `json:"priceAmount,omitempty" example:"199.90"`
+		CurrencyCode *string `json:"currencyCode,omitempty" minLength:"3" maxLength:"3"`
+		IsActive     *bool   `json:"isActive,omitempty"`
+	}
+}
