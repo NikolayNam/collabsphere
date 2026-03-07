@@ -1,6 +1,0 @@
-./normalize.go
-./op_parse.go
-./order_builder.go
-./payload.go
-./spec.go
-./validate.go
