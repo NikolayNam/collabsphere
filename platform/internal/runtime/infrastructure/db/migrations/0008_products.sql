@@ -52,6 +52,9 @@ CREATE TABLE catalog.products
             REFERENCES catalog.product_categories (id)
             ON DELETE SET NULL,
 
+    CONSTRAINT uq_catalog_products_organization_id_id
+        UNIQUE (organization_id, id),
+
     CONSTRAINT chk_catalog_products_name_not_blank
         CHECK (btrim(name) <> ''),
 
