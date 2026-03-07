@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	catalogpg "github.com/NikolayNam/collabsphere/internal/catalog/repository/postgres"
 	memberspg "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application"
 	orghttp "github.com/NikolayNam/collabsphere/internal/organizations/delivery/http"
@@ -18,10 +19,11 @@ import (
 func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)
+	categoryRepo := catalogpg.NewProductCategoryRepo(db)
 	txManager := dbtx.New(db)
 	clk := clock.NewSystemClock()
 
-	organizationService := application.New(organizationRepo, membershipRepo, txManager, clk)
+	organizationService := application.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk)
 	organizationHandler := orghttp.NewHandler(organizationService)
 
 	secret, err := conf.Auth.JWTSecretValue()

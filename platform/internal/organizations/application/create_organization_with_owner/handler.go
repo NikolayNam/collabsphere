@@ -13,13 +13,14 @@ import (
 )
 
 type Handler struct {
-	tx      tx.Manager
-	orgRepo orgPorts.OrganizationRepository
-	memRepo memberPorts.MembershipRepository
+	tx         tx.Manager
+	orgRepo    orgPorts.OrganizationRepository
+	memRepo    memberPorts.MembershipRepository
+	categories orgPorts.ProductCategoryProvisioner
 }
 
-func New(txm tx.Manager, orgRepo orgPorts.OrganizationRepository, memRepo memberPorts.MembershipRepository) *Handler {
-	return &Handler{tx: txm, orgRepo: orgRepo, memRepo: memRepo}
+func New(txm tx.Manager, orgRepo orgPorts.OrganizationRepository, memRepo memberPorts.MembershipRepository, categories orgPorts.ProductCategoryProvisioner) *Handler {
+	return &Handler{tx: txm, orgRepo: orgRepo, memRepo: memRepo, categories: categories}
 }
 
 func (h *Handler) Handle(ctx context.Context, org *orgDomain.Organization, ownerAccountID accdomain.AccountID) error {
@@ -47,6 +48,12 @@ func (h *Handler) Handle(ctx context.Context, org *orgDomain.Organization, owner
 
 		if err := h.memRepo.AddMember(ctx, org.ID(), membership); err != nil {
 			return err
+		}
+
+		if h.categories != nil {
+			if err := h.categories.ProvisionDefaults(ctx, org.ID(), org.CreatedAt()); err != nil {
+				return err
+			}
 		}
 
 		return nil

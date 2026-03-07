@@ -25,8 +25,8 @@ type Service struct {
 	getById *get_organization_by_id.Handler
 }
 
-func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, txm sharedtx.Manager, clock ports.Clock) *Service {
-	creator := create_with_owner.New(txm, repo, membershipRepo)
+func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, categoryProvisioner ports.ProductCategoryProvisioner, txm sharedtx.Manager, clock ports.Clock) *Service {
+	creator := create_with_owner.New(txm, repo, membershipRepo, categoryProvisioner)
 
 	return &Service{
 		create:  create_organization.NewHandler(creator, clock),

@@ -38,3 +38,5 @@ migrations:
   - iam/groups.sql
   - iam/group_account_members.sql
   - iam/group_organization_members.sql
+  - catalog/product_categories_per_organization.sql
+

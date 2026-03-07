@@ -75,12 +75,12 @@ $$
                                   s.name,
                                   s.sort_order
                            FROM tmp_product_categories_seed s
-                                    LEFT JOIN catalog.product_categories p
+                                    LEFT JOIN catalog.product_category_templates p
                                               ON p.code = s.parent_code
                            WHERE s.parent_code IS NULL
                               OR p.id IS NOT NULL),
                  upserted AS (
-                     INSERT INTO catalog.product_categories (parent_id, name, sort_order, code)
+                     INSERT INTO catalog.product_category_templates (parent_id, name, sort_order, code)
                          SELECT r.parent_id,
                                 r.name,
                                 r.sort_order,
@@ -118,12 +118,67 @@ $$
     END;
 $$;
 
+DO
+$$
+    DECLARE
+        v_inserted_count integer;
+    BEGIN
+        LOOP
+            WITH ready AS (SELECT o.id      AS organization_id,
+                                  t.id      AS template_id,
+                                  parent.id AS parent_id,
+                                  t.code,
+                                  t.name,
+                                  t.sort_order
+                           FROM org.organizations o
+                                    JOIN catalog.product_category_templates t ON TRUE
+                                    LEFT JOIN catalog.product_categories existing
+                                              ON existing.organization_id = o.id
+                                                  AND existing.template_id = t.id
+                                    LEFT JOIN catalog.product_categories parent
+                                              ON parent.organization_id = o.id
+                                                  AND parent.template_id = t.parent_id
+                           WHERE existing.id IS NULL
+                             AND (t.parent_id IS NULL OR parent.id IS NOT NULL)),
+                 inserted AS (
+                     INSERT INTO catalog.product_categories (organization_id,
+                                                             parent_id,
+                                                             template_id,
+                                                             code,
+                                                             name,
+                                                             sort_order)
+                         SELECT r.organization_id,
+                                r.parent_id,
+                                r.template_id,
+                                r.code,
+                                r.name,
+                                r.sort_order
+                         FROM ready r
+                         ON CONFLICT (organization_id, template_id) DO NOTHING
+                         RETURNING id)
+            SELECT count(*)
+            INTO v_inserted_count
+            FROM inserted;
 
+            EXIT WHEN v_inserted_count = 0;
+        END LOOP;
+
+        IF EXISTS (SELECT 1
+                   FROM org.organizations o
+                            CROSS JOIN catalog.product_category_templates t
+                            LEFT JOIN catalog.product_categories c
+                                      ON c.organization_id = o.id
+                                          AND c.template_id = t.id
+                   WHERE c.id IS NULL) THEN
+            RAISE EXCEPTION 'product_categories seed failed: missing organization-scoped categories after backfill';
+        END IF;
+    END;
+$$;
 
 -- +goose Down
 
 DELETE
-FROM catalog.product_categories
+FROM catalog.product_category_templates
 WHERE code IN (
                'ready_meals',
                'semi_finished_products',
