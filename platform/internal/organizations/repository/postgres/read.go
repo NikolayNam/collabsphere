@@ -33,7 +33,7 @@ func (r *OrganizationRepo) Exists(ctx context.Context, id domain.OrganizationID)
 
 	var n int64
 	err := r.dbFrom(ctx).WithContext(ctx).
-		Table("organizations").
+		Table("org.organizations").
 		Where("id = ?", id.UUID()).
 		Limit(1).
 		Count(&n).Error
@@ -42,3 +42,4 @@ func (r *OrganizationRepo) Exists(ctx context.Context, id domain.OrganizationID)
 	}
 	return n > 0, nil
 }
+

@@ -15,4 +15,5 @@ type Account struct {
 	Status string `gorm:"column:status;not null;default:active"`
 }
 
-func (Account) TableName() string { return "accounts" }
+func (Account) TableName() string { return "iam.accounts" }
+

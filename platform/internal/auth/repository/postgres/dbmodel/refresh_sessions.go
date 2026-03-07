@@ -22,4 +22,5 @@ type RefreshSession struct {
 	RevokedAt *time.Time `gorm:"column:revoked_at;type:timestamptz"`
 }
 
-func (RefreshSession) TableName() string { return "auth_refresh_sessions" }
+func (RefreshSession) TableName() string { return "auth.refresh_sessions" }
+
