@@ -17,6 +17,10 @@ const (
 	CodeProductCategoryNotFound = "PRODUCT_CATEGORY_NOT_FOUND"
 	CodeProductExists           = "PRODUCT_ALREADY_EXISTS"
 	CodeProductNotFound         = "PRODUCT_NOT_FOUND"
+	CodeSourceObjectNotFound    = "PRODUCT_IMPORT_SOURCE_OBJECT_NOT_FOUND"
+	CodeProductImportNotFound   = "PRODUCT_IMPORT_NOT_FOUND"
+	CodeImportUnavailable       = "PRODUCT_IMPORT_UNAVAILABLE"
+	CodeImportFileInvalid       = "PRODUCT_IMPORT_FILE_INVALID"
 	CodeAccessDenied            = "CATALOG_ACCESS_DENIED"
 	CodeInternal                = "INTERNAL"
 )
@@ -44,6 +48,23 @@ func ProductAlreadyExists() error {
 
 func ProductNotFound() error {
 	return fault.NotFound("Product not found", fault.Code(CodeProductNotFound))
+}
+
+func ProductImportSourceObjectNotFound() error {
+	return fault.NotFound("Import source object not found", fault.Code(CodeSourceObjectNotFound))
+}
+
+func ProductImportNotFound() error {
+	return fault.NotFound("Product import batch not found", fault.Code(CodeProductImportNotFound))
+}
+
+func ProductImportUnavailable() error {
+	return fault.Unavailable("Product import storage is unavailable", fault.Code(CodeImportUnavailable))
+}
+
+func ProductImportFileInvalid(message string, opts ...fault.Opt) error {
+	opts = append([]fault.Opt{fault.Code(CodeImportFileInvalid)}, opts...)
+	return fault.Validation(message, opts...)
 }
 
 func AccessDenied() error {

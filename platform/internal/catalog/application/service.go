@@ -5,11 +5,19 @@ import (
 
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product_category"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product_import_upload"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/delete_product"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/delete_product_category"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/get_product_by_id"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/get_product_import"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/list_product_categories"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/list_products"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
+	productimport "github.com/NikolayNam/collabsphere/internal/catalog/application/product_import"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/run_product_import"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product_category"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 )
 
@@ -18,31 +26,62 @@ var (
 )
 
 type CreateProductCategoryCmd = create_product_category.Command
+type UpdateProductCategoryCmd = update_product_category.Command
+type DeleteProductCategoryCmd = delete_product_category.Command
 type ListProductCategoriesQuery = list_product_categories.Query
 type CreateProductCmd = create_product.Command
+type UpdateProductCmd = update_product.Command
+type DeleteProductCmd = delete_product.Command
 type ListProductsQuery = list_products.Query
 type GetProductByIDQuery = get_product_by_id.Query
+type CreateProductImportUploadCmd = create_product_import_upload.Command
+type CreateProductImportUploadResult = create_product_import_upload.Result
+type RunProductImportCmd = run_product_import.Command
+type GetProductImportQuery = get_product_import.Query
+type ProductImportView = productimport.View
 
 type Service struct {
-	createCategory *create_product_category.Handler
-	listCategories *list_product_categories.Handler
-	createProduct  *create_product.Handler
-	listProducts   *list_products.Handler
-	getProductByID *get_product_by_id.Handler
+	createCategory     *create_product_category.Handler
+	updateCategory     *update_product_category.Handler
+	deleteCategory     *delete_product_category.Handler
+	listCategories     *list_product_categories.Handler
+	createProduct      *create_product.Handler
+	updateProduct      *update_product.Handler
+	deleteProduct      *delete_product.Handler
+	listProducts       *list_products.Handler
+	getProductByID     *get_product_by_id.Handler
+	createImportUpload *create_product_import_upload.Handler
+	runImport          *run_product_import.Handler
+	getImport          *get_product_import.Handler
 }
 
-func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock) *Service {
+func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock, storage ports.ObjectStorage, storageBucket string) *Service {
 	return &Service{
-		createCategory: create_product_category.NewHandler(repo, organizations, memberships, clock),
-		listCategories: list_product_categories.NewHandler(repo, organizations, memberships),
-		createProduct:  create_product.NewHandler(repo, organizations, memberships, clock),
-		listProducts:   list_products.NewHandler(repo, organizations, memberships),
-		getProductByID: get_product_by_id.NewHandler(repo, organizations, memberships),
+		createCategory:     create_product_category.NewHandler(repo, organizations, memberships, clock),
+		updateCategory:     update_product_category.NewHandler(repo, organizations, memberships, clock),
+		deleteCategory:     delete_product_category.NewHandler(repo, organizations, memberships, clock),
+		listCategories:     list_product_categories.NewHandler(repo, organizations, memberships),
+		createProduct:      create_product.NewHandler(repo, organizations, memberships, clock),
+		updateProduct:      update_product.NewHandler(repo, organizations, memberships, clock),
+		deleteProduct:      delete_product.NewHandler(repo, organizations, memberships, clock),
+		listProducts:       list_products.NewHandler(repo, organizations, memberships),
+		getProductByID:     get_product_by_id.NewHandler(repo, organizations, memberships),
+		createImportUpload: create_product_import_upload.NewHandler(repo, organizations, memberships, clock, storage, storageBucket),
+		runImport:          run_product_import.NewHandler(repo, organizations, memberships, clock, storage),
+		getImport:          get_product_import.NewHandler(repo, organizations, memberships),
 	}
 }
 
 func (s *Service) CreateProductCategory(ctx context.Context, cmd CreateProductCategoryCmd) (*catalogdomain.ProductCategory, error) {
 	return s.createCategory.Handle(ctx, cmd)
+}
+
+func (s *Service) UpdateProductCategory(ctx context.Context, cmd UpdateProductCategoryCmd) (*catalogdomain.ProductCategory, error) {
+	return s.updateCategory.Handle(ctx, cmd)
+}
+
+func (s *Service) DeleteProductCategory(ctx context.Context, cmd DeleteProductCategoryCmd) error {
+	return s.deleteCategory.Handle(ctx, cmd)
 }
 
 func (s *Service) ListProductCategories(ctx context.Context, q ListProductCategoriesQuery) ([]catalogdomain.ProductCategory, error) {
@@ -53,10 +92,30 @@ func (s *Service) CreateProduct(ctx context.Context, cmd CreateProductCmd) (*cat
 	return s.createProduct.Handle(ctx, cmd)
 }
 
+func (s *Service) UpdateProduct(ctx context.Context, cmd UpdateProductCmd) (*catalogdomain.Product, error) {
+	return s.updateProduct.Handle(ctx, cmd)
+}
+
+func (s *Service) DeleteProduct(ctx context.Context, cmd DeleteProductCmd) error {
+	return s.deleteProduct.Handle(ctx, cmd)
+}
+
 func (s *Service) ListProducts(ctx context.Context, q ListProductsQuery) ([]catalogdomain.Product, error) {
 	return s.listProducts.Handle(ctx, q)
 }
 
 func (s *Service) GetProductByID(ctx context.Context, q GetProductByIDQuery) (*catalogdomain.Product, error) {
 	return s.getProductByID.Handle(ctx, q)
+}
+
+func (s *Service) CreateProductImportUpload(ctx context.Context, cmd CreateProductImportUploadCmd) (*CreateProductImportUploadResult, error) {
+	return s.createImportUpload.Handle(ctx, cmd)
+}
+
+func (s *Service) RunProductImport(ctx context.Context, cmd RunProductImportCmd) (*ProductImportView, error) {
+	return s.runImport.Handle(ctx, cmd)
+}
+
+func (s *Service) GetProductImport(ctx context.Context, q GetProductImportQuery) (*ProductImportView, error) {
+	return s.getImport.Handle(ctx, q)
 }

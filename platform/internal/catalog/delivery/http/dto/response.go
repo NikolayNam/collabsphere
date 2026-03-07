@@ -29,6 +29,45 @@ type ProductBody struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 }
 
+type ProductImportUploadBody struct {
+	ObjectID  uuid.UUID `json:"objectId"`
+	Bucket    string    `json:"bucket"`
+	ObjectKey string    `json:"objectKey"`
+	UploadURL string    `json:"uploadUrl"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	FileName  string    `json:"fileName"`
+	SizeBytes int64     `json:"sizeBytes"`
+}
+
+type ProductImportErrorBody struct {
+	ID        uuid.UUID      `json:"id"`
+	RowNo     *int           `json:"rowNo,omitempty"`
+	Code      *string        `json:"code,omitempty"`
+	Message   string         `json:"message"`
+	Details   map[string]any `json:"details,omitempty"`
+	CreatedAt time.Time      `json:"createdAt"`
+}
+
+type ProductImportBatchBody struct {
+	ID                 uuid.UUID                `json:"id"`
+	OrganizationID     uuid.UUID                `json:"organizationId"`
+	SourceObjectID     uuid.UUID                `json:"sourceObjectId"`
+	CreatedByAccountID uuid.UUID                `json:"createdByAccountId"`
+	Status             string                   `json:"status"`
+	TotalRows          *int                     `json:"totalRows,omitempty"`
+	ProcessedRows      int                      `json:"processedRows"`
+	SuccessRows        int                      `json:"successRows"`
+	ErrorRows          int                      `json:"errorRows"`
+	StartedBy          *string                  `json:"startedBy,omitempty"`
+	StartedAt          time.Time                `json:"startedAt"`
+	FinishedAt         *time.Time               `json:"finishedAt,omitempty"`
+	CreatedAt          time.Time                `json:"createdAt"`
+	UpdatedAt          *time.Time               `json:"updatedAt,omitempty"`
+	Mode               *string                  `json:"mode,omitempty"`
+	ResultSummary      map[string]any           `json:"resultSummary,omitempty"`
+	Errors             []ProductImportErrorBody `json:"errors,omitempty"`
+}
+
 type ProductCategoryResponse struct {
 	Status int                 `json:"-"`
 	Body   ProductCategoryBody `json:"body"`
@@ -51,4 +90,14 @@ type ProductsResponse struct {
 	Body   struct {
 		Items []ProductBody `json:"items"`
 	} `json:"body"`
+}
+
+type ProductImportUploadResponse struct {
+	Status int                     `json:"-"`
+	Body   ProductImportUploadBody `json:"body"`
+}
+
+type ProductImportResponse struct {
+	Status int                    `json:"-"`
+	Body   ProductImportBatchBody `json:"body"`
 }

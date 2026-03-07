@@ -3,6 +3,8 @@ package mapper
 import (
 	"net/http"
 
+	catalogapp "github.com/NikolayNam/collabsphere/internal/catalog/application"
+	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	"github.com/NikolayNam/collabsphere/internal/catalog/delivery/http/dto"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 	"github.com/google/uuid"
@@ -84,10 +86,82 @@ func ToProductsResponse(products []catalogdomain.Product) *dto.ProductsResponse 
 	return resp
 }
 
+func ToProductImportUploadResponse(result *catalogapp.CreateProductImportUploadResult, status int) *dto.ProductImportUploadResponse {
+	if result == nil {
+		return nil
+	}
+	return &dto.ProductImportUploadResponse{
+		Status: status,
+		Body: dto.ProductImportUploadBody{
+			ObjectID:  result.ObjectID,
+			Bucket:    result.Bucket,
+			ObjectKey: result.ObjectKey,
+			UploadURL: result.UploadURL,
+			ExpiresAt: result.ExpiresAt,
+			FileName:  result.FileName,
+			SizeBytes: result.SizeBytes,
+		},
+	}
+}
+
+func ToProductImportResponse(view *catalogapp.ProductImportView, status int) *dto.ProductImportResponse {
+	if view == nil || view.Batch == nil {
+		return nil
+	}
+	return &dto.ProductImportResponse{
+		Status: status,
+		Body: dto.ProductImportBatchBody{
+			ID:                 view.Batch.ID,
+			OrganizationID:     view.Batch.OrganizationID.UUID(),
+			SourceObjectID:     view.Batch.SourceObjectID,
+			CreatedByAccountID: view.Batch.CreatedByAccountID.UUID(),
+			Status:             string(view.Batch.Status),
+			TotalRows:          view.Batch.TotalRows,
+			ProcessedRows:      view.Batch.ProcessedRows,
+			SuccessRows:        view.Batch.SuccessRows,
+			ErrorRows:          view.Batch.ErrorRows,
+			StartedBy:          view.Batch.StartedBy,
+			StartedAt:          view.Batch.StartedAt,
+			FinishedAt:         view.Batch.FinishedAt,
+			CreatedAt:          view.Batch.CreatedAt,
+			UpdatedAt:          view.Batch.UpdatedAt,
+			Mode:               view.Batch.Mode,
+			ResultSummary:      copyMap(view.Batch.ResultSummary),
+			Errors:             toImportErrors(view.Errors),
+		},
+	}
+}
+
+func toImportErrors(items []ports.ProductImportErrorRecord) []dto.ProductImportErrorBody {
+	out := make([]dto.ProductImportErrorBody, 0, len(items))
+	for _, item := range items {
+		out = append(out, dto.ProductImportErrorBody{
+			ID:        item.ID,
+			RowNo:     item.RowNo,
+			Code:      item.Code,
+			Message:   item.Message,
+			Details:   copyMap(item.Details),
+			CreatedAt: item.CreatedAt,
+		})
+	}
+	return out
+}
+
 func toCategoryUUIDPtr(id *catalogdomain.ProductCategoryID) *uuid.UUID {
 	if id == nil {
 		return nil
 	}
 	value := id.UUID()
 	return &value
+}
+
+func copyMap(value map[string]any) map[string]any {
+	if len(value) == 0 {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(value))
+	for key, item := range value {
+		out[key] = item
+	}
+	return out
 }
