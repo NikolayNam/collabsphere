@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	authdomain "github.com/NikolayNam/collabsphere/internal/auth/domain"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/actorctx"
+	"github.com/danielgtaylor/huma/v2"
 )
 
 type principalCtxKey struct{}
@@ -35,25 +37,8 @@ func PrincipalFromContext(ctx context.Context) authdomain.Principal {
 func AuthOptional(verifier AccessTokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authz := strings.TrimSpace(r.Header.Get("Authorization"))
-			if authz == "" {
-				next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), authdomain.AnonymousPrincipal())))
-				return
-			}
-
-			token := extractBearer(authz)
-			if token == "" {
-				next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), authdomain.AnonymousPrincipal())))
-				return
-			}
-
-			p, err := verifier.VerifyAccessToken(r.Context(), token)
-			if err != nil {
-				next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), authdomain.AnonymousPrincipal())))
-				return
-			}
-
-			next.ServeHTTP(w, r.WithContext(WithPrincipal(r.Context(), p)))
+			principal := authenticatePrincipal(r.Context(), strings.TrimSpace(r.Header.Get("Authorization")), verifier)
+			next.ServeHTTP(w, r.WithContext(withActor(WithPrincipal(r.Context(), principal), principal)))
 		})
 	}
 }
@@ -72,10 +57,44 @@ func AuthRequired(verifier AccessTokenVerifier) func(http.Handler) http.Handler 
 	}
 }
 
+func HumaAuthOptional(verifier AccessTokenVerifier) func(huma.Context, func(huma.Context)) {
+	return func(hctx huma.Context, next func(huma.Context)) {
+		principal := authenticatePrincipal(hctx.Context(), strings.TrimSpace(hctx.Header("Authorization")), verifier)
+		ctx := withActor(WithPrincipal(hctx.Context(), principal), principal)
+		next(huma.WithContext(hctx, ctx))
+	}
+}
+
+func authenticatePrincipal(ctx context.Context, authz string, verifier AccessTokenVerifier) authdomain.Principal {
+	principal := authdomain.AnonymousPrincipal()
+	if verifier == nil || authz == "" {
+		return principal
+	}
+
+	token := extractBearer(authz)
+	if token == "" {
+		return principal
+	}
+
+	verified, err := verifier.VerifyAccessToken(ctx, token)
+	if err != nil {
+		return principal
+	}
+
+	return verified
+}
+
+func withActor(ctx context.Context, principal authdomain.Principal) context.Context {
+	if principal.Authenticated {
+		return actorctx.WithActorID(ctx, principal.AccountID)
+	}
+	return ctx
+}
+
 func extractBearer(v string) string {
 	const prefix = "Bearer "
-	if !strings.HasPrefix(v, prefix) {
+	if len(v) < len(prefix)+1 || !strings.EqualFold(v[:len(prefix)], prefix) {
 		return ""
 	}
-	return strings.TrimSpace(strings.TrimPrefix(v, prefix))
+	return strings.TrimSpace(v[len(prefix):])
 }
