@@ -34,3 +34,5 @@ migrations:
   - catalog/product_import_errors.sql
   - sales/order_documents.sql
   - catalog/product_images.sql
+  - auth/password_credentials.sql
+

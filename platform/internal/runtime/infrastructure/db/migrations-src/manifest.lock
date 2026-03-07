@@ -16,3 +16,4 @@
 0014 | catalog/product_import_errors.sql  | 0014_product_import_errors.sql
 0015 | sales/order_documents.sql          | 0015_order_documents.sql
 0016 | catalog/product_images.sql         | 0016_product_images.sql
+0017 | auth/password_credentials.sql      | 0017_password_credentials.sql
