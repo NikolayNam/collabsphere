@@ -4,7 +4,7 @@ import (
 	"log"
 	"log/slog"
 
-	"github.com/NikolayNam/collabsphere/internal/runtime/bootstrap"
+	"github.com/NikolayNam/collabsphere/internal/runtime/bootstrap/app"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpserver"
 )
@@ -14,7 +14,7 @@ func main() {
 	conf := config.New()
 
 	// 2) build bootstrap (router + huma + module registration)
-	application := bootstrap.New(conf)
+	application := app.New(conf)
 
 	// 3) run http httpserver (timeouts + graceful shutdown)
 	if err := httpserver.Run(application.Router, conf.APP.Address,

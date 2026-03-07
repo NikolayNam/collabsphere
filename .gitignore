@@ -45,4 +45,4 @@ go.work.sum
 .vscode/
 
 llm/*
-
+platform/cmd/knowgen

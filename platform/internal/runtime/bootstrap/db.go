@@ -14,13 +14,13 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/persistence/gorm/log"
 )
 
-func registerDBHooks(db *gorm.DB) {
+func RegisterDBHooks(db *gorm.DB) {
 	if err := blame.Register(db); err != nil {
 		panic(err)
 	}
 }
 
-func mustOpenGormDB(conf *config.Config, dbLog *slog.Logger) *gorm.DB {
+func MustOpenGormDB(conf *config.Config, dbLog *slog.Logger) *gorm.DB {
 
 	dsn, err := conf.DB.DSN()
 	if err != nil {

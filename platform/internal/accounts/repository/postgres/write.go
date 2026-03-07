@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	apperrors "github.com/NikolayNam/collabsphere/internal/accounts/application/errors"
 
@@ -23,7 +24,7 @@ func (r *AccountRepo) Create(ctx context.Context, account *domain.Account) error
 	err := r.db.WithContext(ctx).Create(m).Error
 	if err != nil {
 		if isUniqueViolation(err) {
-			return apperrors.AccountAlreadyExists()
+			return fmt.Errorf("%w: %w", apperrors.ErrConflict, err)
 		}
 		return err
 	}

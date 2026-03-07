@@ -21,7 +21,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dir := envOrDefault("MIGRATIONS_DIR", "/app/migrations")
+	dir := envOrDefault("MIGRATIONS_DIR", "/app/migrations-src")
 	cmd := strings.ToLower(envOrDefault("MIGRATE_CMD", "up"))
 
 	log.Printf("migrate: connecting dsn=%s schema=%s dir=%s cmd=%s",

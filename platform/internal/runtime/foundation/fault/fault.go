@@ -85,7 +85,8 @@ func (e *Error) Unwrap() error { return e.Cause }
 // Пример: errors.Is(err, apperr.ErrValidation) == true
 // Пример: errors.Is(err, apperr.New(KindValidation, "", apperr.Code("x"))) можно проверить по Code.
 func (e *Error) Is(target error) bool {
-	t, ok := target.(*Error)
+	var t *Error
+	ok := errors.As(target, &t)
 	if !ok || e == nil || t == nil {
 		return false
 	}

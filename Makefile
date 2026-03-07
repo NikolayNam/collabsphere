@@ -21,6 +21,8 @@ CODEBASE_LOG := $(LOG_DIR)/codebase.log
 
 CODEBASE_OUTPUT := ./docs/codebase_actual.md
 
+APPLICATION_PORT :=
+
 COMPOSE_ARGS = \
 	-f $(DEPLOY_DIR)/$(INFRA_FILE) \
 	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
@@ -38,7 +40,7 @@ MIGRATE_COMPOSE_ARGS = \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile migrate
 
-.PHONY: cloudsphere-init network up-app up-dev up-prod down logs sync migrate clean-logs
+.PHONY: cloudsphere-init network up-app up-dev up-prod down logs sync migrate clean-logs migrations-build check-migrations
 
 cloudsphere-init: network up-dev migrate
 
@@ -48,6 +50,7 @@ network:
 clean-logs:
 	@mkdir -p $(LOG_DIR)
 	@rm -f $(RUN_LOG)
+
 
 up-dev: clean-logs
 	@mkdir -p $(dir $(APP_LOG))
@@ -91,6 +94,12 @@ migrate:
 		> $(MIGRATE_LOG) 2>&1 \
 	|| (echo "migrate failed; tail:"; tail -n 160 $(MIGRATE_LOG) || true; exit 1)
 
+migrations-build:
+	go -C platform run ./internal/runtime/infrastructure/db/cmd/build-migrations
+
+check-migrations:
+	./scripts/build-migrations.sh
+	git diff --exit-code -- platform/internal/runtime/infrastructure/db/migrations
 
 migrate-up:
 	@$(MAKE) migrate MIGRATE_CMD=up
@@ -104,7 +113,7 @@ codebase:
 	@echo Generating codebase markdown...
 	@rm -f $(CODEBASE_OUTPUT)
 	@codeweaver -input=. -output=$(CODEBASE_OUTPUT) \
-		-include="\\.go$$,\\.md$$,\\.sql$$,\\.yaml$$" \
+		-include="\\.go$$, \\.mod$$, \\.md$$,\\.sql$$,\\.yaml$$" \
 		-ignore="^\\.git,^docs/" \
 		> $(CODEBASE_LOG) 2>&1
 

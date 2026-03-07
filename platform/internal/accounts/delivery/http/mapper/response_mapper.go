@@ -7,17 +7,18 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/accounts/domain"
 )
 
-func ToAccountResponse(a *domain.Account) *dto.AccountResponse {
+func ToAccountResponse(a *domain.Account, status int) *dto.AccountResponse {
 	if a == nil {
 		return nil
 	}
 
 	return &dto.AccountResponse{
+		Status: status,
 		Body: struct {
 			ID        uuid.UUID `json:"id"`
 			Email     string    `json:"email"`
-			FirstName string    `json:"first_name"`
-			LastName  string    `json:"last_name"`
+			FirstName string    `json:"firstName"`
+			LastName  string    `json:"lastName"`
 			Status    string    `json:"status"`
 		}{
 			ID:        a.ID().UUID(),

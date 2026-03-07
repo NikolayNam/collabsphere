@@ -2,9 +2,7 @@ package http
 
 import (
 	"context"
-	"errors"
-
-	"github.com/danielgtaylor/huma/v2"
+	"net/http"
 
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
 
@@ -32,7 +30,7 @@ func (h *Handler) CreateAccount(ctx context.Context, input *dto.CreateAccountInp
 		return nil, humaerr.From(ctx, err)
 	}
 
-	return mapper.ToAccountResponse(u), nil
+	return mapper.ToAccountResponse(u, http.StatusCreated), nil
 }
 
 func (h *Handler) GetAccountById(ctx context.Context, input *dto.GetAccountByIdInput) (*dto.AccountResponse, error) {
@@ -40,18 +38,10 @@ func (h *Handler) GetAccountById(ctx context.Context, input *dto.GetAccountByIdI
 		ID: input.ID,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, application.ErrValidation):
-			return nil, huma.Error400BadRequest("Invalid account id")
-		case errors.Is(err, application.ErrNotFound):
-			return nil, huma.Error404NotFound("Account not found")
-		default:
-			// h.logInternal(ctx, "get account failed", "err", err, "id", input.ID)
-			return nil, huma.Error500InternalServerError("Internal error")
-		}
+		return nil, humaerr.From(ctx, err)
 	}
 
-	return mapper.ToAccountResponse(u), nil
+	return mapper.ToAccountResponse(u, http.StatusOK), nil
 }
 
 func (h *Handler) GetAccountByEmail(ctx context.Context, input *dto.GetAccountByEmailInput) (*dto.AccountResponse, error) {
@@ -62,5 +52,5 @@ func (h *Handler) GetAccountByEmail(ctx context.Context, input *dto.GetAccountBy
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToAccountResponse(u), nil
+	return mapper.ToAccountResponse(u, http.StatusOK), nil
 }

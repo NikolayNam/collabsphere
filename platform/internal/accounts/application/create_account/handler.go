@@ -6,6 +6,7 @@ import (
 
 	"github.com/NikolayNam/collabsphere/internal/accounts/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/accounts/application/ports"
+	"github.com/NikolayNam/collabsphere/internal/accounts/application/validation"
 	"github.com/NikolayNam/collabsphere/internal/accounts/domain"
 )
 
@@ -25,17 +26,13 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*domain.Account, err
 		return nil, errors.InvalidInput("Invalid email")
 	}
 
-	exists, err := h.repo.ExistsByEmail(ctx, email)
-	if err != nil {
+	if err := validation.ValidatePassword(cmd.Password); err != nil {
 		return nil, err
-	}
-	if exists {
-		return nil, errors.AccountAlreadyExists()
 	}
 
 	passwordHash, err := h.hasher.Hash(cmd.Password)
 	if err != nil {
-		return nil, err
+		return nil, errors.Internal("hash password failed", err)
 	}
 
 	acc, err := domain.NewAccount(domain.NewAccountParams{
@@ -51,12 +48,10 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*domain.Account, err
 	}
 
 	if err := h.repo.Create(ctx, acc); err != nil {
-		// Важно: если репо мапит unique_violation -> ErrConflict, это станет 409 (как надо).
 		if stdErrors.Is(err, errors.ErrConflict) {
 			return nil, errors.AccountAlreadyExists()
 		}
 		return nil, err
 	}
-
 	return acc, nil
 }

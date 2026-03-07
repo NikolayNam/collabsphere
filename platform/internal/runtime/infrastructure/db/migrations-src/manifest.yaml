@@ -1,0 +1,36 @@
+migrations:
+  - init_extensions.sql
+  - init_schemas.sql
+  - org/organizations.sql
+  - iam/accounts.sql
+
+  - auth/refresh_sessions.sql
+#  - auth/access_token_blacklist.sql
+#  - auth/account_locks.sql
+#  - auth/audit_logins.sql
+#  - auth/audit_session_events.sql
+#  - auth/auth_rate_limits.sql
+#  - auth/challenge_counters.sql
+#  - auth/device_sessions.sql
+#  - auth/email_verifications.sql
+#  - auth/external_identities.sql
+#  - auth/login_attempts.sql
+#  - auth/magic_links.sql
+#  - auth/mfa_challenges.sql
+#  - auth/mfa_factors.sql
+
+  - iam/memberships.sql
+
+  - catalog/product_categories.sql
+  - catalog/products.sql
+
+  - sales/orders.sql
+  - sales/requests.sql
+  - sales/order_requests.sql
+
+  - storage/objects.sql
+
+  - catalog/product_import_batches.sql
+  - catalog/product_import_errors.sql
+  - sales/order_documents.sql
+  - catalog/product_images.sql

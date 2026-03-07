@@ -94,7 +94,7 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql stri
 	}
 
 	if l.logSQLOnSuccess && l.level >= logger.Info {
-		l.log.DebugContext(ctx, "db query",
+		l.log.InfoContext(ctx, "db query",
 			append(attrs,
 				"event", "db.query",
 				"sql", sql,

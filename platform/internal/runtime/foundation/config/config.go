@@ -18,6 +18,13 @@ type Config struct {
 	DB  DB
 }
 
+type Auth struct {
+	JWTSecret         string        `env:"AUTH_JWT_SECRET"`
+	JWTSecretFile     string        `env:"AUTH_JWT_SECRET_FILE"`
+	AccessTTL         time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
+	RefreshSessionTTL time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
+}
+
 type App struct {
 	Title        string        `env:"APPLICATION_TITLE,required"`
 	Version      string        `env:"APPLICATION_VERSION,required"`
@@ -74,6 +81,26 @@ func (d DB) PasswordValue() (string, error) {
 		return "", errors.New("postgres password file is empty")
 	}
 	return pw, nil
+}
+
+func (a Auth) JWTSecretValue() (string, error) {
+	if strings.TrimSpace(a.JWTSecret) != "" {
+		return a.JWTSecret, nil
+	}
+	if strings.TrimSpace(a.JWTSecretFile) == "" {
+		return "", errors.New("auth jwt secret is empty")
+	}
+
+	b, err := os.ReadFile(a.JWTSecretFile)
+	if err != nil {
+		return "", err
+	}
+
+	secret := strings.TrimSpace(string(b))
+	if secret == "" {
+		return "", errors.New("auth jwt secret file is empty")
+	}
+	return secret, nil
 }
 
 // --- Secret Loader ---

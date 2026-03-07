@@ -13,18 +13,19 @@ services:
     secrets:
       - dev_password
       - neon_password
+      - jwt_secret
     networks:
       - internal.network
       - web.network
     ports:
       - "${APPLICATION_PORT}:${APPLICATION_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsSL http://localhost:8080/health"]
-      interval: 10s
+      test: [ "CMD-SHELL", "curl -fsSL http://localhost:8080/health" ]
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 30s
-    command: ["/api"]
+      start_period: 15s
+    command: [ "/api" ]
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,3 +44,5 @@ secrets:
     file: secrets/postgres/dev/db_password
   neon_password:
     file: secrets/postgres/prod/db_password
+  jwt_secret:
+    file: secrets/jwt/auth_jwt_secret

@@ -38,21 +38,3 @@ func (r *AccountRepo) GetByEmail(ctx context.Context, email domain.Email) (*doma
 	}
 	return mapper.ToDomainAccount(&m)
 }
-
-func (r *AccountRepo) ExistsByEmail(ctx context.Context, email domain.Email) (bool, error) {
-	var one int
-
-	err := r.db.WithContext(ctx).
-		Model(&dbmodel.Account{}).
-		Select("1").
-		Where("email = ?", email.String()).
-		Limit(1).
-		Take(&one).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}

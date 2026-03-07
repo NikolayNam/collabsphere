@@ -16,13 +16,13 @@ services:
       - neon_password
     networks:
       - internal.network
-    command: ["/migrate"]
+    command: [ "/migrate" ]
     restart: "no"
 
 networks:
   internal.network:
     name: internal.network
-    driver: bridge
+    external: true
 
 secrets:
   dev_password:

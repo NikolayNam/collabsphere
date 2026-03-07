@@ -3,11 +3,12 @@ package dto
 import "github.com/google/uuid"
 
 type AccountResponse struct {
-	Body struct {
+	Status int `json:"-"`
+	Body   struct {
 		ID        uuid.UUID `json:"id"`
 		Email     string    `json:"email"`
-		FirstName string    `json:"first_name"`
-		LastName  string    `json:"last_name"`
+		FirstName string    `json:"firstName"`
+		LastName  string    `json:"lastName"`
 		Status    string    `json:"status"`
 	}
 }

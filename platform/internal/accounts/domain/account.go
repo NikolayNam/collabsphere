@@ -152,13 +152,16 @@ func (a *Account) Activate(now time.Time) error {
 	if now.IsZero() {
 		return ErrNowRequired
 	}
-	if err := a.ensureMutable(); err != nil {
-		return err
+	switch a.status {
+	case AccountStatusBlocked:
+		return ErrAccountBlocked
+	case AccountStatusActive, AccountStatusSuspended:
+		a.status = AccountStatusActive
+		a.touch(now)
+		return nil
+	default:
+		return ErrInvalidAccountStatus
 	}
-
-	a.status = AccountStatusActive
-	a.touch(now)
-	return nil
 }
 
 func (a *Account) Block(now time.Time) error {

@@ -10,7 +10,7 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 )
 
-func newRouter(httpLog *slog.Logger) chi.Router {
+func NewRouter(httpLog *slog.Logger) chi.Router {
 	humaerr.Install()
 	r := chi.NewRouter()
 
@@ -20,6 +20,7 @@ func newRouter(httpLog *slog.Logger) chi.Router {
 
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.RateLimit)
+	r.Use(middleware.Actor)
 	r.Use(middleware.AccessLog(httpLog))
 
 	return r
