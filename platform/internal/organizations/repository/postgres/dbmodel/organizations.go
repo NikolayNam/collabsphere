@@ -13,4 +13,5 @@ type Organization struct {
 	Status string `gorm:"column:status;not null;default:active"`
 }
 
-func (Organization) TableName() string { return "organizations" }
+func (Organization) TableName() string { return "org.organizations" }
+

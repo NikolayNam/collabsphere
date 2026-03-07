@@ -17,4 +17,5 @@ type Membership struct {
 	Status string `gorm:"column:status;type:text;not null;default:active"`
 }
 
-func (Membership) TableName() string { return "memberships" }
+func (Membership) TableName() string { return "iam.memberships" }
+

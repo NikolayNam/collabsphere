@@ -22,7 +22,7 @@ func (r *MembershipRepo) ListMembers(ctx context.Context, orgID orgDomain.Organi
 
 	var rows []row
 	err := r.dbFrom(ctx).WithContext(ctx).
-		Table("memberships").
+		Table("iam.memberships").
 		Select("id, organization_id, account_id, kind, status, created_at").
 		Where("organization_id = ?", orgID.UUID()).
 		Order("created_at asc").
@@ -44,3 +44,4 @@ func (r *MembershipRepo) ListMembers(ctx context.Context, orgID orgDomain.Organi
 	}
 	return out, nil
 }
+
