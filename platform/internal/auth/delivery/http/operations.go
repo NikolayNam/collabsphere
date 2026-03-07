@@ -32,4 +32,7 @@ var meOp = huma.Operation{
 	Path:        "/auth/me",
 	Tags:        []string{"Auth"},
 	Summary:     "Get current user",
+	Security: []map[string][]string{
+		{"bearerAuth": {}},
+	},
 }
