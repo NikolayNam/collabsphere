@@ -45,4 +45,4 @@ secrets:
   neon_password:
     file: secrets/postgres/prod/db_password
   jwt_secret:
-    file: secrets/jwt/auth_jwt_secret
+    file: secrets/jwt/jwt_secret
