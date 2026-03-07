@@ -88,8 +88,8 @@ CREATE TABLE catalog.product_images
             ON DELETE CASCADE,
 
     CONSTRAINT fk_catalog_product_images_object
-        FOREIGN KEY (object_id)
-            REFERENCES storage.objects (id)
+        FOREIGN KEY (organization_id, object_id)
+            REFERENCES storage.objects (organization_id, id)
             ON DELETE RESTRICT,
 
     CONSTRAINT fk_catalog_product_images_created_by

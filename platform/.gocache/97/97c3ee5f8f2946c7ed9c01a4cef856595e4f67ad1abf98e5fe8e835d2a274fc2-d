@@ -1,5 +1,0 @@
-./membership_repository.go
-./membership_writer.go
-./organization_reader.go
-./password_hasher.go
-./system_clock.go

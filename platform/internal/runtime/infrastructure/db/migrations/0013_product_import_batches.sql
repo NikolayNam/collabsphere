@@ -61,8 +61,8 @@ CREATE TABLE catalog.product_import_batches
             ON DELETE RESTRICT,
 
     CONSTRAINT fk_catalog_product_import_batches_source_object
-        FOREIGN KEY (source_object_id)
-            REFERENCES storage.objects (id)
+        FOREIGN KEY (organization_id, source_object_id)
+            REFERENCES storage.objects (organization_id, id)
             ON DELETE RESTRICT,
 
     CONSTRAINT fk_catalog_product_import_batches_created_by_account

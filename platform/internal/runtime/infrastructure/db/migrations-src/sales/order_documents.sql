@@ -87,8 +87,8 @@ CREATE TABLE sales.order_documents
             ON DELETE CASCADE,
 
     CONSTRAINT fk_sales_order_documents_object
-        FOREIGN KEY (object_id)
-            REFERENCES storage.objects (id)
+        FOREIGN KEY (organization_id, object_id)
+            REFERENCES storage.objects (organization_id, id)
             ON DELETE RESTRICT,
 
     CONSTRAINT fk_sales_order_documents_created_by

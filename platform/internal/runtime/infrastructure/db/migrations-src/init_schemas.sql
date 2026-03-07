@@ -104,7 +104,7 @@ $$
                             JOIN pg_namespace n ON n.oid = c.relnamespace
                    WHERE n.nspname = 'auth'
                      AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')) THEN
-            RAISE EXCEPTION 'schema "iam" is not empty';
+            RAISE EXCEPTION 'schema "auth" is not empty';
         END IF;
     END
 $$;
