@@ -48,6 +48,17 @@ $$
             RAISE EXCEPTION 'table "storage.objects" does not exist; run objects migration first';
         END IF;
 
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_constraint
+            WHERE conrelid = 'catalog.products'::regclass
+              AND conname = 'uq_catalog_products_organization_id_id'
+        ) THEN
+            ALTER TABLE catalog.products
+                ADD CONSTRAINT uq_catalog_products_organization_id_id
+                    UNIQUE (organization_id, id);
+        END IF;
+
         IF to_regclass('iam.accounts') IS NULL THEN
             RAISE EXCEPTION 'table "iam.accounts" does not exist; run accounts migration first';
         END IF;
