@@ -1,20 +1,34 @@
 package app
 
-// imports:
 import (
+	"fmt"
+
+	memberspg "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application"
-	"github.com/NikolayNam/collabsphere/internal/organizations/delivery/http"
-	"github.com/NikolayNam/collabsphere/internal/organizations/repository/postgres"
+	orghttp "github.com/NikolayNam/collabsphere/internal/organizations/delivery/http"
+	orgpg "github.com/NikolayNam/collabsphere/internal/organizations/repository/postgres"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/clock"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jwt"
+	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"
 )
 
-func registerOrganzationsModule(api huma.API, db *gorm.DB) {
-	organizationRepo := postgres.NewOrganizationRepo(db)
+func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) {
+	organizationRepo := orgpg.NewOrganizationRepo(db)
+	membershipRepo := memberspg.NewMembershipRepo(db)
+	txManager := dbtx.New(db)
 	clk := clock.NewSystemClock()
 
-	organizationService := application.New(organizationRepo, clk)
-	organizationHandler := http.NewHandler(organizationService)
-	http.Register(api, organizationHandler)
+	organizationService := application.New(organizationRepo, membershipRepo, txManager, clk)
+	organizationHandler := orghttp.NewHandler(organizationService)
+
+	secret, err := conf.Auth.JWTSecretValue()
+	if err != nil {
+		panic(fmt.Errorf("load auth jwt secret for organizations: %w", err))
+	}
+	jwtManager := jwt.NewManager(secret, conf.Auth.AccessTTL, conf.Auth.RefreshSessionTTL)
+
+	orghttp.Register(api, organizationHandler, jwtManager)
 }

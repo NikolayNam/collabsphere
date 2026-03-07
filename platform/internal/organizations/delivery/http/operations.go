@@ -8,6 +8,9 @@ var createOrganizationOp = huma.Operation{
 	Path:        "/organizations",
 	Tags:        []string{"Organizations"},
 	Summary:     "Create organization",
+	Security: []map[string][]string{
+		{"bearerAuth": {}},
+	},
 }
 
 var getOrganizationByIdOp = huma.Operation{

@@ -8,10 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/NikolayNam/collabsphere/internal/runtime/bootstrap"
-
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/logger"
-
 	"github.com/NikolayNam/collabsphere/internal/system"
 )
 
@@ -40,7 +38,6 @@ func New(conf *config.Config) *App {
 
 	api := bootstrap.NewAPI(apiV1, conf)
 
-	// после Mount("/v1", v1) и создания api на v1
 	router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/docs", http.StatusTemporaryRedirect)
 	})
@@ -55,9 +52,9 @@ func New(conf *config.Config) *App {
 	bootstrap.RegisterDBHooks(db)
 
 	registerPlatform(api)
-	registerAccountsModule(api, db /*, rootLog*/)
-	registerOrganzationsModule(api, db /*, rootLog*/)
-	registerMembershipsModule(api, db /*, rootLog*/)
+	registerAccountsModule(api, db)
+	registerOrganzationsModule(api, db, conf)
+	registerMembershipsModule(api, db)
 	registerAuthModule(api, db, conf)
 
 	appLog.Info("application bootstrapped",
@@ -69,4 +66,3 @@ func New(conf *config.Config) *App {
 func registerPlatform(api huma.API) {
 	system.Register(api)
 }
-
