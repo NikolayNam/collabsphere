@@ -17,3 +17,6 @@
 0015 | sales/order_documents.sql          | 0015_order_documents.sql
 0016 | catalog/product_images.sql         | 0016_product_images.sql
 0017 | auth/password_credentials.sql      | 0017_password_credentials.sql
+0018 | iam/groups.sql                     | 0018_groups.sql
+0019 | iam/group_account_members.sql      | 0019_group_account_members.sql
+0020 | iam/group_organization_members.sql | 0020_group_organization_members.sql

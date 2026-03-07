@@ -35,4 +35,6 @@ migrations:
   - sales/order_documents.sql
   - catalog/product_images.sql
   - auth/password_credentials.sql
-
+  - iam/groups.sql
+  - iam/group_account_members.sql
+  - iam/group_organization_members.sql
