@@ -46,6 +46,11 @@ func NewClient(cfg config.S3) (*Client, error) {
 		return nil, err
 	}
 
+	secretKey, err := cfg.SecretKeyValue()
+	if err != nil {
+		return nil, err
+	}
+
 	publicEndpoint := endpoint
 	if strings.TrimSpace(cfg.PublicEndpoint) != "" {
 		publicEndpoint, err = parseEndpoint("storage s3 public endpoint", cfg.PublicEndpoint)
@@ -59,7 +64,7 @@ func NewClient(cfg config.S3) (*Client, error) {
 		publicEndpoint: publicEndpoint,
 		region:         strings.TrimSpace(cfg.Region),
 		accessKey:      strings.TrimSpace(cfg.AccessKey),
-		secretKey:      strings.TrimSpace(cfg.SecretKey),
+		secretKey:      secretKey,
 		pathStyle:      cfg.PathStyle,
 		presignTTL:     cfg.PresignTTL,
 		downloadTTL:    cfg.DownloadTTL,

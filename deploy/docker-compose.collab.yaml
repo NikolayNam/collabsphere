@@ -3,14 +3,16 @@ name: collabsphere
 services:
   minio:
     profiles: ["local"]
-    image: quay.io/minio/minio:${MINIO_IMAGE_VERSION:-RELEASE.2025-07-23T15-54-02Z}
+    image: quay.io/minio/minio:${MINIO_IMAGE_VERSION:-RELEASE.2025-09-07T16-13-09Z}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     env_file:
       - .env
+    secrets:
+      - minio_secret
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_secret
       MINIO_BROWSER_REDIRECT_URL: "${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}"
     networks:
       - internal.network
@@ -28,25 +30,27 @@ services:
       - .env
     depends_on:
       - minio
+    secrets:
+      - minio_secret
     networks:
       - internal.network
     entrypoint:
       - /bin/sh
       - -ec
       - |
-        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"; do
+        MINIO_ROOT_PASSWORD="$$(tr -d '\r\n' </run/secrets/minio_secret)"
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
           sleep 2
         done
         mc mb --ignore-existing local/"$${STORAGE_S3_BUCKET}"
         mc anonymous set private local/"$${STORAGE_S3_BUCKET}" || true
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
       STORAGE_S3_BUCKET: "${STORAGE_S3_BUCKET:-collabsphere}"
 
   jitsi-web:
     profiles: ["local"]
-    image: jitsi/web:${JITSI_IMAGE_VERSION:-stable-10741}
+    image: jitsi/web:${JITSI_WEB_IMAGE_VERSION:-web-1.0.9105-1}
     restart: unless-stopped
     env_file:
       - .env
@@ -54,6 +58,8 @@ services:
       - jitsi-prosody
       - jitsi-jicofo
       - jitsi-jvb
+    secrets:
+      - jitsi_secret
     networks:
       - internal.network
     ports:
@@ -62,6 +68,12 @@ services:
     volumes:
       - jitsi.web.config:/config
       - jitsi.transcripts:/usr/share/jitsi-meet/transcripts
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        export JWT_APP_SECRET="$$(tr -d '\r\n' </run/secrets/jitsi_secret)"
+        exec /init
     environment:
       TZ: "${TZ:-UTC}"
       PUBLIC_URL: "${JITSI_PUBLIC_URL:-https://localhost:8443}"
@@ -70,7 +82,6 @@ services:
       ENABLE_HTTP_REDIRECT: "1"
       AUTH_TYPE: jwt
       JWT_APP_ID: "${JITSI_APP_ID:-collabsphere}"
-      JWT_APP_SECRET: "${JITSI_APP_SECRET:-change-me-jitsi-secret}"
       JWT_ACCEPTED_ISSUERS: "${JITSI_ISSUER:-collabsphere}"
       JWT_ACCEPTED_AUDIENCES: "${JITSI_AUDIENCE:-jitsi}"
       XMPP_DOMAIN: meet.jitsi
@@ -84,10 +95,12 @@ services:
 
   jitsi-prosody:
     profiles: ["local"]
-    image: jitsi/prosody:${JITSI_IMAGE_VERSION:-stable-10741}
+    image: jitsi/prosody:${JITSI_PROSODY_IMAGE_VERSION:-prosody-13.0.4}
     restart: unless-stopped
     env_file:
       - .env
+    secrets:
+      - jitsi_secret
     networks:
       internal.network:
         aliases:
@@ -100,13 +113,18 @@ services:
     volumes:
       - jitsi.prosody.config:/config
       - jitsi.prosody.plugins:/prosody-plugins-custom
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        export JWT_APP_SECRET="$$(tr -d '\r\n' </run/secrets/jitsi_secret)"
+        exec /init
     environment:
       TZ: "${TZ:-UTC}"
       ENABLE_AUTH: "1"
       ENABLE_GUESTS: "0"
       AUTH_TYPE: jwt
       JWT_APP_ID: "${JITSI_APP_ID:-collabsphere}"
-      JWT_APP_SECRET: "${JITSI_APP_SECRET:-change-me-jitsi-secret}"
       JWT_ACCEPTED_ISSUERS: "${JITSI_ISSUER:-collabsphere}"
       JWT_ACCEPTED_AUDIENCES: "${JITSI_AUDIENCE:-jitsi}"
       XMPP_DOMAIN: meet.jitsi
@@ -124,7 +142,7 @@ services:
 
   jitsi-jicofo:
     profiles: ["local"]
-    image: jitsi/jicofo:${JITSI_IMAGE_VERSION:-stable-10741}
+    image: jitsi/jicofo:${JITSI_JICOFO_IMAGE_VERSION:-jicofo-1.0-1172-1}
     restart: unless-stopped
     env_file:
       - .env
@@ -156,7 +174,7 @@ services:
 
   jitsi-jvb:
     profiles: ["local"]
-    image: jitsi/jvb:${JITSI_IMAGE_VERSION:-stable-10741}
+    image: jitsi/jvb:${JITSI_JVB_IMAGE_VERSION:-jvb-2.3-272-g0360d0488-1}
     restart: unless-stopped
     env_file:
       - .env
@@ -201,3 +219,9 @@ networks:
   internal.network:
     name: internal.network
     external: true
+
+secrets:
+  minio_secret:
+    file: ../secrets/minio/minio_secret
+  jitsi_secret:
+    file: ../secrets/jitsi/jitsi_secret

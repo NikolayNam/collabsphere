@@ -14,6 +14,8 @@ services:
       - dev_password
       - neon_password
       - jwt_secret
+      - minio_secret
+      - jitsi_secret
     networks:
       - internal.network
       - web.network
@@ -46,3 +48,7 @@ secrets:
     file: secrets/postgres/prod/db_password
   jwt_secret:
     file: secrets/jwt/jwt_secret
+  minio_secret:
+    file: ../secrets/minio/minio_secret
+  jitsi_secret:
+    file: ../secrets/jitsi/jitsi_secret
