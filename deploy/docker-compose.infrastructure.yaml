@@ -41,4 +41,4 @@ networks:
 #secret keys
 secrets:
   dev_password:
-    file: secrets/postgres/dev/db_password
+    file: secrets/postgres/dev/password

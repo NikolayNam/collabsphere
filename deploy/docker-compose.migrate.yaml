@@ -24,6 +24,6 @@ networks:
 
 secrets:
   dev_password:
-    file: secrets/postgres/dev/db_password
+    file: secrets/postgres/dev/password
   neon_password:
-    file: secrets/postgres/prod/db_password
+    file: secrets/postgres/prod/password

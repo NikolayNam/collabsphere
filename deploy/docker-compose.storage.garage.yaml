@@ -60,4 +60,4 @@ networks:
 
 secrets:
   s3_garage_rpc_secret:
-    file: secrets/s3/s3_secret
+    file: secrets/s3/garage_rpc_secret
