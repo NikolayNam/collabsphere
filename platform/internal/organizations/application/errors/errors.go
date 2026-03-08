@@ -10,10 +10,11 @@ var (
 )
 
 const (
-	CodeInvalidInput         = "ORGANIZATIONS_INVALID_INPUT"
-	CodeOrganizationExists   = "ORGANIZATIONS_ALREADY_EXISTS"
-	CodeOrganizationNotFound = "ORGANIZATION_NOT_FOUND"
-	CodeInternal             = "INTERNAL"
+	CodeInvalidInput                   = "ORGANIZATIONS_INVALID_INPUT"
+	CodeOrganizationExists             = "ORGANIZATIONS_ALREADY_EXISTS"
+	CodeOrganizationNotFound           = "ORGANIZATION_NOT_FOUND"
+	CodeCooperationApplicationNotFound = "COOPERATION_APPLICATION_NOT_FOUND"
+	CodeInternal                       = "INTERNAL"
 )
 
 func InvalidInput(message string, opts ...fault.Opt) error {
@@ -27,6 +28,10 @@ func OrganizationAlreadyExists() error {
 
 func OrganizationNotFound() error {
 	return fault.NotFound("Organization not found", fault.Code(CodeOrganizationNotFound))
+}
+
+func CooperationApplicationNotFound() error {
+	return fault.NotFound("Cooperation application not found", fault.Code(CodeCooperationApplicationNotFound))
 }
 
 func Internal(detail string, cause error) error {

@@ -13,15 +13,16 @@ import (
 )
 
 type Config struct {
-	TZ            string `env:"TZ" envDefault:"UTC"`
-	APP           App
-	DB            DB
-	Auth          Auth
-	Storage       Storage
-	Collab        Collab
-	Realtime      Realtime
-	Conference    Conference
-	Transcription Transcription
+	TZ               string `env:"TZ" envDefault:"UTC"`
+	APP              App
+	DB               DB
+	Auth             Auth
+	Storage          Storage
+	Collab           Collab
+	Realtime         Realtime
+	Conference       Conference
+	Transcription    Transcription
+	DocumentAnalysis DocumentAnalysis
 }
 
 type Auth struct {
@@ -114,6 +115,16 @@ type Transcription struct {
 	Model           string        `env:"TRANSCRIPTION_MODEL" envDefault:"whisper-1"`
 	RequestTimeout  time.Duration `env:"TRANSCRIPTION_REQUEST_TIMEOUT" envDefault:"10m"`
 	WorkerPollEvery time.Duration `env:"TRANSCRIPTION_WORKER_POLL_EVERY" envDefault:"10s"`
+}
+
+type DocumentAnalysis struct {
+	Enabled         bool          `env:"DOCUMENT_ANALYSIS_ENABLED" envDefault:"false"`
+	Endpoint        string        `env:"DOCUMENT_ANALYSIS_ENDPOINT"`
+	APIKey          string        `env:"DOCUMENT_ANALYSIS_API_KEY"`
+	Provider        string        `env:"DOCUMENT_ANALYSIS_PROVIDER" envDefault:"generic-http"`
+	Model           string        `env:"DOCUMENT_ANALYSIS_MODEL" envDefault:"legal-doc-ocr-v1"`
+	RequestTimeout  time.Duration `env:"DOCUMENT_ANALYSIS_REQUEST_TIMEOUT" envDefault:"2m"`
+	WorkerPollEvery time.Duration `env:"DOCUMENT_ANALYSIS_WORKER_POLL_EVERY" envDefault:"10s"`
 }
 
 func New() *Config {
@@ -253,6 +264,25 @@ func (t Transcription) Validate() error {
 		return errors.New("transcription request timeout must be positive")
 	case t.WorkerPollEvery <= 0:
 		return errors.New("transcription worker poll interval must be positive")
+	default:
+		return nil
+	}
+}
+
+func (d DocumentAnalysis) Validate() error {
+	if !d.Enabled {
+		return nil
+	}
+
+	switch {
+	case strings.TrimSpace(d.Endpoint) == "":
+		return errors.New("document analysis endpoint is empty")
+	case strings.TrimSpace(d.Provider) == "":
+		return errors.New("document analysis provider is empty")
+	case d.RequestTimeout <= 0:
+		return errors.New("document analysis request timeout must be positive")
+	case d.WorkerPollEvery <= 0:
+		return errors.New("document analysis worker poll interval must be positive")
 	default:
 		return nil
 	}

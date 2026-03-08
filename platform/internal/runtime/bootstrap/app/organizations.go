@@ -13,6 +13,7 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jwt"
 	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
+	generichttp "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/documentanalysis/generichttp"
 	s3storage "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/storage/s3"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"
@@ -34,7 +35,18 @@ func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) 
 		objectStorage = client
 	}
 
-	organizationService := application.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket)
+	var analyzer orgports.LegalDocumentAnalyzer
+	provider := ""
+	if conf.DocumentAnalysis.Enabled {
+		client, err := generichttp.NewClient(conf.DocumentAnalysis)
+		if err != nil {
+			panic(fmt.Errorf("init organizations document analysis client: %w", err))
+		}
+		analyzer = client
+		provider = conf.DocumentAnalysis.Provider
+	}
+
+	organizationService := application.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, analyzer, provider)
 	organizationHandler := orghttp.NewHandler(organizationService)
 
 	secret, err := conf.Auth.JWTSecretValue()

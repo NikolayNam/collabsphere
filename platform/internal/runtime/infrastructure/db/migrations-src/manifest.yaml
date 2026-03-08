@@ -60,3 +60,7 @@ migrations:
   - integration/transcription_jobs.sql
   - iam/account_profile_fields.sql
   - org/organization_profile_fields.sql
+  - org/cooperation_applications.sql
+  - org/organization_legal_documents.sql
+  - org/organization_legal_document_analysis.sql
+  - integration/organization_document_analysis_jobs.sql
