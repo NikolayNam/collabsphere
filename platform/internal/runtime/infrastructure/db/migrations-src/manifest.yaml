@@ -1,6 +1,7 @@
 migrations:
   - init_extensions.sql
   - init_schemas.sql
+  - collab/init_schema.sql
   - org/organizations.sql
   - iam/accounts.sql
 
@@ -39,4 +40,20 @@ migrations:
   - iam/group_account_members.sql
   - iam/group_organization_members.sql
   - catalog/product_categories_per_organization.sql
-
+  - collab/channels.sql
+  - collab/channel_admins.sql
+  - collab/guest_invites.sql
+  - auth/guest_identities.sql
+  - auth/guest_sessions.sql
+  - collab/messages.sql
+  - collab/message_revisions.sql
+  - collab/message_mentions.sql
+  - collab/message_reactions.sql
+  - collab/message_attachments.sql
+  - collab/channel_read_cursors.sql
+  - collab/conferences.sql
+  - collab/conference_participants.sql
+  - collab/conference_recordings.sql
+  - collab/conference_transcripts.sql
+  - integration/jitsi_webhook_inbox.sql
+  - integration/transcription_jobs.sql

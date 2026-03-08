@@ -27,10 +27,12 @@ type accessTokenHeader struct {
 }
 
 type accessTokenClaims struct {
-	Subject   string `json:"sub"`
-	SessionID string `json:"sid"`
-	IssuedAt  int64  `json:"iat"`
-	ExpiresAt int64  `json:"exp"`
+	SubjectType string `json:"st"`
+	Subject     string `json:"sub"`
+	SessionID   string `json:"sid"`
+	ChannelID   string `json:"cid,omitempty"`
+	IssuedAt    int64  `json:"iat"`
+	ExpiresAt   int64  `json:"exp"`
 }
 
 func NewManager(secret string, accessTTL, sessionTTL time.Duration) *Manager {
@@ -55,34 +57,29 @@ func (m *Manager) GenerateAccessToken(ctx context.Context, principal authdomain.
 	if len(m.secret) == 0 {
 		return "", errors.New("jwt secret is empty")
 	}
-	if !principal.Authenticated || principal.AccountID == uuid.Nil || principal.SessionID == uuid.Nil {
+	if !principal.Authenticated || principal.SessionID == uuid.Nil {
 		return "", errors.New("principal is not authenticated")
 	}
 	if expiresAt.IsZero() {
 		return "", errors.New("access token expiry is required")
 	}
 
-	headerPart, err := marshalTokenPart(accessTokenHeader{
-		Alg: "HS256",
-		Typ: "JWT",
-	})
+	claims, err := buildClaims(principal, expiresAt)
+	if err != nil {
+		return "", err
+	}
+
+	headerPart, err := marshalTokenPart(accessTokenHeader{Alg: "HS256", Typ: "JWT"})
 	if err != nil {
 		return "", fmt.Errorf("marshal jwt header: %w", err)
 	}
-
-	claimsPart, err := marshalTokenPart(accessTokenClaims{
-		Subject:   principal.AccountID.String(),
-		SessionID: principal.SessionID.String(),
-		IssuedAt:  time.Now().UTC().Unix(),
-		ExpiresAt: expiresAt.UTC().Unix(),
-	})
+	claimsPart, err := marshalTokenPart(claims)
 	if err != nil {
 		return "", fmt.Errorf("marshal jwt claims: %w", err)
 	}
 
 	signingInput := headerPart + "." + claimsPart
 	signature := m.sign(signingInput)
-
 	return signingInput + "." + signature, nil
 }
 
@@ -116,20 +113,59 @@ func (m *Manager) VerifyAccessToken(ctx context.Context, token string) (authdoma
 	if err := unmarshalTokenPart(parts[1], &claims); err != nil {
 		return authdomain.Principal{}, fmt.Errorf("decode jwt claims: %w", err)
 	}
-
-	accountID, err := uuid.Parse(claims.Subject)
-	if err != nil {
-		return authdomain.Principal{}, errors.New("jwt subject is invalid")
-	}
-	sessionID, err := uuid.Parse(claims.SessionID)
-	if err != nil {
-		return authdomain.Principal{}, errors.New("jwt session is invalid")
-	}
 	if claims.ExpiresAt <= time.Now().UTC().Unix() {
 		return authdomain.Principal{}, errors.New("jwt token is expired")
 	}
 
-	return authdomain.NewPrincipal(accountID, sessionID), nil
+	sessionID, err := uuid.Parse(claims.SessionID)
+	if err != nil || sessionID == uuid.Nil {
+		return authdomain.Principal{}, errors.New("jwt session is invalid")
+	}
+
+	switch authdomain.SubjectType(claims.SubjectType) {
+	case authdomain.SubjectTypeAccount:
+		accountID, err := uuid.Parse(claims.Subject)
+		if err != nil || accountID == uuid.Nil {
+			return authdomain.Principal{}, errors.New("jwt subject is invalid")
+		}
+		return authdomain.NewAccountPrincipal(accountID, sessionID), nil
+	case authdomain.SubjectTypeGuest:
+		guestID, err := uuid.Parse(claims.Subject)
+		if err != nil || guestID == uuid.Nil {
+			return authdomain.Principal{}, errors.New("jwt subject is invalid")
+		}
+		channelID, err := uuid.Parse(claims.ChannelID)
+		if err != nil || channelID == uuid.Nil {
+			return authdomain.Principal{}, errors.New("jwt guest channel is invalid")
+		}
+		return authdomain.NewGuestPrincipal(guestID, sessionID, channelID), nil
+	default:
+		return authdomain.Principal{}, errors.New("jwt subject type is invalid")
+	}
+}
+
+func buildClaims(principal authdomain.Principal, expiresAt time.Time) (accessTokenClaims, error) {
+	claims := accessTokenClaims{
+		SubjectType: string(principal.SubjectType),
+		SessionID:   principal.SessionID.String(),
+		IssuedAt:    time.Now().UTC().Unix(),
+		ExpiresAt:   expiresAt.UTC().Unix(),
+	}
+
+	switch {
+	case principal.IsAccount():
+		claims.Subject = principal.AccountID.String()
+	case principal.IsGuest():
+		if principal.ChannelID == uuid.Nil {
+			return accessTokenClaims{}, errors.New("guest principal channel is required")
+		}
+		claims.Subject = principal.GuestID.String()
+		claims.ChannelID = principal.ChannelID.String()
+	default:
+		return accessTokenClaims{}, errors.New("principal is not authenticated")
+	}
+
+	return claims, nil
 }
 
 func marshalTokenPart(v any) (string, error) {

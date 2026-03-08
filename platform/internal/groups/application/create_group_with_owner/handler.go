@@ -11,12 +11,13 @@ import (
 )
 
 type Handler struct {
-	tx   sharedtx.Manager
-	repo ports.GroupRepository
+	tx       sharedtx.Manager
+	repo     ports.GroupRepository
+	channels ports.ChannelProvisioner
 }
 
-func NewHandler(txm sharedtx.Manager, repo ports.GroupRepository) *Handler {
-	return &Handler{tx: txm, repo: repo}
+func NewHandler(txm sharedtx.Manager, repo ports.GroupRepository, channels ports.ChannelProvisioner) *Handler {
+	return &Handler{tx: txm, repo: repo, channels: channels}
 }
 
 func (h *Handler) Handle(ctx context.Context, group *domain.Group, ownerAccountID accdomain.AccountID) error {
@@ -45,7 +46,11 @@ func (h *Handler) Handle(ctx context.Context, group *domain.Group, ownerAccountI
 		if err := h.repo.AddAccountMember(ctx, group.ID(), ownerMembership); err != nil {
 			return err
 		}
-
+		if h.channels != nil {
+			if err := h.channels.ProvisionDefaults(ctx, group.ID(), ownerAccountID, group.CreatedAt()); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }

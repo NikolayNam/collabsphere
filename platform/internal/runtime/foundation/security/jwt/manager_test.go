@@ -13,7 +13,7 @@ func TestManagerGenerateAndVerifyAccessToken(t *testing.T) {
 	t.Parallel()
 
 	manager := NewManager("test-secret", 15*time.Minute, 24*time.Hour)
-	principal := authdomain.NewPrincipal(uuid.New(), uuid.New())
+	principal := authdomain.NewAccountPrincipal(uuid.New(), uuid.New())
 
 	token, err := manager.GenerateAccessToken(context.Background(), principal, time.Now().Add(15*time.Minute))
 	if err != nil {
@@ -25,6 +25,9 @@ func TestManagerGenerateAndVerifyAccessToken(t *testing.T) {
 		t.Fatalf("VerifyAccessToken() error = %v", err)
 	}
 
+	if got.SubjectType != authdomain.SubjectTypeAccount {
+		t.Fatalf("SubjectType = %v, want %v", got.SubjectType, authdomain.SubjectTypeAccount)
+	}
 	if got.AccountID != principal.AccountID {
 		t.Fatalf("AccountID = %v, want %v", got.AccountID, principal.AccountID)
 	}
@@ -36,11 +39,38 @@ func TestManagerGenerateAndVerifyAccessToken(t *testing.T) {
 	}
 }
 
+func TestManagerGenerateAndVerifyGuestAccessToken(t *testing.T) {
+	t.Parallel()
+
+	manager := NewManager("test-secret", 15*time.Minute, 24*time.Hour)
+	principal := authdomain.NewGuestPrincipal(uuid.New(), uuid.New(), uuid.New())
+
+	token, err := manager.GenerateAccessToken(context.Background(), principal, time.Now().Add(15*time.Minute))
+	if err != nil {
+		t.Fatalf("GenerateAccessToken() error = %v", err)
+	}
+
+	got, err := manager.VerifyAccessToken(context.Background(), token)
+	if err != nil {
+		t.Fatalf("VerifyAccessToken() error = %v", err)
+	}
+
+	if got.SubjectType != authdomain.SubjectTypeGuest {
+		t.Fatalf("SubjectType = %v, want %v", got.SubjectType, authdomain.SubjectTypeGuest)
+	}
+	if got.GuestID != principal.GuestID {
+		t.Fatalf("GuestID = %v, want %v", got.GuestID, principal.GuestID)
+	}
+	if got.ChannelID != principal.ChannelID {
+		t.Fatalf("ChannelID = %v, want %v", got.ChannelID, principal.ChannelID)
+	}
+}
+
 func TestManagerVerifyAccessTokenRejectsInvalidSignature(t *testing.T) {
 	t.Parallel()
 
 	manager := NewManager("test-secret", 15*time.Minute, 24*time.Hour)
-	principal := authdomain.NewPrincipal(uuid.New(), uuid.New())
+	principal := authdomain.NewAccountPrincipal(uuid.New(), uuid.New())
 
 	token, err := manager.GenerateAccessToken(context.Background(), principal, time.Now().Add(15*time.Minute))
 	if err != nil {
@@ -56,7 +86,7 @@ func TestManagerVerifyAccessTokenRejectsExpiredToken(t *testing.T) {
 	t.Parallel()
 
 	manager := NewManager("test-secret", 15*time.Minute, 24*time.Hour)
-	principal := authdomain.NewPrincipal(uuid.New(), uuid.New())
+	principal := authdomain.NewAccountPrincipal(uuid.New(), uuid.New())
 
 	token, err := manager.GenerateAccessToken(context.Background(), principal, time.Now().Add(-time.Minute))
 	if err != nil {

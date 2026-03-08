@@ -33,8 +33,8 @@ type Service struct {
 	listMembers           *list_members.Handler
 }
 
-func New(repo ports.GroupRepository, accounts ports.AccountReader, organizations ports.OrganizationReader, txm sharedtx.Manager, clock ports.Clock) *Service {
-	creator := create_with_owner.NewHandler(txm, repo)
+func New(repo ports.GroupRepository, accounts ports.AccountReader, organizations ports.OrganizationReader, channels ports.ChannelProvisioner, txm sharedtx.Manager, clock ports.Clock) *Service {
+	creator := create_with_owner.NewHandler(txm, repo, channels)
 
 	return &Service{
 		create:                create_group.NewHandler(creator, clock),

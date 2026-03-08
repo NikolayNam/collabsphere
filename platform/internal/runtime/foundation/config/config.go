@@ -13,11 +13,15 @@ import (
 )
 
 type Config struct {
-	TZ      string `env:"TZ" envDefault:"UTC"`
-	APP     App
-	DB      DB
-	Auth    Auth
-	Storage Storage
+	TZ            string `env:"TZ" envDefault:"UTC"`
+	APP           App
+	DB            DB
+	Auth          Auth
+	Storage       Storage
+	Collab        Collab
+	Realtime      Realtime
+	Conference    Conference
+	Transcription Transcription
 }
 
 type Auth struct {
@@ -25,6 +29,7 @@ type Auth struct {
 	JWTSecretFile     string        `env:"AUTH_JWT_SECRET_FILE"`
 	AccessTTL         time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
 	RefreshSessionTTL time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
+	GuestAccessTTL    time.Duration `env:"AUTH_GUEST_ACCESS_TTL" envDefault:"24h"`
 }
 
 type Storage struct {
@@ -44,13 +49,14 @@ type S3 struct {
 }
 
 type App struct {
-	Title        string        `env:"APPLICATION_TITLE,required"`
-	Version      string        `env:"APPLICATION_VERSION,required"`
-	Address      string        `env:"APPLICATION_ADDRESS" envDefault:"0.0.0.0:8080"`
-	TimeoutRead  time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
-	TimeoutWrite time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
-	TimeoutIdle  time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
-	Debug        bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
+	Title         string        `env:"APPLICATION_TITLE,required"`
+	Version       string        `env:"APPLICATION_VERSION,required"`
+	Address       string        `env:"APPLICATION_ADDRESS" envDefault:"0.0.0.0:8080"`
+	PublicBaseURL string        `env:"APPLICATION_PUBLIC_BASE_URL"`
+	TimeoutRead   time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
+	TimeoutWrite  time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
+	TimeoutIdle   time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
+	Debug         bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
 }
 
 type DB struct {
@@ -66,6 +72,48 @@ type DB struct {
 	PasswordFile string `env:"POSTGRES_PASSWORD_FILE"`
 
 	Debug bool `env:"POSTGRES_DEBUG" envDefault:"false"`
+}
+
+type Collab struct {
+	GuestInviteTTL time.Duration `env:"COLLAB_GUEST_INVITE_TTL" envDefault:"72h"`
+}
+
+type Realtime struct {
+	Redis Redis
+}
+
+type Redis struct {
+	Enabled       bool          `env:"REALTIME_REDIS_ENABLED" envDefault:"false"`
+	Address       string        `env:"REALTIME_REDIS_ADDRESS"`
+	Password      string        `env:"REALTIME_REDIS_PASSWORD"`
+	DB            int           `env:"REALTIME_REDIS_DB" envDefault:"0"`
+	ChannelPrefix string        `env:"REALTIME_REDIS_CHANNEL_PREFIX" envDefault:"collabsphere:realtime"`
+	PresenceTTL   time.Duration `env:"REALTIME_REDIS_PRESENCE_TTL" envDefault:"30s"`
+	TypingTTL     time.Duration `env:"REALTIME_REDIS_TYPING_TTL" envDefault:"5s"`
+}
+
+type Conference struct {
+	Jitsi Jitsi
+}
+
+type Jitsi struct {
+	Enabled   bool          `env:"JITSI_ENABLED" envDefault:"false"`
+	BaseURL   string        `env:"JITSI_BASE_URL"`
+	Domain    string        `env:"JITSI_DOMAIN"`
+	AppID     string        `env:"JITSI_APP_ID"`
+	AppSecret string        `env:"JITSI_APP_SECRET"`
+	Issuer    string        `env:"JITSI_ISSUER"`
+	Audience  string        `env:"JITSI_AUDIENCE" envDefault:"jitsi"`
+	TokenTTL  time.Duration `env:"JITSI_TOKEN_TTL" envDefault:"2h"`
+}
+
+type Transcription struct {
+	Enabled         bool          `env:"TRANSCRIPTION_ENABLED" envDefault:"false"`
+	Endpoint        string        `env:"TRANSCRIPTION_ENDPOINT"`
+	APIKey          string        `env:"TRANSCRIPTION_API_KEY"`
+	Model           string        `env:"TRANSCRIPTION_MODEL" envDefault:"whisper-1"`
+	RequestTimeout  time.Duration `env:"TRANSCRIPTION_REQUEST_TIMEOUT" envDefault:"10m"`
+	WorkerPollEvery time.Duration `env:"TRANSCRIPTION_WORKER_POLL_EVERY" envDefault:"10s"`
 }
 
 func New() *Config {
@@ -146,6 +194,70 @@ func (s S3) Validate() error {
 	}
 }
 
+func (r Redis) Validate() error {
+	if !r.Enabled {
+		return nil
+	}
+
+	switch {
+	case strings.TrimSpace(r.Address) == "":
+		return errors.New("realtime redis address is empty")
+	case strings.TrimSpace(r.ChannelPrefix) == "":
+		return errors.New("realtime redis channel prefix is empty")
+	case r.PresenceTTL <= 0:
+		return errors.New("realtime redis presence ttl must be positive")
+	case r.TypingTTL <= 0:
+		return errors.New("realtime redis typing ttl must be positive")
+	default:
+		return nil
+	}
+}
+
+func (j Jitsi) Validate() error {
+	if !j.Enabled {
+		return nil
+	}
+
+	switch {
+	case strings.TrimSpace(j.BaseURL) == "":
+		return errors.New("jitsi base url is empty")
+	case strings.TrimSpace(j.Domain) == "":
+		return errors.New("jitsi domain is empty")
+	case strings.TrimSpace(j.AppID) == "":
+		return errors.New("jitsi app id is empty")
+	case strings.TrimSpace(j.AppSecret) == "":
+		return errors.New("jitsi app secret is empty")
+	case j.TokenTTL <= 0:
+		return errors.New("jitsi token ttl must be positive")
+	default:
+		return nil
+	}
+}
+
+func (j Jitsi) IssuerValue() string {
+	if strings.TrimSpace(j.Issuer) != "" {
+		return strings.TrimSpace(j.Issuer)
+	}
+	return strings.TrimSpace(j.AppID)
+}
+
+func (t Transcription) Validate() error {
+	if !t.Enabled {
+		return nil
+	}
+
+	switch {
+	case strings.TrimSpace(t.Endpoint) == "":
+		return errors.New("transcription endpoint is empty")
+	case t.RequestTimeout <= 0:
+		return errors.New("transcription request timeout must be positive")
+	case t.WorkerPollEvery <= 0:
+		return errors.New("transcription worker poll interval must be positive")
+	default:
+		return nil
+	}
+}
+
 func applyTZ(tz string) error {
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
@@ -177,7 +289,7 @@ func (d DB) DSN() (string, error) {
 }
 
 func buildSearchPath(primary string) []string {
-	values := []string{primary, "auth", "iam", "org", "catalog", "sales", "storage", "integration", "public"}
+	values := []string{primary, "auth", "iam", "org", "catalog", "sales", "storage", "integration", "collab", "public"}
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
 

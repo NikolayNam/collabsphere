@@ -57,6 +57,7 @@ func New(conf *config.Config) *App {
 	registerMembershipsModule(api, db)
 	registerCatalogModule(api, db, conf)
 	registerGroupsModule(api, db, conf)
+	registerCollabModule(api, router, db, conf)
 	registerAuthModule(api, db, conf)
 
 	appLog.Info("application bootstrapped",

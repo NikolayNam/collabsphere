@@ -85,7 +85,7 @@ func authenticatePrincipal(ctx context.Context, authz string, verifier AccessTok
 }
 
 func withActor(ctx context.Context, principal authdomain.Principal) context.Context {
-	if principal.Authenticated {
+	if principal.IsAccount() {
 		return actorctx.WithActorID(ctx, principal.AccountID)
 	}
 	return ctx
