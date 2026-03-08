@@ -38,15 +38,16 @@ type Storage struct {
 }
 
 type S3 struct {
-	Enabled     bool          `env:"STORAGE_S3_ENABLED" envDefault:"false"`
-	Endpoint    string        `env:"STORAGE_S3_ENDPOINT"`
-	Region      string        `env:"STORAGE_S3_REGION" envDefault:"us-east-1"`
-	AccessKey   string        `env:"STORAGE_S3_ACCESS_KEY"`
-	SecretKey   string        `env:"STORAGE_S3_SECRET_KEY"`
-	Bucket      string        `env:"STORAGE_S3_BUCKET"`
-	PathStyle   bool          `env:"STORAGE_S3_PATH_STYLE" envDefault:"true"`
-	PresignTTL  time.Duration `env:"STORAGE_S3_PRESIGN_TTL" envDefault:"15m"`
-	DownloadTTL time.Duration `env:"STORAGE_S3_DOWNLOAD_TTL" envDefault:"5m"`
+	Enabled        bool          `env:"STORAGE_S3_ENABLED" envDefault:"false"`
+	Endpoint       string        `env:"STORAGE_S3_ENDPOINT"`
+	PublicEndpoint string        `env:"STORAGE_S3_PUBLIC_ENDPOINT"`
+	Region         string        `env:"STORAGE_S3_REGION" envDefault:"us-east-1"`
+	AccessKey      string        `env:"STORAGE_S3_ACCESS_KEY"`
+	SecretKey      string        `env:"STORAGE_S3_SECRET_KEY"`
+	Bucket         string        `env:"STORAGE_S3_BUCKET"`
+	PathStyle      bool          `env:"STORAGE_S3_PATH_STYLE" envDefault:"true"`
+	PresignTTL     time.Duration `env:"STORAGE_S3_PRESIGN_TTL" envDefault:"15m"`
+	DownloadTTL    time.Duration `env:"STORAGE_S3_DOWNLOAD_TTL" envDefault:"5m"`
 }
 
 type App struct {

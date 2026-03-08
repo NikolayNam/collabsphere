@@ -11,9 +11,10 @@ DEPLOY_DIR := deploy
 
 INFRA_FILE := docker-compose.infrastructure.yaml
 PLATFORM_FILE := docker-compose.platform.yaml
+COLLAB_FILE := docker-compose.collab.yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
 
-NETWORK_NAME := platform.web.network
+NETWORK_NAME := web.network
 
 LOG_DIR := ./logs/docker
 APP_LOG := $(LOG_DIR)/app.log
@@ -28,6 +29,7 @@ APPLICATION_PORT :=
 COMPOSE_ARGS = \
 	-f $(DEPLOY_DIR)/$(INFRA_FILE) \
 	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
+	-f $(DEPLOY_DIR)/$(COLLAB_FILE) \
 	--profile local
 
 SHELL := /bin/bash
@@ -141,5 +143,4 @@ codebase:
 
 logs:
 	$(LOGS) -f $(APP_CONTAINER)
-
 
