@@ -3,6 +3,7 @@ EXEC := docker exec -it
 LOGS := docker logs
 ENV_FILE := --env-file .env
 MIGRATE_CMD ?= up
+SEED_CMD ?= up
 
 PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
@@ -17,6 +18,7 @@ NETWORK_NAME := platform.web.network
 LOG_DIR := ./logs/docker
 APP_LOG := $(LOG_DIR)/app.log
 MIGRATE_LOG := $(LOG_DIR)/migrate.log
+SEED_LOG := $(LOG_DIR)/seed.log
 CODEBASE_LOG := $(LOG_DIR)/codebase.log
 
 CODEBASE_OUTPUT := ./docs/codebase_actual.md
@@ -40,7 +42,7 @@ MIGRATE_COMPOSE_ARGS = \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile migrate
 
-.PHONY: cloudsphere-init network up-app up-dev up-prod down logs sync migrate clean-logs migrations-build check-migrations
+.PHONY: cloudsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations
 
 cloudsphere-init: network up-dev migrate
 
@@ -94,6 +96,13 @@ migrate:
 		> $(MIGRATE_LOG) 2>&1 \
 	|| (echo "migrate failed; tail:"; tail -n 160 $(MIGRATE_LOG) || true; exit 1)
 
+seed:
+	@mkdir -p $(dir $(SEED_LOG))
+	@SEED_CMD=$(SEED_CMD) docker compose $(MIGRATE_COMPOSE_ARGS) \
+		run --rm --build migrate /seed \
+		> $(SEED_LOG) 2>&1 \
+	|| (echo "seed failed; tail:"; tail -n 160 $(SEED_LOG) || true; exit 1)
+
 migrations-build:
 	go -C platform run ./internal/runtime/infrastructure/db/cmd/build-migrations
 
@@ -106,6 +115,18 @@ migrate-up:
 
 migrate-down:
 	@$(MAKE) migrate MIGRATE_CMD=down
+
+seed-up:
+	@$(MAKE) seed SEED_CMD=up
+
+seed-down:
+	@$(MAKE) seed SEED_CMD=down
+
+seed-status:
+	@$(MAKE) seed SEED_CMD=status
+
+seed-reset:
+	@$(MAKE) seed SEED_CMD=reset
 
 codebase:
 	@mkdir -p $(LOG_DIR)
@@ -120,3 +141,5 @@ codebase:
 
 logs:
 	$(LOGS) -f $(APP_CONTAINER)
+
+

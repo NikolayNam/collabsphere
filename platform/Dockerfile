@@ -14,6 +14,7 @@ RUN go test -v ./...
 # Build binaries
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /out/api ./cmd/api
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /out/migrate ./cmd/migrate
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /out/seed ./cmd/seed
 
 
 # Stage 2: Final image
@@ -24,5 +25,6 @@ RUN apt-get update && apt-get install -y
 # Копируем только бинарник из предыдущего этапа
 COPY --from=builder /out/api /api
 COPY --from=builder /out/migrate /migrate
+COPY --from=builder /out/seed /seed
 
 USER 65532:65532
