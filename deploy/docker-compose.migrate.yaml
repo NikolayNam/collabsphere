@@ -8,6 +8,7 @@ services:
       - .env
     volumes:
       - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
+      - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
     environment:
       # принимает up, status, down
       MIGRATE_CMD: ${MIGRATE_CMD:-up}
