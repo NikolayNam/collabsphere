@@ -13,4 +13,12 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 
 	huma.Register(api, create, h.CreateOrganization)
 	huma.Register(api, getOrganizationByIdOp, h.GetOrganizationById)
+
+	update := updateOrganizationOp
+	update.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, update, h.UpdateOrganization)
+
+	logoUpload := createOrganizationLogoUploadOp
+	logoUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, logoUpload, h.CreateOrganizationLogoUpload)
 }

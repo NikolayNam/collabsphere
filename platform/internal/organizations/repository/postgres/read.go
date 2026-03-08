@@ -42,4 +42,3 @@ func (r *OrganizationRepo) Exists(ctx context.Context, id domain.OrganizationID)
 	}
 	return n > 0, nil
 }
-

@@ -58,3 +58,5 @@ migrations:
   - collab/conference_transcripts.sql
   - integration/jitsi_webhook_inbox.sql
   - integration/transcription_jobs.sql
+  - iam/account_profile_fields.sql
+  - org/organization_profile_fields.sql

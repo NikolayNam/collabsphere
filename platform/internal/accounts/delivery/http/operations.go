@@ -25,3 +25,30 @@ var getAccountByEmailOp = huma.Operation{
 	Tags:        []string{"Accounts"},
 	Summary:     "Get account by email",
 }
+
+var getMyAccountOp = huma.Operation{
+	OperationID: "get-my-account",
+	Method:      "GET",
+	Path:        "/accounts/me",
+	Tags:        []string{"Accounts"},
+	Summary:     "Get current account profile",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var updateMyAccountOp = huma.Operation{
+	OperationID: "update-my-account",
+	Method:      "PATCH",
+	Path:        "/accounts/me",
+	Tags:        []string{"Accounts"},
+	Summary:     "Update current account profile",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var createAvatarUploadOp = huma.Operation{
+	OperationID: "create-account-avatar-upload",
+	Method:      "POST",
+	Path:        "/accounts/me/avatar-upload",
+	Tags:        []string{"Accounts"},
+	Summary:     "Create presigned upload for account avatar",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

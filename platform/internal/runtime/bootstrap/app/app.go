@@ -52,7 +52,7 @@ func New(conf *config.Config) *App {
 	bootstrap.RegisterDBHooks(db)
 
 	registerPlatform(api)
-	registerAccountsModule(api, db)
+	registerAccountsModule(api, db, conf)
 	registerOrganzationsModule(api, db, conf)
 	registerMembershipsModule(api, db)
 	registerCatalogModule(api, db, conf)

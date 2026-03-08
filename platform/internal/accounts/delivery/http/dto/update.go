@@ -1,21 +1,27 @@
 package dto
 
-type UpdateAccountByIDInput struct {
-	ID   string `path:"id" doc:"User ID (UUID)"`
+import "github.com/google/uuid"
+
+type GetMyAccountInput struct{}
+
+type UpdateMyAccountProfileInput struct {
 	Body struct {
-		Email     *string `json:"email,omitempty"`
-		FirstName *string `json:"firstName,omitempty"`
-		LastName  *string `json:"lastName,omitempty"`
-		Status    *string `json:"status,omitempty"`
+		DisplayName    *string    `json:"displayName,omitempty" maxLength:"255"`
+		AvatarObjectID *uuid.UUID `json:"avatarObjectId,omitempty"`
+		ClearAvatar    bool       `json:"clearAvatar,omitempty"`
+		Bio            *string    `json:"bio,omitempty" maxLength:"4096"`
+		Phone          *string    `json:"phone,omitempty" maxLength:"32"`
+		Locale         *string    `json:"locale,omitempty" maxLength:"16"`
+		Timezone       *string    `json:"timezone,omitempty" maxLength:"64"`
+		Website        *string    `json:"website,omitempty" maxLength:"512"`
 	}
 }
 
-type UpdateAccountByEmailInput struct {
-	Email string `query:"email" required:"true" doc:"Lookup email"`
-	Body  struct {
-		Email     *string `json:"email,omitempty"` // Новый email
-		FirstName *string `json:"firstName,omitempty"`
-		LastName  *string `json:"lastName,omitempty"`
-		Status    *string `json:"status,omitempty"` // "active"|"suspended"|"blocked"
+type CreateAvatarUploadInput struct {
+	Body struct {
+		FileName       string  `json:"fileName" required:"true" maxLength:"512"`
+		ContentType    *string `json:"contentType,omitempty" maxLength:"255"`
+		SizeBytes      *int64  `json:"sizeBytes,omitempty" minimum:"0"`
+		ChecksumSHA256 *string `json:"checksumSHA256,omitempty" maxLength:"64"`
 	}
 }
