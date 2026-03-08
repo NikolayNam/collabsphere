@@ -73,5 +73,4 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	getTranscript.Middlewares = secured
 	huma.Register(api, getTranscript, h.GetConferenceTranscript)
 
-	huma.Register(api, jitsiWebhookOp, h.JitsiWebhook)
 }

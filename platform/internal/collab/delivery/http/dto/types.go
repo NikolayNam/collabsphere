@@ -234,7 +234,7 @@ type ConferencePayload struct {
 	Status              string     `json:"status"`
 	Provider            string     `json:"provider"`
 	Title               string     `json:"title"`
-	JitsiRoomName       string     `json:"jitsiRoomName"`
+	RoomName            string     `json:"roomName"`
 	ScheduledStartAt    *time.Time `json:"scheduledStartAt,omitempty"`
 	StartedAt           *time.Time `json:"startedAt,omitempty"`
 	EndedAt             *time.Time `json:"endedAt,omitempty"`
@@ -304,13 +304,5 @@ type ConferenceTranscriptResponse struct {
 		SourceRecordingID *uuid.UUID      `json:"sourceRecordingId,omitempty"`
 		CreatedAt         time.Time       `json:"createdAt"`
 		UpdatedAt         *time.Time      `json:"updatedAt,omitempty"`
-	}
-}
-
-type JitsiWebhookInput struct {
-	Body struct {
-		ProviderEventID string          `json:"providerEventId"`
-		EventType       string          `json:"eventType"`
-		Payload         json.RawMessage `json:"payload"`
 	}
 }

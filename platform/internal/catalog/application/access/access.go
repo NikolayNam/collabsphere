@@ -6,11 +6,10 @@ import (
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
-	memberdomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 )
 
-func RequireOrganizationAccess(ctx context.Context, organizations ports.OrganizationReader, memberships ports.MembershipReader, organizationID orgdomain.OrganizationID, actorID accdomain.AccountID, requireOwner bool) error {
+func RequireOrganizationAccess(ctx context.Context, organizations ports.OrganizationReader, memberships ports.MembershipReader, organizationID orgdomain.OrganizationID, actorID accdomain.AccountID, requireManage bool) error {
 	if organizationID.IsZero() {
 		return catalogerrors.InvalidInput("Organization is required")
 	}
@@ -26,20 +25,15 @@ func RequireOrganizationAccess(ctx context.Context, organizations ports.Organiza
 		return catalogerrors.OrganizationNotFound()
 	}
 
-	members, err := memberships.ListMembers(ctx, organizationID)
+	member, err := memberships.GetMemberByAccount(ctx, organizationID, actorID)
 	if err != nil {
-		return catalogerrors.Internal("list organization members", err)
+		return catalogerrors.Internal("get organization membership", err)
 	}
-
-	for _, member := range members {
-		if member.AccountID != actorID.UUID() || !member.IsActive {
-			continue
-		}
-		if requireOwner && member.Role != string(memberdomain.MembershipRoleOwner) {
-			return catalogerrors.AccessDenied()
-		}
-		return nil
+	if member == nil || !member.IsActive() || member.IsRemoved() {
+		return catalogerrors.AccessDenied()
 	}
-
-	return catalogerrors.AccessDenied()
+	if requireManage && !member.Role().CanManageCatalog() {
+		return catalogerrors.AccessDenied()
+	}
+	return nil
 }

@@ -33,11 +33,6 @@ type AccessTokenManager interface {
 	AccessTTL() time.Duration
 }
 
-type JitsiTokenManager interface {
-	GenerateJoinToken(ctx context.Context, roomName, displayName string, moderator bool, expiresAt time.Time) (string, error)
-	JoinURL(roomName, token string) string
-}
-
 type EventPublisher interface {
 	Publish(ctx context.Context, event collabdomain.Event)
 }
@@ -62,7 +57,6 @@ type Service struct {
 	storage            ObjectStorage
 	tokens             TokenGenerator
 	jwt                AccessTokenManager
-	jitsi              JitsiTokenManager
 	clock              Clock
 	publisher          EventPublisher
 	transcriber        Transcriber
@@ -73,7 +67,7 @@ type Service struct {
 	guestAccessTTL     time.Duration
 }
 
-func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tokens TokenGenerator, jwt AccessTokenManager, jitsi JitsiTokenManager, clock Clock, publisher EventPublisher, transcriber Transcriber, conferenceProvider, publicBaseURL, storageBucket string, guestInviteTTL, guestAccessTTL time.Duration) *Service {
+func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tokens TokenGenerator, jwt AccessTokenManager, clock Clock, publisher EventPublisher, transcriber Transcriber, conferenceProvider, publicBaseURL, storageBucket string, guestInviteTTL, guestAccessTTL time.Duration) *Service {
 	provider := strings.ToLower(strings.TrimSpace(conferenceProvider))
 	if provider == "" {
 		provider = "mediasoup"
@@ -84,7 +78,6 @@ func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tok
 		storage:            storage,
 		tokens:             tokens,
 		jwt:                jwt,
-		jitsi:              jitsi,
 		clock:              clock,
 		publisher:          publisher,
 		transcriber:        transcriber,
@@ -241,34 +234,4 @@ type UpdateConferenceRecordingCmd struct {
 type GetConferenceTranscriptQuery struct {
 	ConferenceID uuid.UUID
 	Actor        authdomain.Principal
-}
-
-type JitsiWebhookCmd struct {
-	ProviderEventID string
-	EventType       string
-	Payload         json.RawMessage
-}
-
-type jitsiRecordingPayload struct {
-	FileName       string  `json:"fileName"`
-	Bucket         string  `json:"bucket"`
-	ObjectKey      string  `json:"objectKey"`
-	ContentType    *string `json:"contentType"`
-	SizeBytes      int64   `json:"sizeBytes"`
-	ChecksumSHA256 *string `json:"checksumSha256"`
-	DurationSec    *int32  `json:"durationSec"`
-	OrganizationID *string `json:"organizationId"`
-}
-
-type jitsiTranscriptPayload struct {
-	Text         string          `json:"text"`
-	SegmentsJSON json.RawMessage `json:"segmentsJson"`
-	LanguageCode *string         `json:"languageCode"`
-}
-
-type jitsiWebhookPayload struct {
-	ConferenceID string                  `json:"conferenceId"`
-	OccurredAt   *time.Time              `json:"occurredAt"`
-	Recording    *jitsiRecordingPayload  `json:"recording"`
-	Transcript   *jitsiTranscriptPayload `json:"transcript"`
 }

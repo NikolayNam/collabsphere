@@ -51,16 +51,14 @@ func main() {
 	}
 	jwtManager := jwt.NewManager(secret, conf.Auth.AccessTTL, conf.Auth.RefreshSessionTTL)
 	conferenceProvider := conf.Conference.ProviderValue()
-	switch conferenceProvider {
-	case "jitsi", "mediasoup":
-	default:
+	if conferenceProvider != "mediasoup" {
 		log.Fatalf("unsupported conference provider: %s", conferenceProvider)
 	}
 	transcriber, err := whisper.NewClient(conf.Transcription)
 	if err != nil {
 		log.Fatalf("init transcription client: %v", err)
 	}
-	collabService := collabapp.New(collabRepo, accountRepo, storageClient, tokenGen, jwtManager, nil, clk, nil, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
+	collabService := collabapp.New(collabRepo, accountRepo, storageClient, tokenGen, jwtManager, clk, nil, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
 
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)

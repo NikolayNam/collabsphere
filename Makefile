@@ -12,7 +12,6 @@ ENV_FILE := --env-file $(DEPLOY_DIR)/.env.dev
 INFRA_FILE := docker-compose.infrastructure.yaml
 PLATFORM_FILE := docker-compose.platform.yaml
 STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
-COLLAB_FILE := docker-compose.collab.yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
 
 NETWORK_NAME := web.network
@@ -32,7 +31,6 @@ COMPOSE_ARGS = \
 	-f $(DEPLOY_DIR)/$(INFRA_FILE) \
 	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
 	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
-	-f $(DEPLOY_DIR)/$(COLLAB_FILE) \
 	--profile local
 
 SHELL := /bin/bash

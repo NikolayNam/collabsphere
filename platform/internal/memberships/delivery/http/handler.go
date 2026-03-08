@@ -1,99 +1,140 @@
 package http
 
 import (
-    "context"
-    "errors"
-    "net/http"
+	"context"
+	"net/http"
 
-    memberDomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
-    orgDomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
-
-    "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
-    "github.com/google/uuid"
-
-    "github.com/NikolayNam/collabsphere/internal/memberships/application"
-    "github.com/NikolayNam/collabsphere/internal/memberships/delivery/http/dto"
+	"github.com/NikolayNam/collabsphere/internal/memberships/application"
+	"github.com/NikolayNam/collabsphere/internal/memberships/delivery/http/dto"
+	memberDomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
+	orgDomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
+	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
+	"github.com/google/uuid"
 )
 
 type Handler struct {
-    svc *application.Service
+	svc *application.Service
 }
 
 func NewHandler(svc *application.Service) *Handler { return &Handler{svc: svc} }
 
-func (h *Handler) AddMember(ctx context.Context, input *dto.AddMemberInput) (*dto.MembersResponse, error) {
-    orgUUID, err := uuid.Parse(input.OrganizationID)
-    if err != nil || orgUUID == uuid.Nil {
-        return nil, humaerr.From(ctx, application.ErrValidation)
-    }
-    orgID, _ := orgDomain.OrganizationIDFromUUID(orgUUID)
+func (h *Handler) AddMember(ctx context.Context, input *dto.AddMemberInput) (*dto.MemberResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	member, err := h.svc.AddMember(ctx, actorID, orgID, input.Body.AccountID, input.Body.Role)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.MemberResponse{Status: http.StatusCreated, Body: toMemberPayload(*member)}, nil
+}
 
-    accUUID, err := uuid.Parse(input.Body.AccountID)
-    if err != nil || accUUID == uuid.Nil {
-        return nil, humaerr.From(ctx, application.ErrValidation)
-    }
+func (h *Handler) UpdateMember(ctx context.Context, input *dto.UpdateMemberInput) (*dto.MemberResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	membershipID, err := parseUUID(input.MembershipID)
+	if err != nil {
+		return nil, humaerr.From(ctx, fault.Validation("Invalid membership_id"))
+	}
+	member, err := h.svc.UpdateMember(ctx, application.UpdateMemberCmd{
+		OrganizationID: orgID,
+		MembershipID:   membershipID,
+		ActorAccountID: actorID,
+		Role:           input.Body.Role,
+		IsActive:       input.Body.IsActive,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.MemberResponse{Status: http.StatusOK, Body: toMemberPayload(*member)}, nil
+}
 
-    if err := h.svc.AddMember(ctx, orgID, input.Body.AccountID, input.Body.Role); err != nil {
-        return nil, humaerr.From(ctx, err)
-    }
-
-    members, err := h.svc.ListMembers(ctx, orgID)
-    if err != nil {
-        return nil, humaerr.From(ctx, err)
-    }
-
-    var created *memberDomain.MemberView
-    for i := range members {
-        if members[i].AccountID == accUUID {
-            created = &members[i]
-            break
-        }
-    }
-    if created == nil {
-        return nil, humaerr.From(ctx, errors.New("member not found after successful add"))
-    }
-
-    return &dto.MembersResponse{
-        OrganizationID: orgUUID,
-        Status:         http.StatusCreated,
-        Body: dto.MemberBody{
-            ID:        created.MembershipID,
-            AccountID: created.AccountID,
-            Role:      created.Role,
-            IsActive:  created.IsActive,
-            CreatedAt: created.CreatedAt,
-        },
-    }, nil
+func (h *Handler) RemoveMember(ctx context.Context, input *dto.RemoveMemberInput) (*dto.EmptyResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	membershipID, err := parseUUID(input.MembershipID)
+	if err != nil {
+		return nil, humaerr.From(ctx, fault.Validation("Invalid membership_id"))
+	}
+	if err := h.svc.RemoveMember(ctx, application.RemoveMemberCmd{OrganizationID: orgID, MembershipID: membershipID, ActorAccountID: actorID}); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.EmptyResponse{Status: http.StatusNoContent}, nil
 }
 
 func (h *Handler) ListMembers(ctx context.Context, input *dto.ListMembersInput) (*dto.MembersListResponse, error) {
-    orgUUID, err := uuid.Parse(input.OrganizationID)
-    if err != nil || orgUUID == uuid.Nil {
-        return nil, humaerr.From(ctx, application.ErrValidation)
-    }
-    orgID, _ := orgDomain.OrganizationIDFromUUID(orgUUID)
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	members, err := h.svc.ListMembers(ctx, actorID, orgID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.MembersListResponse{Status: http.StatusOK}
+	out.Body.Members = make([]dto.MemberPayload, 0, len(members))
+	for _, member := range members {
+		out.Body.Members = append(out.Body.Members, toMemberPayload(member))
+	}
+	return out, nil
+}
 
-    members, err := h.svc.ListMembers(ctx, orgID)
-    if err != nil {
-        return nil, humaerr.From(ctx, err)
-    }
+func principalMembershipActor(ctx context.Context) (uuid.UUID, error) {
+	principal := authmw.PrincipalFromContext(ctx)
+	if !principal.IsAccount() {
+		return uuid.Nil, fault.Unauthorized("Authentication required")
+	}
+	return principal.AccountID, nil
+}
 
-    out := &dto.MembersListResponse{
-        Status: http.StatusOK,
-        Body: dto.MembersListBody{
-            Data: make([]dto.MemberBody, 0, len(members)),
-        },
-    }
+func parseOrganizationID(raw string) (orgDomain.OrganizationID, error) {
+	parsed, err := parseUUID(raw)
+	if err != nil {
+		return orgDomain.OrganizationID{}, fault.Validation("Invalid organization_id")
+	}
+	return orgDomain.OrganizationIDFromUUID(parsed)
+}
 
-    for _, m := range members {
-        out.Body.Data = append(out.Body.Data, dto.MemberBody{
-            ID:        m.MembershipID,
-            AccountID: m.AccountID,
-            Role:      m.Role,
-            IsActive:  m.IsActive,
-            CreatedAt: m.CreatedAt,
-        })
-    }
+func parseUUID(raw string) (uuid.UUID, error) {
+	parsed, err := uuid.Parse(raw)
+	if err != nil || parsed == uuid.Nil {
+		return uuid.Nil, fault.Validation("Invalid identifier")
+	}
+	return parsed, nil
+}
 
-    return out, nil
+func toMemberPayload(member memberDomain.MemberView) dto.MemberPayload {
+	return dto.MemberPayload{
+		ID:             member.MembershipID,
+		OrganizationID: member.OrganizationID,
+		AccountID:      member.AccountID,
+		Role:           member.Role,
+		IsActive:       member.IsActive,
+		CreatedAt:      member.CreatedAt,
+		UpdatedAt:      member.UpdatedAt,
+		DeletedAt:      member.DeletedAt,
+	}
 }

@@ -46,3 +46,5 @@
 0044 | org/organization_legal_document_analysis.sql        | 0044_organization_legal_document_analysis.sql
 0045 | integration/organization_document_analysis_jobs.sql | 0045_organization_document_analysis_jobs.sql
 0046 | collab/conference_provider_mediasoup.sql            | 0046_conference_provider_mediasoup.sql
+0047 | collab/conference_provider_mediasoup_only.sql       | 0047_conference_provider_mediasoup_only.sql
+0048 | iam/membership_roles_v2.sql                         | 0048_membership_roles_v2.sql

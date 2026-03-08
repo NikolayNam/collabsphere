@@ -54,7 +54,7 @@ func New(conf *config.Config) *App {
 	registerPlatform(api)
 	registerAccountsModule(api, db, conf)
 	registerOrganzationsModule(api, db, conf)
-	registerMembershipsModule(api, db)
+	registerMembershipsModule(api, db, conf)
 	registerCatalogModule(api, db, conf)
 	registerGroupsModule(api, db, conf)
 	registerCollabModule(api, router, db, conf)

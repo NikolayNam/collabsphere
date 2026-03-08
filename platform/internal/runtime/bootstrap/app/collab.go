@@ -10,7 +10,6 @@ import (
 	collabpg "github.com/NikolayNam/collabsphere/internal/collab/repository/postgres"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/clock"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
-	jitsisec "github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jitsi"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jwt"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/tokens"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/storage/s3"
@@ -42,21 +41,8 @@ func registerCollabModule(api huma.API, router chi.Router, db *gorm.DB, conf *co
 	}
 
 	conferenceProvider := conf.Conference.ProviderValue()
-	switch conferenceProvider {
-	case "jitsi", "mediasoup":
-	default:
+	if conferenceProvider != "mediasoup" {
 		panic(fmt.Errorf("unsupported conference provider: %s", conferenceProvider))
-	}
-
-	var jitsiManager *jitsisec.Manager
-	if conf.Conference.Jitsi.Enabled {
-		jitsiManager, err = jitsisec.NewManager(conf.Conference.Jitsi)
-		if err != nil {
-			panic(fmt.Errorf("init jitsi manager: %w", err))
-		}
-	}
-	if conferenceProvider == "jitsi" && jitsiManager == nil {
-		panic(fmt.Errorf("conference provider jitsi requires JITSI_ENABLED=true"))
 	}
 
 	transcriber, err := whisper.NewClient(conf.Transcription)
@@ -64,7 +50,7 @@ func registerCollabModule(api huma.API, router chi.Router, db *gorm.DB, conf *co
 		panic(fmt.Errorf("init transcription client: %w", err))
 	}
 
-	service := collabapp.New(repo, accountRepo, storageClient, tokenGen, jwtManager, jitsiManager, clk, broker, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
+	service := collabapp.New(repo, accountRepo, storageClient, tokenGen, jwtManager, clk, broker, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
 	handler := collabhttp.NewHandler(service)
 	collabhttp.Register(api, handler, jwtManager)
 	if router != nil {

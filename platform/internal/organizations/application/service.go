@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	memberPorts "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
-	memberdomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application/create_organization"
 	create_with_owner "github.com/NikolayNam/collabsphere/internal/organizations/application/create_organization_with_owner"
 	apperrors "github.com/NikolayNam/collabsphere/internal/organizations/application/errors"
@@ -457,7 +457,6 @@ func (s *Service) ProcessNextLegalDocumentAnalysisJob(ctx context.Context) (bool
 	}
 	return true, nil
 }
-
 func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID, requireOwner bool) error {
 	if organizationID.IsZero() {
 		return apperrors.InvalidInput("Organization is required")
@@ -474,20 +473,21 @@ func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID 
 		return apperrors.OrganizationNotFound()
 	}
 
-	members, err := s.memberships.ListMembers(ctx, organizationID)
+	accountID, err := accdomain.AccountIDFromUUID(actorAccountID)
 	if err != nil {
-		return fault.Internal("List organization members failed", fault.WithCause(err))
+		return fault.Unauthorized("Authentication required")
 	}
-	for _, member := range members {
-		if member.AccountID != actorAccountID || !member.IsActive {
-			continue
-		}
-		if requireOwner && member.Role != string(memberdomain.MembershipRoleOwner) {
-			return fault.Forbidden("Only organization owners can manage organization profile")
-		}
-		return nil
+	membership, err := s.memberships.GetMemberByAccount(ctx, organizationID, accountID)
+	if err != nil {
+		return fault.Internal("Get organization membership failed", fault.WithCause(err))
 	}
-	return fault.Forbidden("Organization access denied")
+	if membership == nil || !membership.IsActive() || membership.IsRemoved() {
+		return fault.Forbidden("Organization access denied")
+	}
+	if requireOwner && !membership.Role().CanManageOrganizationProfile() {
+		return fault.Forbidden("Only organization owners or admins can manage organization profile")
+	}
+	return nil
 }
 
 func (s *Service) createOrganizationScopedUpload(ctx context.Context, organizationID domain.OrganizationID, root string, segments []string, fileName string, contentType *string, sizeBytes *int64, checksumSHA256 *string, fallbackFileName string) (ports.StorageObject, string, time.Time, error) {

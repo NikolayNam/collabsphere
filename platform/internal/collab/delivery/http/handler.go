@@ -289,13 +289,6 @@ func (h *Handler) GetConferenceTranscript(ctx context.Context, input *dto.GetCon
 	return out, nil
 }
 
-func (h *Handler) JitsiWebhook(ctx context.Context, input *dto.JitsiWebhookInput) (*dto.EmptyResponse, error) {
-	if err := h.svc.HandleJitsiWebhook(ctx, authapp.JitsiWebhookCmd{ProviderEventID: input.Body.ProviderEventID, EventType: input.Body.EventType, Payload: input.Body.Payload}); err != nil {
-		return nil, humaerr.From(ctx, err)
-	}
-	return &dto.EmptyResponse{Status: 204}, nil
-}
-
 func principal(ctx context.Context) authdomain.Principal {
 	return authmw.PrincipalFromContext(ctx)
 }
@@ -410,5 +403,5 @@ func toGuestIdentityPayload(guest collabdomain.GuestIdentity) dto.GuestIdentityP
 }
 
 func toConferencePayload(conference collabdomain.Conference) dto.ConferencePayload {
-	return dto.ConferencePayload{ID: conference.ID, ChannelID: conference.ChannelID, Kind: string(conference.Kind), Status: string(conference.Status), Provider: conference.Provider, Title: conference.Title, JitsiRoomName: conference.JitsiRoomName, ScheduledStartAt: conference.ScheduledStartAt, StartedAt: conference.StartedAt, EndedAt: conference.EndedAt, RecordingEnabled: conference.RecordingEnabled, RecordingStartedAt: conference.RecordingStartedAt, RecordingStoppedAt: conference.RecordingStoppedAt, TranscriptionStatus: string(conference.TranscriptionStatus), CreatedAt: conference.CreatedAt, UpdatedAt: conference.UpdatedAt}
+	return dto.ConferencePayload{ID: conference.ID, ChannelID: conference.ChannelID, Kind: string(conference.Kind), Status: string(conference.Status), Provider: conference.Provider, Title: conference.Title, RoomName: conference.RoomName, ScheduledStartAt: conference.ScheduledStartAt, StartedAt: conference.StartedAt, EndedAt: conference.EndedAt, RecordingEnabled: conference.RecordingEnabled, RecordingStartedAt: conference.RecordingStartedAt, RecordingStoppedAt: conference.RecordingStoppedAt, TranscriptionStatus: string(conference.TranscriptionStatus), CreatedAt: conference.CreatedAt, UpdatedAt: conference.UpdatedAt}
 }

@@ -13,10 +13,10 @@ import (
 func TestPresignPutObjectUsesPublicEndpointWhenConfigured(t *testing.T) {
 	client, err := NewClient(config.S3{
 		Enabled:        true,
-		Endpoint:       "http://minio:9000",
+		Endpoint:       "http://s3:9000",
 		PublicEndpoint: "http://localhost:9000",
 		Region:         "us-east-1",
-		AccessKey:      "minioadmin",
+		AccessKey:      "access-key",
 		SecretKey:      "secret",
 		Bucket:         "collabsphere",
 		PathStyle:      true,
@@ -47,9 +47,9 @@ func TestPresignPutObjectUsesPublicEndpointWhenConfigured(t *testing.T) {
 func TestPresignPutObjectFallsBackToInternalEndpoint(t *testing.T) {
 	client, err := NewClient(config.S3{
 		Enabled:     true,
-		Endpoint:    "http://minio:9000",
+		Endpoint:    "http://s3:9000",
 		Region:      "us-east-1",
-		AccessKey:   "minioadmin",
+		AccessKey:   "access-key",
 		SecretKey:   "secret",
 		Bucket:      "collabsphere",
 		PathStyle:   true,
@@ -69,7 +69,7 @@ func TestPresignPutObjectFallsBackToInternalEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse presigned URL: %v", err)
 	}
-	if parsed.Host != "minio:9000" {
-		t.Fatalf("expected internal host minio:9000, got %q", parsed.Host)
+	if parsed.Host != "s3:9000" {
+		t.Fatalf("expected internal host s3:9000, got %q", parsed.Host)
 	}
 }

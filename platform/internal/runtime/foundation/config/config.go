@@ -104,25 +104,6 @@ type Redis struct {
 
 type Conference struct {
 	Provider string `env:"CONFERENCE_PROVIDER" envDefault:"mediasoup"`
-	Jitsi    Jitsi
-}
-
-type Jitsi struct {
-	Enabled                   bool          `env:"JITSI_ENABLED" envDefault:"false"`
-	BaseURL                   string        `env:"JITSI_BASE_URL"`
-	Domain                    string        `env:"JITSI_DOMAIN"`
-	AppID                     string        `env:"JITSI_APP_ID"`
-	AppSecret                 string        `env:"JITSI_APP_SECRET"`
-	AppSecretFile             string        `env:"JITSI_APP_SECRET_FILE"`
-	Issuer                    string        `env:"JITSI_ISSUER"`
-	Audience                  string        `env:"JITSI_AUDIENCE" envDefault:"jitsi"`
-	TokenTTL                  time.Duration `env:"JITSI_TOKEN_TTL" envDefault:"2h"`
-	JicofoAuthPassword        string        `env:"JITSI_JICOFO_AUTH_PASSWORD"`
-	JicofoAuthPasswordFile    string        `env:"JITSI_JICOFO_AUTH_PASSWORD_FILE"`
-	JicofoComponentSecret     string        `env:"JITSI_JICOFO_COMPONENT_SECRET"`
-	JicofoComponentSecretFile string        `env:"JITSI_JICOFO_COMPONENT_SECRET_FILE"`
-	JVBAuthPassword           string        `env:"JITSI_JVB_AUTH_PASSWORD"`
-	JVBAuthPasswordFile       string        `env:"JITSI_JVB_AUTH_PASSWORD_FILE"`
 }
 
 type Transcription struct {
@@ -178,22 +159,6 @@ func (s S3) AccessKeyValue() (string, error) {
 
 func (s S3) SecretKeyValue() (string, error) {
 	return readRequiredSecret("storage s3 secret key", s.SecretKey, s.SecretKeyFile)
-}
-
-func (j Jitsi) AppSecretValue() (string, error) {
-	return readRequiredSecret("jitsi app secret", j.AppSecret, j.AppSecretFile)
-}
-
-func (j Jitsi) JicofoAuthPasswordValue() (string, error) {
-	return readOptionalSecret("jitsi jicofo auth password", j.JicofoAuthPassword, j.JicofoAuthPasswordFile)
-}
-
-func (j Jitsi) JicofoComponentSecretValue() (string, error) {
-	return readOptionalSecret("jitsi jicofo component secret", j.JicofoComponentSecret, j.JicofoComponentSecretFile)
-}
-
-func (j Jitsi) JVBAuthPasswordValue() (string, error) {
-	return readOptionalSecret("jitsi jvb auth password", j.JVBAuthPassword, j.JVBAuthPasswordFile)
 }
 
 func (r Redis) PasswordValue() (string, error) {
@@ -262,50 +227,14 @@ func (c Conference) ProviderValue() string {
 	if provider == "" {
 		return "mediasoup"
 	}
-	switch provider {
-	case "jitsi", "mediasoup":
-		return provider
-	default:
-		return provider
-	}
+	return provider
 }
 
-func (j Jitsi) Validate() error {
-	if !j.Enabled {
-		return nil
+func (c Conference) Validate() error {
+	if c.ProviderValue() != "mediasoup" {
+		return errors.New("only mediasoup conference provider is supported")
 	}
-	if _, err := j.AppSecretValue(); err != nil {
-		return err
-	}
-	if _, err := j.JicofoAuthPasswordValue(); err != nil {
-		return err
-	}
-	if _, err := j.JicofoComponentSecretValue(); err != nil {
-		return err
-	}
-	if _, err := j.JVBAuthPasswordValue(); err != nil {
-		return err
-	}
-
-	switch {
-	case strings.TrimSpace(j.BaseURL) == "":
-		return errors.New("jitsi base url is empty")
-	case strings.TrimSpace(j.Domain) == "":
-		return errors.New("jitsi domain is empty")
-	case strings.TrimSpace(j.AppID) == "":
-		return errors.New("jitsi app id is empty")
-	case j.TokenTTL <= 0:
-		return errors.New("jitsi token ttl must be positive")
-	default:
-		return nil
-	}
-}
-
-func (j Jitsi) IssuerValue() string {
-	if strings.TrimSpace(j.Issuer) != "" {
-		return strings.TrimSpace(j.Issuer)
-	}
-	return strings.TrimSpace(j.AppID)
+	return nil
 }
 
 func (t Transcription) Validate() error {

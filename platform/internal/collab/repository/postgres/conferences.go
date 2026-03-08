@@ -18,7 +18,7 @@ type conferenceRow struct {
 	Status              string     `gorm:"column:status"`
 	Provider            string     `gorm:"column:provider"`
 	Title               string     `gorm:"column:title"`
-	JitsiRoomName       string     `gorm:"column:jitsi_room_name"`
+	RoomName            string     `gorm:"column:jitsi_room_name"`
 	ScheduledStartAt    *time.Time `gorm:"column:scheduled_start_at"`
 	StartedAt           *time.Time `gorm:"column:started_at"`
 	EndedAt             *time.Time `gorm:"column:ended_at"`
@@ -86,7 +86,7 @@ func (r *Repo) CreateConference(ctx context.Context, conference collabdomain.Con
 		"status":               string(conference.Status),
 		"provider":             conference.Provider,
 		"title":                conference.Title,
-		"jitsi_room_name":      conference.JitsiRoomName,
+		"jitsi_room_name":      conference.RoomName,
 		"scheduled_start_at":   conference.ScheduledStartAt,
 		"started_at":           conference.StartedAt,
 		"ended_at":             conference.EndedAt,
@@ -252,38 +252,6 @@ func (r *Repo) GetConferenceTranscript(ctx context.Context, conferenceID uuid.UU
 	}, nil
 }
 
-func (r *Repo) CreateJitsiWebhookInbox(ctx context.Context, providerEventID, eventType string, payload json.RawMessage, now time.Time) (uuid.UUID, bool, error) {
-	if now.IsZero() {
-		now = time.Now().UTC()
-	}
-	id := uuid.New()
-	err := r.dbFrom(ctx).WithContext(ctx).Table("integration.jitsi_webhook_inbox").Create(map[string]any{
-		"id":                id,
-		"provider_event_id": providerEventID,
-		"event_type":        eventType,
-		"payload_json":      payload,
-		"received_at":       now,
-	}).Error
-	if isUniqueViolation(err) {
-		return uuid.Nil, false, nil
-	}
-	if err != nil {
-		return uuid.Nil, false, err
-	}
-	return id, true, nil
-}
-
-func (r *Repo) MarkJitsiWebhookProcessed(ctx context.Context, inboxID uuid.UUID, processedAt time.Time, errMessage *string) error {
-	if processedAt.IsZero() {
-		processedAt = time.Now().UTC()
-	}
-	updates := map[string]any{"processed_at": processedAt}
-	if errMessage != nil {
-		updates["error_message"] = *errMessage
-	}
-	return r.dbFrom(ctx).WithContext(ctx).Table("integration.jitsi_webhook_inbox").Where("id = ?", inboxID).Updates(updates).Error
-}
-
 func (r *Repo) EnqueueTranscriptionJob(ctx context.Context, conferenceID, recordingID uuid.UUID, now time.Time) error {
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -372,7 +340,7 @@ func mapConference(row conferenceRow) *collabdomain.Conference {
 		Status:              collabdomain.ConferenceStatus(row.Status),
 		Provider:            row.Provider,
 		Title:               row.Title,
-		JitsiRoomName:       row.JitsiRoomName,
+		RoomName:            row.RoomName,
 		ScheduledStartAt:    row.ScheduledStartAt,
 		StartedAt:           row.StartedAt,
 		EndedAt:             row.EndedAt,

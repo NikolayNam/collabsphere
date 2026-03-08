@@ -1,16 +1,18 @@
 package domain
 
 import (
-    "time"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 type MemberView struct {
-    MembershipID   uuid.UUID
-    OrganizationID uuid.UUID
-    AccountID      uuid.UUID
-    Role           string
-    IsActive       bool
-    CreatedAt      time.Time
+	MembershipID   uuid.UUID
+	OrganizationID uuid.UUID
+	AccountID      uuid.UUID
+	Role           string
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      *time.Time
+	DeletedAt      *time.Time
 }

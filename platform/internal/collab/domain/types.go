@@ -136,7 +136,7 @@ type Conference struct {
 	Status              ConferenceStatus
 	Provider            string
 	Title               string
-	JitsiRoomName       string
+	RoomName            string
 	ScheduledStartAt    *time.Time
 	StartedAt           *time.Time
 	EndedAt             *time.Time
