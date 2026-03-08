@@ -19,4 +19,4 @@ s3_region = "${STORAGE_S3_REGION}"
 root_domain = ""
 EOF
 
-exec garage -c /etc/garage/garage.toml server
+exec /garage -c /etc/garage/garage.toml server

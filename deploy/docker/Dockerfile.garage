@@ -1,0 +1,9 @@
+ARG GARAGE_VERSION=v1.3.1
+FROM dxflrs/garage:${GARAGE_VERSION} AS garage-bin
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=garage-bin /garage /garage
+ENTRYPOINT ["/garage"]
