@@ -14,6 +14,8 @@ services:
       - dev_password
       - neon_password
       - jwt_secret
+      - s3_access_key
+      - s3_secret
     networks:
       - internal.network
       - web.network
@@ -33,8 +35,6 @@ services:
         condition: service_started
       s3-init:
         condition: service_completed_successfully
-    volumes:
-      - s3.credentials:/run/generated/s3:ro
 
 networks:
   internal.network:
@@ -45,10 +45,6 @@ networks:
     name: web.network
     external: true
 
-volumes:
-  s3.credentials:
-    name: s3.credentials
-
 secrets:
   dev_password:
     file: deploy/secrets/postgres/dev/db_password
@@ -56,3 +52,7 @@ secrets:
     file: deploy/secrets/postgres/prod/db_password
   jwt_secret:
     file: deploy/secrets/jwt/jwt_secret
+  s3_access_key:
+    file: deploy/secrets/s3/s3_access_key
+  s3_secret:
+    file: deploy/secrets/s3/s3_secret

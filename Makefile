@@ -3,7 +3,7 @@ EXEC := docker exec -it
 LOGS := docker logs
 MIGRATE_CMD ?= up
 SEED_CMD ?= up
-STORAGE_PROVIDER ?= garage
+STORAGE_PROVIDER ?= minio
 
 PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
