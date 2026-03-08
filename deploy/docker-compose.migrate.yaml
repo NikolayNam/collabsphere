@@ -20,10 +20,11 @@ services:
 networks:
   internal.network:
     name: internal.network
-    external: true
+    driver: bridge
+    external: false
 
 secrets:
   dev_password:
-    file: secrets/postgres/dev/password
+    file: secrets/postgres/dev/db_password
   neon_password:
-    file: secrets/postgres/prod/password
+    file: secrets/postgres/prod/db_password
