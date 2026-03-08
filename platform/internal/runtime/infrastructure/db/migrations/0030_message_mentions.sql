@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.message_mentions
 (
     message_id   uuid        NOT NULL,
@@ -16,3 +18,7 @@ CREATE TABLE collab.message_mentions
 
 CREATE INDEX idx_collab_message_mentions_account_id
     ON collab.message_mentions (account_id, created_at DESC);
+
+-- +goose Down
+
+DROP TABLE collab.message_mentions;

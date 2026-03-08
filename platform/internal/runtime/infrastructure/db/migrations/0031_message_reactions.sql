@@ -1,12 +1,14 @@
+-- +goose Up
+
 CREATE TABLE collab.message_reactions
 (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    message_id   uuid        NOT NULL,
-    actor_type   text        NOT NULL,
-    account_id   uuid        NULL,
-    guest_id     uuid        NULL,
-    emoji        text        NOT NULL,
-    created_at   timestamptz NOT NULL DEFAULT now(),
+    message_id  uuid        NOT NULL,
+    actor_type  text        NOT NULL,
+    account_id  uuid        NULL,
+    guest_id    uuid        NULL,
+    emoji       text        NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT fk_collab_message_reactions_message
         FOREIGN KEY (message_id)
             REFERENCES collab.messages (id)
@@ -31,3 +33,7 @@ CREATE TABLE collab.message_reactions
     CONSTRAINT chk_collab_message_reactions_emoji_not_blank
         CHECK (btrim(emoji) <> '')
 );
+
+-- +goose Down
+
+DROP TABLE collab.message_reactions;

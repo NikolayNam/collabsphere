@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.messages
 (
     id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -50,3 +52,7 @@ CREATE TABLE collab.messages
 
 CREATE INDEX idx_collab_messages_channel_created_at
     ON collab.messages (channel_id, created_at DESC);
+
+-- +goose Down
+
+DROP TABLE collab.messages;

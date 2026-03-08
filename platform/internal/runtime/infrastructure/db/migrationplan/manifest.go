@@ -92,6 +92,17 @@ func ValidateManifest(m *Manifest, srcDir string) error {
 
 		if info.IsDir() {
 			errs = append(errs, fmt.Sprintf("entry %q is a directory, expected file", clean))
+			continue
+		}
+
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("read %q: %v", clean, err))
+			continue
+		}
+
+		if err := validateGooseDirectives(content); err != nil {
+			errs = append(errs, fmt.Sprintf("file %q: %v", clean, err))
 		}
 	}
 
@@ -110,4 +121,20 @@ func ValidateManifest(m *Manifest, srcDir string) error {
 	}
 
 	return nil
+}
+
+func validateGooseDirectives(content []byte) error {
+	normalized := strings.TrimPrefix(string(content), "\ufeff")
+	for _, rawLine := range strings.Split(normalized, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		if !strings.EqualFold(line, "-- +goose Up") {
+			return fmt.Errorf("must start with '-- +goose Up'")
+		}
+		return nil
+	}
+
+	return fmt.Errorf("is empty")
 }

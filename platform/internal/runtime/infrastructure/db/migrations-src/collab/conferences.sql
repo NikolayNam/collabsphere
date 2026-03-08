@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.conferences
 (
     id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,3 +60,7 @@ CREATE TABLE collab.conferences
 
 CREATE INDEX idx_collab_conferences_channel_id
     ON collab.conferences (channel_id, created_at DESC);
+
+-- +goose Down
+
+DROP TABLE collab.conferences;

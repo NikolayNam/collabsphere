@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.conference_recordings
 (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -24,3 +26,7 @@ CREATE TABLE collab.conference_recordings
     CONSTRAINT chk_collab_conference_recordings_duration_nonneg
         CHECK (duration_sec IS NULL OR duration_sec >= 0)
 );
+
+-- +goose Down
+
+DROP TABLE collab.conference_recordings;

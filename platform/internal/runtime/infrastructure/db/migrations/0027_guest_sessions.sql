@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE auth.guest_sessions
 (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,3 +32,7 @@ CREATE TABLE auth.guest_sessions
 
 CREATE INDEX idx_auth_guest_sessions_guest_id
     ON auth.guest_sessions (guest_id);
+
+-- +goose Down
+
+DROP TABLE auth.guest_sessions;

@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.message_attachments
 (
     message_id       uuid        NOT NULL,
@@ -23,3 +25,7 @@ CREATE TABLE collab.message_attachments
             REFERENCES iam.accounts (id)
             ON DELETE SET NULL
 );
+
+-- +goose Down
+
+DROP TABLE collab.message_attachments;

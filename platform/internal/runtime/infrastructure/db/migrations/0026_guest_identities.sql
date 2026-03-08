@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE auth.guest_identities
 (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -32,3 +34,7 @@ CREATE TABLE auth.guest_identities
 
 CREATE INDEX idx_auth_guest_identities_channel_id
     ON auth.guest_identities (channel_id);
+
+-- +goose Down
+
+DROP TABLE auth.guest_identities;

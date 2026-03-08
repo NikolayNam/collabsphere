@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.channel_read_cursors
 (
     id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,3 +33,7 @@ CREATE TABLE collab.channel_read_cursors
     CONSTRAINT chk_collab_channel_read_cursors_last_read_seq_nonneg
         CHECK (last_read_seq >= 0)
 );
+
+-- +goose Down
+
+DROP TABLE collab.channel_read_cursors;

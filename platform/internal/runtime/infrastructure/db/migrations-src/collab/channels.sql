@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.channels
 (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -58,3 +60,7 @@ WHERE NOT EXISTS (
       AND c.is_default = true
       AND c.deleted_at IS NULL
 );
+
+-- +goose Down
+
+DROP TABLE collab.channels;

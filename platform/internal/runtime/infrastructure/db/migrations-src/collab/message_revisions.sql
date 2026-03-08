@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.message_revisions
 (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -17,3 +19,7 @@ CREATE TABLE collab.message_revisions
 
 CREATE INDEX idx_collab_message_revisions_message_id
     ON collab.message_revisions (message_id, created_at DESC);
+
+-- +goose Down
+
+DROP TABLE collab.message_revisions;

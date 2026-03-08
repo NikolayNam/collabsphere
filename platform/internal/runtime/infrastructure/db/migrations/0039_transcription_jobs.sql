@@ -1,17 +1,19 @@
+-- +goose Up
+
 CREATE TABLE integration.transcription_jobs
 (
-    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    conference_id     uuid        NOT NULL,
-    recording_id      uuid        NOT NULL,
-    status            text        NOT NULL DEFAULT 'pending',
-    provider          text        NOT NULL DEFAULT 'whisper',
-    attempts          integer     NOT NULL DEFAULT 0,
-    available_at      timestamptz NOT NULL DEFAULT now(),
-    leased_until      timestamptz NULL,
-    last_error        text        NULL,
-    completed_at      timestamptz NULL,
-    created_at        timestamptz NOT NULL DEFAULT now(),
-    updated_at        timestamptz NULL,
+    id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    conference_id    uuid        NOT NULL,
+    recording_id     uuid        NOT NULL,
+    status           text        NOT NULL DEFAULT 'pending',
+    provider         text        NOT NULL DEFAULT 'whisper',
+    attempts         integer     NOT NULL DEFAULT 0,
+    available_at     timestamptz NOT NULL DEFAULT now(),
+    leased_until     timestamptz NULL,
+    last_error       text        NULL,
+    completed_at     timestamptz NULL,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NULL,
     CONSTRAINT fk_integration_transcription_jobs_conference
         FOREIGN KEY (conference_id)
             REFERENCES collab.conferences (id)
@@ -38,3 +40,7 @@ CREATE TABLE integration.transcription_jobs
 
 CREATE INDEX idx_integration_transcription_jobs_status_available
     ON integration.transcription_jobs (status, available_at);
+
+-- +goose Down
+
+DROP TABLE integration.transcription_jobs;

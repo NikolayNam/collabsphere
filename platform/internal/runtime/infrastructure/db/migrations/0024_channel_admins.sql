@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.channel_admins
 (
     channel_id  uuid        NOT NULL,
@@ -21,3 +23,7 @@ CREATE TABLE collab.channel_admins
 
 CREATE INDEX idx_collab_channel_admins_account_id
     ON collab.channel_admins (account_id);
+
+-- +goose Down
+
+DROP TABLE collab.channel_admins;

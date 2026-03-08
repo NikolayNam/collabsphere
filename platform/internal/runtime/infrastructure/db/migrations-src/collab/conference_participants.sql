@@ -1,13 +1,15 @@
+-- +goose Up
+
 CREATE TABLE collab.conference_participants
 (
-    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    conference_id uuid      NOT NULL,
-    actor_type  text        NOT NULL,
-    account_id  uuid        NULL,
-    guest_id    uuid        NULL,
-    joined_at   timestamptz NOT NULL DEFAULT now(),
-    left_at     timestamptz NULL,
-    role        text        NOT NULL DEFAULT 'participant',
+    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    conference_id  uuid        NOT NULL,
+    actor_type     text        NOT NULL,
+    account_id     uuid        NULL,
+    guest_id       uuid        NULL,
+    joined_at      timestamptz NOT NULL DEFAULT now(),
+    left_at        timestamptz NULL,
+    role           text        NOT NULL DEFAULT 'participant',
     CONSTRAINT fk_collab_conference_participants_conference
         FOREIGN KEY (conference_id)
             REFERENCES collab.conferences (id)
@@ -35,3 +37,7 @@ CREATE TABLE collab.conference_participants
 
 CREATE INDEX idx_collab_conference_participants_conference_id
     ON collab.conference_participants (conference_id, joined_at DESC);
+
+-- +goose Down
+
+DROP TABLE collab.conference_participants;

@@ -1,3 +1,5 @@
+-- +goose Up
+
 CREATE TABLE collab.conference_transcripts
 (
     conference_id       uuid PRIMARY KEY,
@@ -20,3 +22,7 @@ CREATE TABLE collab.conference_transcripts
     CONSTRAINT chk_collab_conference_transcripts_updated_valid
         CHECK (updated_at IS NULL OR updated_at >= created_at)
 );
+
+-- +goose Down
+
+DROP TABLE collab.conference_transcripts;

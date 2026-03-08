@@ -1,18 +1,20 @@
+-- +goose Up
+
 CREATE TABLE collab.guest_invites
 (
-    id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    channel_id       uuid        NOT NULL,
-    email            citext      NOT NULL,
-    token_hash       text        NOT NULL,
-    can_post         boolean     NOT NULL DEFAULT true,
-    visible_from_seq bigint      NOT NULL DEFAULT 0,
-    expires_at       timestamptz NOT NULL,
-    accepted_at      timestamptz NULL,
-    revoked_at       timestamptz NULL,
-    created_at       timestamptz NOT NULL DEFAULT now(),
-    updated_at       timestamptz NULL,
-    invited_by       uuid        NOT NULL,
-    accepted_by_guest_id uuid    NULL,
+    id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    channel_id           uuid        NOT NULL,
+    email                citext      NOT NULL,
+    token_hash           text        NOT NULL,
+    can_post             boolean     NOT NULL DEFAULT true,
+    visible_from_seq     bigint      NOT NULL DEFAULT 0,
+    expires_at           timestamptz NOT NULL,
+    accepted_at          timestamptz NULL,
+    revoked_at           timestamptz NULL,
+    created_at           timestamptz NOT NULL DEFAULT now(),
+    updated_at           timestamptz NULL,
+    invited_by           uuid        NOT NULL,
+    accepted_by_guest_id uuid        NULL,
     CONSTRAINT fk_collab_guest_invites_channel
         FOREIGN KEY (channel_id)
             REFERENCES collab.channels (id)
@@ -42,3 +44,7 @@ CREATE INDEX idx_collab_guest_invites_channel_id
 
 CREATE INDEX idx_collab_guest_invites_email
     ON collab.guest_invites (email);
+
+-- +goose Down
+
+DROP TABLE collab.guest_invites;
