@@ -39,3 +39,5 @@
 0037 | collab/conference_transcripts.sql               | 0037_conference_transcripts.sql
 0038 | integration/jitsi_webhook_inbox.sql             | 0038_jitsi_webhook_inbox.sql
 0039 | integration/transcription_jobs.sql              | 0039_transcription_jobs.sql
+0040 | iam/account_profile_fields.sql                  | 0040_account_profile_fields.sql
+0041 | org/organization_profile_fields.sql             | 0041_organization_profile_fields.sql

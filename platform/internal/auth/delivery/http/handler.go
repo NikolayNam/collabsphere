@@ -75,7 +75,15 @@ func (h *Handler) Me(ctx context.Context, input *struct{}) (*authdto.MeResponse,
 	resp.Body.ID = acc.ID().UUID()
 	resp.Body.Email = acc.Email().String()
 	resp.Body.DisplayName = acc.DisplayName()
+	resp.Body.AvatarObjectID = acc.AvatarObjectID()
+	resp.Body.Bio = acc.Bio()
+	resp.Body.Phone = acc.Phone()
+	resp.Body.Locale = acc.Locale()
+	resp.Body.Timezone = acc.Timezone()
+	resp.Body.Website = acc.Website()
 	resp.Body.IsActive = acc.IsActive()
+	resp.Body.CreatedAt = acc.CreatedAt()
+	resp.Body.UpdatedAt = acc.UpdatedAt()
 	return resp, nil
 }
 
