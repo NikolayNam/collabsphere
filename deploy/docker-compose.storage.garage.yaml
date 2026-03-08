@@ -1,0 +1,52 @@
+name: collabsphere
+
+services:
+  s3:
+    profiles: [ "local" ]
+    image: dxflrs/garage:${STORAGE_S3_GARAGE_IMAGE_VERSION:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    secrets:
+      - s3_garage_rpc_secret
+    networks:
+      - internal.network
+    ports:
+      - "${STORAGE_S3_PORT:-9000}:${STORAGE_S3_PORT:-9000}"
+    volumes:
+      - ./scripts:/bootstrap:ro
+      - s3.data:/var/lib/garage
+    entrypoint: ["/bin/sh", "/bootstrap/garage-entrypoint.sh"]
+
+  s3-init:
+    profiles: [ "local" ]
+    image: dxflrs/garage:${STORAGE_S3_GARAGE_IMAGE_VERSION:-latest}
+    restart: "no"
+    env_file:
+      - .env.dev
+    depends_on:
+      - s3
+    secrets:
+      - s3_garage_rpc_secret
+    networks:
+      - internal.network
+    volumes:
+      - ./scripts:/bootstrap:ro
+      - s3.data:/var/lib/garage
+      - s3.credentials:/run/generated/s3
+    entrypoint: ["/bin/sh", "/bootstrap/garage-init.sh"]
+
+volumes:
+  s3.data:
+    name: s3.data
+  s3.credentials:
+    name: s3.credentials
+
+networks:
+  internal.network:
+    name: internal.network
+    external: true
+
+secrets:
+  s3_garage_rpc_secret:
+    file: ../secrets/s3/s3_garage_rpc_secret

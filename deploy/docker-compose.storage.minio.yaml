@@ -1,0 +1,52 @@
+name: collabsphere
+
+services:
+  s3:
+    profiles: [ "local" ]
+    image: quay.io/minio/minio:${STORAGE_S3_IMAGE_VERSION:-RELEASE.2025-09-07T16-13-09Z}
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    secrets:
+      - s3_root_password
+    networks:
+      - internal.network
+    ports:
+      - "${STORAGE_S3_PORT:-9000}:9000"
+      - "${STORAGE_S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - ./scripts:/bootstrap:ro
+      - s3.data:/data
+    entrypoint: ["/bin/sh", "/bootstrap/minio-entrypoint.sh"]
+
+  s3-init:
+    profiles: [ "local" ]
+    image: quay.io/minio/mc:${STORAGE_S3_INIT_IMAGE_VERSION:-RELEASE.2025-07-21T05-28-08Z}
+    restart: "no"
+    env_file:
+      - .env.dev
+    depends_on:
+      - s3
+    secrets:
+      - s3_root_password
+    networks:
+      - internal.network
+    volumes:
+      - ./scripts:/bootstrap:ro
+      - s3.credentials:/run/generated/s3
+    entrypoint: ["/bin/sh", "/bootstrap/minio-init.sh"]
+
+volumes:
+  s3.data:
+    name: s3.data
+  s3.credentials:
+    name: s3.credentials
+
+networks:
+  internal.network:
+    name: internal.network
+    external: true
+
+secrets:
+  s3_root_password:
+    file: ../secrets/s3/s3_root_password

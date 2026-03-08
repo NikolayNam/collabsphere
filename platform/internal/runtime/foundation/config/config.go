@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ type S3 struct {
 	PublicEndpoint string        `env:"STORAGE_S3_PUBLIC_ENDPOINT"`
 	Region         string        `env:"STORAGE_S3_REGION" envDefault:"us-east-1"`
 	AccessKey      string        `env:"STORAGE_S3_ACCESS_KEY"`
+	AccessKeyFile  string        `env:"STORAGE_S3_ACCESS_KEY_FILE"`
 	SecretKey      string        `env:"STORAGE_S3_SECRET_KEY"`
 	SecretKeyFile  string        `env:"STORAGE_S3_SECRET_KEY_FILE"`
 	Bucket         string        `env:"STORAGE_S3_BUCKET"`
@@ -54,12 +56,16 @@ type S3 struct {
 type App struct {
 	Title         string        `env:"APPLICATION_TITLE,required"`
 	Version       string        `env:"APPLICATION_VERSION,required"`
-	Address       string        `env:"APPLICATION_ADDRESS" envDefault:"0.0.0.0:8080"`
+	Address       string        `env:"APPLICATION_ADDRESS"`
+	Host          string        `env:"APPLICATION_HOST" envDefault:"0.0.0.0"`
+	Port          string        `env:"APPLICATION_PORT" envDefault:"8080"`
 	PublicBaseURL string        `env:"APPLICATION_PUBLIC_BASE_URL"`
 	TimeoutRead   time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
 	TimeoutWrite  time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
 	TimeoutIdle   time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
 	Debug         bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
+	Environment   string        `env:"APPLICATION_ENVIRONMENT" envDefault:"dev"`
+	LogLevel      string        `env:"APPLICATION_LOG_LEVEL" envDefault:"INFO"`
 }
 
 type DB struct {
@@ -89,6 +95,7 @@ type Redis struct {
 	Enabled       bool          `env:"REALTIME_REDIS_ENABLED" envDefault:"false"`
 	Address       string        `env:"REALTIME_REDIS_ADDRESS"`
 	Password      string        `env:"REALTIME_REDIS_PASSWORD"`
+	PasswordFile  string        `env:"REALTIME_REDIS_PASSWORD_FILE"`
 	DB            int           `env:"REALTIME_REDIS_DB" envDefault:"0"`
 	ChannelPrefix string        `env:"REALTIME_REDIS_CHANNEL_PREFIX" envDefault:"collabsphere:realtime"`
 	PresenceTTL   time.Duration `env:"REALTIME_REDIS_PRESENCE_TTL" envDefault:"30s"`
@@ -100,21 +107,28 @@ type Conference struct {
 }
 
 type Jitsi struct {
-	Enabled       bool          `env:"JITSI_ENABLED" envDefault:"false"`
-	BaseURL       string        `env:"JITSI_BASE_URL"`
-	Domain        string        `env:"JITSI_DOMAIN"`
-	AppID         string        `env:"JITSI_APP_ID"`
-	AppSecret     string        `env:"JITSI_APP_SECRET"`
-	AppSecretFile string        `env:"JITSI_APP_SECRET_FILE"`
-	Issuer        string        `env:"JITSI_ISSUER"`
-	Audience      string        `env:"JITSI_AUDIENCE" envDefault:"jitsi"`
-	TokenTTL      time.Duration `env:"JITSI_TOKEN_TTL" envDefault:"2h"`
+	Enabled                   bool          `env:"JITSI_ENABLED" envDefault:"false"`
+	BaseURL                   string        `env:"JITSI_BASE_URL"`
+	Domain                    string        `env:"JITSI_DOMAIN"`
+	AppID                     string        `env:"JITSI_APP_ID"`
+	AppSecret                 string        `env:"JITSI_APP_SECRET"`
+	AppSecretFile             string        `env:"JITSI_APP_SECRET_FILE"`
+	Issuer                    string        `env:"JITSI_ISSUER"`
+	Audience                  string        `env:"JITSI_AUDIENCE" envDefault:"jitsi"`
+	TokenTTL                  time.Duration `env:"JITSI_TOKEN_TTL" envDefault:"2h"`
+	JicofoAuthPassword        string        `env:"JITSI_JICOFO_AUTH_PASSWORD"`
+	JicofoAuthPasswordFile    string        `env:"JITSI_JICOFO_AUTH_PASSWORD_FILE"`
+	JicofoComponentSecret     string        `env:"JITSI_JICOFO_COMPONENT_SECRET"`
+	JicofoComponentSecretFile string        `env:"JITSI_JICOFO_COMPONENT_SECRET_FILE"`
+	JVBAuthPassword           string        `env:"JITSI_JVB_AUTH_PASSWORD"`
+	JVBAuthPasswordFile       string        `env:"JITSI_JVB_AUTH_PASSWORD_FILE"`
 }
 
 type Transcription struct {
 	Enabled         bool          `env:"TRANSCRIPTION_ENABLED" envDefault:"false"`
 	Endpoint        string        `env:"TRANSCRIPTION_ENDPOINT"`
 	APIKey          string        `env:"TRANSCRIPTION_API_KEY"`
+	APIKeyFile      string        `env:"TRANSCRIPTION_API_KEY_FILE"`
 	Model           string        `env:"TRANSCRIPTION_MODEL" envDefault:"whisper-1"`
 	RequestTimeout  time.Duration `env:"TRANSCRIPTION_REQUEST_TIMEOUT" envDefault:"10m"`
 	WorkerPollEvery time.Duration `env:"TRANSCRIPTION_WORKER_POLL_EVERY" envDefault:"10s"`
@@ -124,6 +138,7 @@ type DocumentAnalysis struct {
 	Enabled         bool          `env:"DOCUMENT_ANALYSIS_ENABLED" envDefault:"false"`
 	Endpoint        string        `env:"DOCUMENT_ANALYSIS_ENDPOINT"`
 	APIKey          string        `env:"DOCUMENT_ANALYSIS_API_KEY"`
+	APIKeyFile      string        `env:"DOCUMENT_ANALYSIS_API_KEY_FILE"`
 	Provider        string        `env:"DOCUMENT_ANALYSIS_PROVIDER" envDefault:"generic-http"`
 	Model           string        `env:"DOCUMENT_ANALYSIS_MODEL" envDefault:"legal-doc-ocr-v1"`
 	RequestTimeout  time.Duration `env:"DOCUMENT_ANALYSIS_REQUEST_TIMEOUT" envDefault:"2m"`
@@ -137,6 +152,10 @@ func New() *Config {
 		log.Fatalf("failed to parse env: %s", err)
 	}
 
+	if strings.TrimSpace(c.APP.Address) == "" {
+		c.APP.Address = c.APP.ListenAddress()
+	}
+
 	if err := applyTZ(c.TZ); err != nil {
 		log.Fatalf("invalid TZ: %s", err)
 	}
@@ -145,87 +164,55 @@ func New() *Config {
 }
 
 func (d DB) PasswordValue() (string, error) {
-	if strings.TrimSpace(d.Password) != "" {
-		return d.Password, nil
-	}
-	if strings.TrimSpace(d.PasswordFile) == "" {
-		return "", errors.New("postgres password is empty (set POSTGRES_PASSWORD or POSTGRES_PASSWORD_FILE)")
-	}
-
-	b, err := os.ReadFile(d.PasswordFile)
-	if err != nil {
-		return "", err
-	}
-	pw := strings.TrimSpace(string(b))
-	if pw == "" {
-		return "", errors.New("postgres password file is empty")
-	}
-	return pw, nil
+	return readRequiredSecret("postgres password", d.Password, d.PasswordFile)
 }
 
 func (a Auth) JWTSecretValue() (string, error) {
-	if strings.TrimSpace(a.JWTSecret) != "" {
-		return a.JWTSecret, nil
-	}
-	if strings.TrimSpace(a.JWTSecretFile) == "" {
-		return "", errors.New("auth jwt secret is empty")
-	}
+	return readRequiredSecret("auth jwt secret", a.JWTSecret, a.JWTSecretFile)
+}
 
-	b, err := os.ReadFile(a.JWTSecretFile)
-	if err != nil {
-		return "", err
-	}
-
-	secret := strings.TrimSpace(string(b))
-	if secret == "" {
-		return "", errors.New("auth jwt secret file is empty")
-	}
-	return secret, nil
+func (s S3) AccessKeyValue() (string, error) {
+	return readRequiredSecret("storage s3 access key", s.AccessKey, s.AccessKeyFile)
 }
 
 func (s S3) SecretKeyValue() (string, error) {
-	if strings.TrimSpace(s.SecretKey) != "" {
-		return s.SecretKey, nil
-	}
-	if strings.TrimSpace(s.SecretKeyFile) == "" {
-		return "", errors.New("storage s3 secret key is empty")
-	}
-
-	b, err := os.ReadFile(s.SecretKeyFile)
-	if err != nil {
-		return "", err
-	}
-
-	secret := strings.TrimSpace(string(b))
-	if secret == "" {
-		return "", errors.New("storage s3 secret key file is empty")
-	}
-	return secret, nil
+	return readRequiredSecret("storage s3 secret key", s.SecretKey, s.SecretKeyFile)
 }
 
 func (j Jitsi) AppSecretValue() (string, error) {
-	if strings.TrimSpace(j.AppSecret) != "" {
-		return j.AppSecret, nil
-	}
-	if strings.TrimSpace(j.AppSecretFile) == "" {
-		return "", errors.New("jitsi app secret is empty")
-	}
+	return readRequiredSecret("jitsi app secret", j.AppSecret, j.AppSecretFile)
+}
 
-	b, err := os.ReadFile(j.AppSecretFile)
-	if err != nil {
-		return "", err
-	}
+func (j Jitsi) JicofoAuthPasswordValue() (string, error) {
+	return readOptionalSecret("jitsi jicofo auth password", j.JicofoAuthPassword, j.JicofoAuthPasswordFile)
+}
 
-	secret := strings.TrimSpace(string(b))
-	if secret == "" {
-		return "", errors.New("jitsi app secret file is empty")
-	}
-	return secret, nil
+func (j Jitsi) JicofoComponentSecretValue() (string, error) {
+	return readOptionalSecret("jitsi jicofo component secret", j.JicofoComponentSecret, j.JicofoComponentSecretFile)
+}
+
+func (j Jitsi) JVBAuthPasswordValue() (string, error) {
+	return readOptionalSecret("jitsi jvb auth password", j.JVBAuthPassword, j.JVBAuthPasswordFile)
+}
+
+func (r Redis) PasswordValue() (string, error) {
+	return readOptionalSecret("realtime redis password", r.Password, r.PasswordFile)
+}
+
+func (t Transcription) APIKeyValue() (string, error) {
+	return readOptionalSecret("transcription api key", t.APIKey, t.APIKeyFile)
+}
+
+func (d DocumentAnalysis) APIKeyValue() (string, error) {
+	return readOptionalSecret("document analysis api key", d.APIKey, d.APIKeyFile)
 }
 
 func (s S3) Validate() error {
 	if !s.Enabled {
 		return nil
+	}
+	if _, err := s.AccessKeyValue(); err != nil {
+		return err
 	}
 	if _, err := s.SecretKeyValue(); err != nil {
 		return err
@@ -236,8 +223,6 @@ func (s S3) Validate() error {
 		return errors.New("storage s3 endpoint is empty")
 	case strings.TrimSpace(s.Region) == "":
 		return errors.New("storage s3 region is empty")
-	case strings.TrimSpace(s.AccessKey) == "":
-		return errors.New("storage s3 access key is empty")
 	case strings.TrimSpace(s.Bucket) == "":
 		return errors.New("storage s3 bucket is empty")
 	case s.PresignTTL <= 0:
@@ -252,6 +237,9 @@ func (s S3) Validate() error {
 func (r Redis) Validate() error {
 	if !r.Enabled {
 		return nil
+	}
+	if _, err := r.PasswordValue(); err != nil {
+		return err
 	}
 
 	switch {
@@ -273,6 +261,15 @@ func (j Jitsi) Validate() error {
 		return nil
 	}
 	if _, err := j.AppSecretValue(); err != nil {
+		return err
+	}
+	if _, err := j.JicofoAuthPasswordValue(); err != nil {
+		return err
+	}
+	if _, err := j.JicofoComponentSecretValue(); err != nil {
+		return err
+	}
+	if _, err := j.JVBAuthPasswordValue(); err != nil {
 		return err
 	}
 
@@ -301,6 +298,9 @@ func (t Transcription) Validate() error {
 	if !t.Enabled {
 		return nil
 	}
+	if _, err := t.APIKeyValue(); err != nil {
+		return err
+	}
 
 	switch {
 	case strings.TrimSpace(t.Endpoint) == "":
@@ -317,6 +317,9 @@ func (t Transcription) Validate() error {
 func (d DocumentAnalysis) Validate() error {
 	if !d.Enabled {
 		return nil
+	}
+	if _, err := d.APIKeyValue(); err != nil {
+		return err
 	}
 
 	switch {
@@ -361,6 +364,55 @@ func (d DB) DSN() (string, error) {
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
+}
+
+func (a App) ListenAddress() string {
+	if strings.TrimSpace(a.Address) != "" {
+		return strings.TrimSpace(a.Address)
+	}
+
+	host := strings.TrimSpace(a.Host)
+	if host == "" {
+		host = "0.0.0.0"
+	}
+	port := strings.TrimSpace(a.Port)
+	if port == "" {
+		port = "8080"
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		return fmt.Sprintf("%s:%s", host, port)
+	}
+	return fmt.Sprintf("%s:%s", host, port)
+}
+
+func readRequiredSecret(label, value, file string) (string, error) {
+	secret, err := readOptionalSecret(label, value, file)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(secret) == "" {
+		return "", fmt.Errorf("%s is empty", label)
+	}
+	return secret, nil
+}
+
+func readOptionalSecret(label, value, file string) (string, error) {
+	if strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value), nil
+	}
+	if strings.TrimSpace(file) == "" {
+		return "", nil
+	}
+
+	b, err := os.ReadFile(strings.TrimSpace(file))
+	if err != nil {
+		return "", fmt.Errorf("read %s file: %w", label, err)
+	}
+	secret := strings.TrimSpace(string(b))
+	if secret == "" {
+		return "", fmt.Errorf("%s file is empty", label)
+	}
+	return secret, nil
 }
 
 func buildSearchPath(primary string) []string {

@@ -6,16 +6,14 @@ services:
     image: colabsphere-api:${IMAGE_TAG}
     restart: unless-stopped
     build:
-      context: ../platform                  # parent directory (collabsphere)
-      dockerfile: ../platform/Dockerfile    # path to your Dockerfile relative to context
+      context: ../platform
+      dockerfile: ../platform/Dockerfile
     env_file:
       - .env.dev
     secrets:
       - dev_password
       - neon_password
       - jwt_secret
-      - minio_secret
-      - jitsi_secret
     networks:
       - internal.network
       - web.network
@@ -31,6 +29,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      s3:
+        condition: service_started
+      s3-init:
+        condition: service_completed_successfully
+    volumes:
+      - s3.credentials:/run/generated/s3:ro
 
 networks:
   internal.network:
@@ -41,6 +45,10 @@ networks:
     name: web.network
     external: true
 
+volumes:
+  s3.credentials:
+    name: s3.credentials
+
 secrets:
   dev_password:
     file: secrets/postgres/dev/db_password
@@ -48,7 +56,3 @@ secrets:
     file: secrets/postgres/prod/db_password
   jwt_secret:
     file: secrets/jwt/jwt_secret
-  minio_secret:
-    file: ../secrets/minio/minio_secret
-  jitsi_secret:
-    file: ../secrets/jitsi/jitsi_secret

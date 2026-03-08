@@ -1,16 +1,17 @@
 COMPOSE := docker compose
 EXEC := docker exec -it
 LOGS := docker logs
-ENV_FILE := --env-file .env
 MIGRATE_CMD ?= up
 SEED_CMD ?= up
+STORAGE_PROVIDER ?= minio
 
 PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
-
+ENV_FILE := --env-file $(DEPLOY_DIR)/.env.dev
 
 INFRA_FILE := docker-compose.infrastructure.yaml
 PLATFORM_FILE := docker-compose.platform.yaml
+STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
 COLLAB_FILE := docker-compose.collab.yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
 
@@ -27,8 +28,10 @@ CODEBASE_OUTPUT := ./docs/codebase_actual.md
 APPLICATION_PORT :=
 
 COMPOSE_ARGS = \
+	$(ENV_FILE) \
 	-f $(DEPLOY_DIR)/$(INFRA_FILE) \
 	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
+	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
 	-f $(DEPLOY_DIR)/$(COLLAB_FILE) \
 	--profile local
 
@@ -40,6 +43,7 @@ API_HEALTH_URL ?= http://localhost:8080/health
 WAIT_TIMEOUT_SEC ?= 60
 
 MIGRATE_COMPOSE_ARGS = \
+	$(ENV_FILE) \
 	-p collabsphere-migrate \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile migrate
@@ -54,7 +58,6 @@ network:
 clean-logs:
 	@mkdir -p $(LOG_DIR)
 	@rm -f $(RUN_LOG)
-
 
 up-dev: clean-logs
 	@mkdir -p $(dir $(APP_LOG))
@@ -93,15 +96,15 @@ up-dev: clean-logs
 
 migrate:
 	@mkdir -p $(dir $(MIGRATE_LOG))
-	@MIGRATE_CMD=$(MIGRATE_CMD) docker compose $(MIGRATE_COMPOSE_ARGS) \
-		run --rm --build migrate \
+	@docker compose $(MIGRATE_COMPOSE_ARGS) \
+		run --rm --build -e MIGRATE_CMD=$(MIGRATE_CMD) migrate \
 		> $(MIGRATE_LOG) 2>&1 \
 	|| (echo "migrate failed; tail:"; tail -n 160 $(MIGRATE_LOG) || true; exit 1)
 
 seed:
 	@mkdir -p $(dir $(SEED_LOG))
-	@SEED_CMD=$(SEED_CMD) docker compose $(MIGRATE_COMPOSE_ARGS) \
-		run --rm --build migrate /seed \
+	@docker compose $(MIGRATE_COMPOSE_ARGS) \
+		run --rm --build -e SEED_CMD=$(SEED_CMD) migrate /seed \
 		> $(SEED_LOG) 2>&1 \
 	|| (echo "seed failed; tail:"; tail -n 160 $(SEED_LOG) || true; exit 1)
 
@@ -140,7 +143,5 @@ codebase:
 		-ignore="^\\.git,^docs/" \
 		> $(CODEBASE_LOG) 2>&1
 
-
 logs:
 	$(LOGS) -f $(APP_CONTAINER)
-

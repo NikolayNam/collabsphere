@@ -1,55 +1,8 @@
 name: collabsphere
 
 services:
-  minio:
-    profiles: [ "local" ]
-    image: quay.io/minio/minio:${MINIO_IMAGE_VERSION:-RELEASE.2025-09-07T16-13-09Z}
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    env_file:
-      - .env.dev
-    secrets:
-      - minio_secret
-    environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/s3_secret
-      MINIO_BROWSER_REDIRECT_URL: "${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}"
-    networks:
-      - internal.network
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    volumes:
-      - s3.data:/data
-
-  minio-init:
-    profiles: [ "local" ]
-    image: quay.io/minio/mc:${MINIO_MC_IMAGE_VERSION:-RELEASE.2025-07-21T05-28-08Z}
-    restart: "no"
-    env_file:
-      - .env.dev
-    depends_on:
-      - minio
-    secrets:
-      - minio_secret
-    networks:
-      - internal.network
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        MINIO_ROOT_PASSWORD="$$(tr -d '\r\n' </run/secrets/minio_secret)"
-        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1; do
-          sleep 2
-        done
-        mc mb --ignore-existing local/"$${STORAGE_S3_BUCKET}"
-        mc anonymous set private local/"$${STORAGE_S3_BUCKET}" || true
-    environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
-      STORAGE_S3_BUCKET: "${STORAGE_S3_BUCKET:-collabsphere}"
-
   jitsi-web:
-    profiles: [ "local" ]
+    profiles: [ "legacy-jitsi" ]
     image: jitsi/web:${JITSI_WEB_IMAGE_VERSION:-web-1.0.9105-1}
     restart: unless-stopped
     env_file:
@@ -60,47 +13,31 @@ services:
       - jitsi-jvb
     secrets:
       - jitsi_secret
+      - jicofo_auth_password
+      - jicofo_component_secret
+      - jvb_auth_password
     networks:
       - internal.network
     ports:
       - "${JITSI_HTTP_PORT:-8000}:80"
       - "${JITSI_HTTPS_PORT:-8443}:443"
     volumes:
+      - ./scripts:/bootstrap:ro
       - jitsi.web.config:/config
       - jitsi.transcripts:/usr/share/jitsi-meet/transcripts
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        export JWT_APP_SECRET="$$(tr -d '\r\n' </run/secrets/jitsi_secret)"
-        exec /init
-    environment:
-      TZ: "${TZ:-UTC}"
-      PUBLIC_URL: "${JITSI_PUBLIC_URL:-https://localhost:8443}"
-      ENABLE_AUTH: "1"
-      ENABLE_GUESTS: "0"
-      ENABLE_HTTP_REDIRECT: "1"
-      AUTH_TYPE: jwt
-      JWT_APP_ID: "${JITSI_APP_ID:-collabsphere}"
-      JWT_ACCEPTED_ISSUERS: "${JITSI_ISSUER:-collabsphere}"
-      JWT_ACCEPTED_AUDIENCES: "${JITSI_AUDIENCE:-jitsi}"
-      XMPP_DOMAIN: meet.jitsi
-      XMPP_AUTH_DOMAIN: auth.meet.jitsi
-      XMPP_GUEST_DOMAIN: guest.meet.jitsi
-      XMPP_MUC_DOMAIN: muc.meet.jitsi
-      XMPP_INTERNAL_MUC_DOMAIN: internal-muc.meet.jitsi
-      XMPP_SERVER: xmpp.meet.jitsi
-      XMPP_BOSH_URL_BASE: http://jitsi-prosody:5280
-      XMPP_PORT: "5222"
+    entrypoint: ["/bin/sh", "/bootstrap/jitsi-web-entrypoint.sh"]
 
   jitsi-prosody:
-    profiles: [ "local" ]
+    profiles: [ "legacy-jitsi" ]
     image: jitsi/prosody:${JITSI_PROSODY_IMAGE_VERSION:-prosody-13.0.4}
     restart: unless-stopped
     env_file:
       - .env.dev
     secrets:
       - jitsi_secret
+      - jicofo_auth_password
+      - jicofo_component_secret
+      - jvb_auth_password
     networks:
       internal.network:
         aliases:
@@ -111,97 +48,49 @@ services:
       - "5280"
       - "5347"
     volumes:
+      - ./scripts:/bootstrap:ro
       - jitsi.prosody.config:/config
       - jitsi.prosody.plugins:/prosody-plugins-custom
-    entrypoint:
-      - /bin/sh
-      - -ec
-      - |
-        export JWT_APP_SECRET="$$(tr -d '\r\n' </run/secrets/jitsi_secret)"
-        exec /init
-    environment:
-      TZ: "${TZ:-UTC}"
-      ENABLE_AUTH: "1"
-      ENABLE_GUESTS: "0"
-      AUTH_TYPE: jwt
-      JWT_APP_ID: "${JITSI_APP_ID:-collabsphere}"
-      JWT_ACCEPTED_ISSUERS: "${JITSI_ISSUER:-collabsphere}"
-      JWT_ACCEPTED_AUDIENCES: "${JITSI_AUDIENCE:-jitsi}"
-      XMPP_DOMAIN: meet.jitsi
-      XMPP_AUTH_DOMAIN: auth.meet.jitsi
-      XMPP_GUEST_DOMAIN: guest.meet.jitsi
-      XMPP_MUC_DOMAIN: muc.meet.jitsi
-      XMPP_INTERNAL_MUC_DOMAIN: internal-muc.meet.jitsi
-      XMPP_HIDDEN_DOMAIN: recorder.meet.jitsi
-      XMPP_RECORDER_DOMAIN: recorder.meet.jitsi
-      JICOFO_AUTH_PASSWORD: "${JITSI_JICOFO_AUTH_PASSWORD:-change-me-focus-password}"
-      JICOFO_COMPONENT_SECRET: "${JITSI_JICOFO_COMPONENT_SECRET:-change-me-component-secret}"
-      JVB_AUTH_USER: jvb
-      JVB_AUTH_PASSWORD: "${JITSI_JVB_AUTH_PASSWORD:-change-me-jvb-password}"
-      XMPP_PORT: "5222"
+    entrypoint: ["/bin/sh", "/bootstrap/jitsi-prosody-entrypoint.sh"]
 
   jitsi-jicofo:
-    profiles: [ "local" ]
+    profiles: [ "legacy-jitsi" ]
     image: jitsi/jicofo:${JITSI_JICOFO_IMAGE_VERSION:-jicofo-1.0-1172-1}
     restart: unless-stopped
     env_file:
       - .env.dev
     depends_on:
       - jitsi-prosody
+    secrets:
+      - jicofo_auth_password
+      - jicofo_component_secret
     networks:
       - internal.network
     volumes:
+      - ./scripts:/bootstrap:ro
       - jitsi.jicofo.config:/config
-    environment:
-      TZ: "${TZ:-UTC}"
-      ENABLE_AUTH: "1"
-      AUTH_TYPE: jwt
-      ENABLE_AUTO_OWNER: "0"
-      XMPP_DOMAIN: meet.jitsi
-      XMPP_AUTH_DOMAIN: auth.meet.jitsi
-      XMPP_INTERNAL_MUC_DOMAIN: internal-muc.meet.jitsi
-      XMPP_MUC_DOMAIN: muc.meet.jitsi
-      XMPP_SERVER: xmpp.meet.jitsi
-      XMPP_PORT: "5222"
-      JICOFO_AUTH_USER: focus
-      JICOFO_AUTH_PASSWORD: "${JITSI_JICOFO_AUTH_PASSWORD:-change-me-focus-password}"
-      JICOFO_COMPONENT_SECRET: "${JITSI_JICOFO_COMPONENT_SECRET:-change-me-component-secret}"
-      JVB_BREWERY_MUC: jvbbrewery
-      JVB_XMPP_AUTH_DOMAIN: auth.meet.jitsi
-      JVB_XMPP_INTERNAL_MUC_DOMAIN: internal-muc.meet.jitsi
-      JVB_XMPP_SERVER: xmpp.meet.jitsi
-      JVB_XMPP_PORT: "5222"
+    entrypoint: ["/bin/sh", "/bootstrap/jitsi-jicofo-entrypoint.sh"]
 
   jitsi-jvb:
-    profiles: [ "local" ]
+    profiles: [ "legacy-jitsi" ]
     image: jitsi/jvb:${JITSI_JVB_IMAGE_VERSION:-jvb-2.3-272-g0360d0488-1}
     restart: unless-stopped
     env_file:
       - .env.dev
     depends_on:
       - jitsi-prosody
+    secrets:
+      - jvb_auth_password
     networks:
       - internal.network
     ports:
       - "${JITSI_JVB_PORT:-10000}:${JITSI_JVB_PORT:-10000}/udp"
     volumes:
+      - ./scripts:/bootstrap:ro
       - jitsi.jvb.config:/config
-    environment:
-      TZ: "${TZ:-UTC}"
-      XMPP_AUTH_DOMAIN: auth.meet.jitsi
-      XMPP_INTERNAL_MUC_DOMAIN: internal-muc.meet.jitsi
-      XMPP_SERVER: xmpp.meet.jitsi
-      XMPP_PORT: "5222"
-      JVB_AUTH_USER: jvb
-      JVB_AUTH_PASSWORD: "${JITSI_JVB_AUTH_PASSWORD:-change-me-jvb-password}"
-      JVB_BREWERY_MUC: jvbbrewery
-      JVB_PORT: "${JITSI_JVB_PORT:-10000}"
-      JVB_ADVERTISE_IPS: "${JITSI_JVB_ADVERTISE_IPS:-127.0.0.1}"
-      PUBLIC_URL: "${JITSI_PUBLIC_URL:-https://localhost:8443}"
+    entrypoint: ["/bin/sh", "/bootstrap/jitsi-jvb-entrypoint.sh"]
 
 volumes:
-  s3.data:
-    name: s3.data
   jitsi.web.config:
     name: jitsi.web.config
   jitsi.transcripts:
@@ -221,7 +110,11 @@ networks:
     external: true
 
 secrets:
-  minio_secret:
-    file: ../secrets/minio/minio_secret
   jitsi_secret:
     file: ../secrets/jitsi/jitsi_secret
+  jicofo_auth_password:
+    file: ../secrets/jitsi/jicofo_auth_password
+  jicofo_component_secret:
+    file: ../secrets/jitsi/jicofo_component_secret
+  jvb_auth_password:
+    file: ../secrets/jitsi/jvb_auth_password

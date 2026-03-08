@@ -37,9 +37,13 @@ func NewClient(cfg config.DocumentAnalysis) (*Client, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	apiKey, err := cfg.APIKeyValue()
+	if err != nil {
+		return nil, err
+	}
 	return &Client{
 		endpoint:   strings.TrimSpace(cfg.Endpoint),
-		apiKey:     strings.TrimSpace(cfg.APIKey),
+		apiKey:     apiKey,
 		provider:   strings.TrimSpace(cfg.Provider),
 		model:      strings.TrimSpace(cfg.Model),
 		httpClient: &http.Client{Timeout: cfg.RequestTimeout},

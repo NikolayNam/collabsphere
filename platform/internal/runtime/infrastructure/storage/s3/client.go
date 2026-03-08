@@ -46,6 +46,10 @@ func NewClient(cfg config.S3) (*Client, error) {
 		return nil, err
 	}
 
+	accessKey, err := cfg.AccessKeyValue()
+	if err != nil {
+		return nil, err
+	}
 	secretKey, err := cfg.SecretKeyValue()
 	if err != nil {
 		return nil, err
@@ -63,7 +67,7 @@ func NewClient(cfg config.S3) (*Client, error) {
 		endpoint:       endpoint,
 		publicEndpoint: publicEndpoint,
 		region:         strings.TrimSpace(cfg.Region),
-		accessKey:      strings.TrimSpace(cfg.AccessKey),
+		accessKey:      accessKey,
 		secretKey:      secretKey,
 		pathStyle:      cfg.PathStyle,
 		presignTTL:     cfg.PresignTTL,

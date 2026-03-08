@@ -35,7 +35,11 @@ func NewClient(cfg config.Transcription) (*Client, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	return &Client{endpoint: strings.TrimSpace(cfg.Endpoint), apiKey: strings.TrimSpace(cfg.APIKey), model: strings.TrimSpace(cfg.Model), httpClient: &http.Client{Timeout: cfg.RequestTimeout}}, nil
+	apiKey, err := cfg.APIKeyValue()
+	if err != nil {
+		return nil, err
+	}
+	return &Client{endpoint: strings.TrimSpace(cfg.Endpoint), apiKey: apiKey, model: strings.TrimSpace(cfg.Model), httpClient: &http.Client{Timeout: cfg.RequestTimeout}}, nil
 }
 
 func (c *Client) Transcribe(ctx context.Context, fileName string, mimeType *string, content io.Reader) (collabapp.TranscriptionResult, error) {
