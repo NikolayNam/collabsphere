@@ -60,6 +60,84 @@ type CreateOrganizationLogoUploadResult struct {
 	SizeBytes int64
 }
 
+type GetCooperationApplicationQuery struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+}
+
+type UpdateCooperationApplicationCmd struct {
+	OrganizationID        domain.OrganizationID
+	ActorAccountID        uuid.UUID
+	ConfirmationEmail     *string
+	CompanyName           *string
+	RepresentedCategories *string
+	MinimumOrderAmount    *string
+	DeliveryGeography     *string
+	SalesChannels         []string
+	StorefrontURL         *string
+	ContactFirstName      *string
+	ContactLastName       *string
+	ContactJobTitle       *string
+	PriceListObjectID     *uuid.UUID
+	ClearPriceList        bool
+	ContactEmail          *string
+	ContactPhone          *string
+	PartnerCode           *string
+}
+
+type SubmitCooperationApplicationCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+}
+
+type CreateCooperationPriceListUploadCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	FileName       string
+	ContentType    *string
+	SizeBytes      *int64
+	ChecksumSHA256 *string
+}
+
+type CreateCooperationPriceListUploadResult struct {
+	ObjectID  uuid.UUID
+	Bucket    string
+	ObjectKey string
+	UploadURL string
+	ExpiresAt time.Time
+	FileName  string
+	SizeBytes int64
+}
+
+type CreateLegalDocumentUploadCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	DocumentType   string
+	FileName       string
+	ContentType    *string
+	SizeBytes      *int64
+	ChecksumSHA256 *string
+}
+
+type CreateLegalDocumentUploadResult struct {
+	ObjectID     uuid.UUID
+	Bucket       string
+	ObjectKey    string
+	UploadURL    string
+	ExpiresAt    time.Time
+	FileName     string
+	SizeBytes    int64
+	DocumentType string
+}
+
+type AddOrganizationLegalDocumentCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	DocumentType   string
+	ObjectID       uuid.UUID
+	Title          string
+}
+
 type Service struct {
 	create      *create_organization.Handler
 	getById     *get_organization_by_id.Handler
@@ -125,43 +203,9 @@ func (s *Service) CreateOrganizationLogoUpload(ctx context.Context, cmd CreateOr
 	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
-	if s.storage == nil || s.bucket == "" {
-		return nil, fault.Unavailable("Logo upload is unavailable")
-	}
-	fileName := strings.TrimSpace(cmd.FileName)
-	if fileName == "" {
-		return nil, apperrors.InvalidInput("fileName is required")
-	}
-
-	sizeBytes := int64(0)
-	if cmd.SizeBytes != nil {
-		if *cmd.SizeBytes < 0 {
-			return nil, apperrors.InvalidInput("sizeBytes must be non-negative")
-		}
-		sizeBytes = *cmd.SizeBytes
-	}
-
-	now := s.clock.Now()
-	objectID := uuid.New()
-	orgUUID := cmd.OrganizationID.UUID()
-	objectKey := buildOrganizationLogoObjectKey(orgUUID, objectID, fileName, now)
-	object := ports.StorageObject{
-		ID:             objectID,
-		OrganizationID: &orgUUID,
-		Bucket:         s.bucket,
-		ObjectKey:      objectKey,
-		FileName:       sanitizeFileName(fileName, "logo.bin"),
-		ContentType:    normalizeOptional(cmd.ContentType),
-		SizeBytes:      sizeBytes,
-		ChecksumSHA256: normalizeOptional(cmd.ChecksumSHA256),
-		CreatedAt:      now,
-	}
-	if err := s.repo.CreateStorageObject(ctx, object); err != nil {
-		return nil, fault.Internal("Create logo object failed", fault.WithCause(err))
-	}
-	uploadURL, expiresAt, err := s.storage.PresignPutObject(ctx, object.Bucket, object.ObjectKey)
+	object, uploadURL, expiresAt, err := s.createOrganizationScopedUpload(ctx, cmd.OrganizationID, "organizations", []string{"logos"}, cmd.FileName, cmd.ContentType, cmd.SizeBytes, cmd.ChecksumSHA256, "logo.bin")
 	if err != nil {
-		return nil, fault.Internal("Presign logo upload failed", fault.WithCause(err))
+		return nil, err
 	}
 	return &CreateOrganizationLogoUploadResult{
 		ObjectID:  object.ID,
@@ -172,6 +216,158 @@ func (s *Service) CreateOrganizationLogoUpload(ctx context.Context, cmd CreateOr
 		FileName:  object.FileName,
 		SizeBytes: object.SizeBytes,
 	}, nil
+}
+
+func (s *Service) GetCooperationApplication(ctx context.Context, q GetCooperationApplicationQuery) (*domain.CooperationApplication, error) {
+	if err := s.requireOrganizationAccess(ctx, q.OrganizationID, q.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	application, err := s.repo.GetCooperationApplication(ctx, q.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	if application == nil {
+		return nil, apperrors.CooperationApplicationNotFound()
+	}
+	return application, nil
+}
+
+func (s *Service) UpdateCooperationApplication(ctx context.Context, cmd UpdateCooperationApplicationCmd) (*domain.CooperationApplication, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	if cmd.ClearPriceList && cmd.PriceListObjectID != nil {
+		return nil, apperrors.InvalidInput("clearPriceList and priceListObjectId cannot be used together")
+	}
+
+	application, err := s.repo.GetCooperationApplication(ctx, cmd.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	if application == nil {
+		application, err = domain.NewCooperationApplication(domain.NewCooperationApplicationParams{
+			ID:             uuid.New(),
+			OrganizationID: cmd.OrganizationID,
+			Now:            s.clock.Now(),
+		})
+		if err != nil {
+			return nil, apperrors.InvalidInput(err.Error())
+		}
+	}
+	if err := application.ApplyPatch(domain.CooperationApplicationPatch{
+		ConfirmationEmail:     cmd.ConfirmationEmail,
+		CompanyName:           cmd.CompanyName,
+		RepresentedCategories: cmd.RepresentedCategories,
+		MinimumOrderAmount:    cmd.MinimumOrderAmount,
+		DeliveryGeography:     cmd.DeliveryGeography,
+		SalesChannels:         cmd.SalesChannels,
+		StorefrontURL:         cmd.StorefrontURL,
+		ContactFirstName:      cmd.ContactFirstName,
+		ContactLastName:       cmd.ContactLastName,
+		ContactJobTitle:       cmd.ContactJobTitle,
+		PriceListObjectID:     cmd.PriceListObjectID,
+		ClearPriceList:        cmd.ClearPriceList,
+		ContactEmail:          cmd.ContactEmail,
+		ContactPhone:          cmd.ContactPhone,
+		PartnerCode:           cmd.PartnerCode,
+		UpdatedAt:             s.clock.Now(),
+	}); err != nil {
+		return nil, apperrors.InvalidInput(err.Error())
+	}
+	return s.repo.SaveCooperationApplication(ctx, application)
+}
+
+func (s *Service) SubmitCooperationApplication(ctx context.Context, cmd SubmitCooperationApplicationCmd) (*domain.CooperationApplication, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	application, err := s.repo.GetCooperationApplication(ctx, cmd.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	if application == nil {
+		return nil, apperrors.CooperationApplicationNotFound()
+	}
+	documents, err := s.repo.ListOrganizationLegalDocuments(ctx, cmd.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	if len(documents) == 0 {
+		return nil, apperrors.InvalidInput("At least one legal document is required before submission")
+	}
+	if err := application.MarkSubmitted(s.clock.Now()); err != nil {
+		return nil, apperrors.InvalidInput(err.Error())
+	}
+	return s.repo.SaveCooperationApplication(ctx, application)
+}
+
+func (s *Service) CreateCooperationPriceListUpload(ctx context.Context, cmd CreateCooperationPriceListUploadCmd) (*CreateCooperationPriceListUploadResult, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	object, uploadURL, expiresAt, err := s.createOrganizationScopedUpload(ctx, cmd.OrganizationID, "organizations", []string{"cooperation-applications", "price-lists"}, cmd.FileName, cmd.ContentType, cmd.SizeBytes, cmd.ChecksumSHA256, "price-list.xlsx")
+	if err != nil {
+		return nil, err
+	}
+	return &CreateCooperationPriceListUploadResult{
+		ObjectID:  object.ID,
+		Bucket:    object.Bucket,
+		ObjectKey: object.ObjectKey,
+		UploadURL: uploadURL,
+		ExpiresAt: expiresAt,
+		FileName:  object.FileName,
+		SizeBytes: object.SizeBytes,
+	}, nil
+}
+
+func (s *Service) CreateLegalDocumentUpload(ctx context.Context, cmd CreateLegalDocumentUploadCmd) (*CreateLegalDocumentUploadResult, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	documentType := strings.TrimSpace(cmd.DocumentType)
+	if documentType == "" {
+		return nil, apperrors.InvalidInput("documentType is required")
+	}
+	object, uploadURL, expiresAt, err := s.createOrganizationScopedUpload(ctx, cmd.OrganizationID, "organizations", []string{"legal-documents", sanitizePathSegment(documentType, "other")}, cmd.FileName, cmd.ContentType, cmd.SizeBytes, cmd.ChecksumSHA256, "document.pdf")
+	if err != nil {
+		return nil, err
+	}
+	return &CreateLegalDocumentUploadResult{
+		ObjectID:     object.ID,
+		Bucket:       object.Bucket,
+		ObjectKey:    object.ObjectKey,
+		UploadURL:    uploadURL,
+		ExpiresAt:    expiresAt,
+		FileName:     object.FileName,
+		SizeBytes:    object.SizeBytes,
+		DocumentType: documentType,
+	}, nil
+}
+
+func (s *Service) AddOrganizationLegalDocument(ctx context.Context, cmd AddOrganizationLegalDocumentCmd) (*domain.OrganizationLegalDocument, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	document, err := domain.NewOrganizationLegalDocument(domain.NewOrganizationLegalDocumentParams{
+		ID:                  uuid.New(),
+		OrganizationID:      cmd.OrganizationID,
+		DocumentType:        cmd.DocumentType,
+		ObjectID:            cmd.ObjectID,
+		Title:               cmd.Title,
+		UploadedByAccountID: &cmd.ActorAccountID,
+		Now:                 s.clock.Now(),
+	})
+	if err != nil {
+		return nil, apperrors.InvalidInput(err.Error())
+	}
+	return s.repo.CreateOrganizationLegalDocument(ctx, document)
+}
+
+func (s *Service) ListOrganizationLegalDocuments(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID) ([]domain.OrganizationLegalDocument, error) {
+	if err := s.requireOrganizationAccess(ctx, organizationID, actorAccountID, true); err != nil {
+		return nil, err
+	}
+	return s.repo.ListOrganizationLegalDocuments(ctx, organizationID)
 }
 
 func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID, requireOwner bool) error {
@@ -206,17 +402,75 @@ func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID 
 	return fault.Forbidden("Organization access denied")
 }
 
-func buildOrganizationLogoObjectKey(organizationID, objectID uuid.UUID, fileName string, now time.Time) string {
-	return strings.Join([]string{
-		"organizations",
-		"logos",
-		organizationID.String(),
+func (s *Service) createOrganizationScopedUpload(ctx context.Context, organizationID domain.OrganizationID, root string, segments []string, fileName string, contentType *string, sizeBytes *int64, checksumSHA256 *string, fallbackFileName string) (ports.StorageObject, string, time.Time, error) {
+	if s.storage == nil || s.bucket == "" {
+		return ports.StorageObject{}, "", time.Time{}, fault.Unavailable("File upload is unavailable")
+	}
+	trimmedFileName := strings.TrimSpace(fileName)
+	if trimmedFileName == "" {
+		return ports.StorageObject{}, "", time.Time{}, apperrors.InvalidInput("fileName is required")
+	}
+	resolvedSizeBytes := int64(0)
+	if sizeBytes != nil {
+		if *sizeBytes < 0 {
+			return ports.StorageObject{}, "", time.Time{}, apperrors.InvalidInput("sizeBytes must be non-negative")
+		}
+		resolvedSizeBytes = *sizeBytes
+	}
+	now := s.clock.Now()
+	orgUUID := organizationID.UUID()
+	objectID := uuid.New()
+	pathParts := []string{root}
+	pathParts = append(pathParts, segments...)
+	pathParts = append(pathParts,
+		orgUUID.String(),
 		now.UTC().Format("2006"),
 		now.UTC().Format("01"),
 		now.UTC().Format("02"),
 		objectID.String(),
-		sanitizeFileName(fileName, "logo.bin"),
-	}, "/")
+		sanitizeFileName(trimmedFileName, fallbackFileName),
+	)
+	object := ports.StorageObject{
+		ID:             objectID,
+		OrganizationID: &orgUUID,
+		Bucket:         s.bucket,
+		ObjectKey:      strings.Join(pathParts, "/"),
+		FileName:       sanitizeFileName(trimmedFileName, fallbackFileName),
+		ContentType:    normalizeOptional(contentType),
+		SizeBytes:      resolvedSizeBytes,
+		ChecksumSHA256: normalizeOptional(checksumSHA256),
+		CreatedAt:      now,
+	}
+	if err := s.repo.CreateStorageObject(ctx, object); err != nil {
+		return ports.StorageObject{}, "", time.Time{}, fault.Internal("Create organization file object failed", fault.WithCause(err))
+	}
+	uploadURL, expiresAt, err := s.storage.PresignPutObject(ctx, object.Bucket, object.ObjectKey)
+	if err != nil {
+		return ports.StorageObject{}, "", time.Time{}, fault.Internal("Presign organization file upload failed", fault.WithCause(err))
+	}
+	return object, uploadURL, expiresAt, nil
+}
+
+func sanitizePathSegment(value, fallback string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return fallback
+	}
+	var b strings.Builder
+	b.Grow(len(value))
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return fallback
+	}
+	return out
 }
 
 func sanitizeFileName(fileName, fallback string) string {

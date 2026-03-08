@@ -41,3 +41,5 @@
 0039 | integration/transcription_jobs.sql              | 0039_transcription_jobs.sql
 0040 | iam/account_profile_fields.sql                  | 0040_account_profile_fields.sql
 0041 | org/organization_profile_fields.sql             | 0041_organization_profile_fields.sql
+0042 | org/cooperation_applications.sql                | 0042_cooperation_applications.sql
+0043 | org/organization_legal_documents.sql            | 0043_organization_legal_documents.sql

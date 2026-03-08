@@ -25,4 +25,8 @@ type OrganizationRepository interface {
 	GetByID(ctx context.Context, id domain.OrganizationID) (*domain.Organization, error)
 	UpdateProfile(ctx context.Context, id domain.OrganizationID, patch domain.OrganizationProfilePatch) (*domain.Organization, error)
 	CreateStorageObject(ctx context.Context, object StorageObject) error
+	GetCooperationApplication(ctx context.Context, organizationID domain.OrganizationID) (*domain.CooperationApplication, error)
+	SaveCooperationApplication(ctx context.Context, application *domain.CooperationApplication) (*domain.CooperationApplication, error)
+	CreateOrganizationLegalDocument(ctx context.Context, document *domain.OrganizationLegalDocument) (*domain.OrganizationLegalDocument, error)
+	ListOrganizationLegalDocuments(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationLegalDocument, error)
 }

@@ -51,7 +51,7 @@ func (r *OrganizationRepo) UpdateProfile(ctx context.Context, id domain.Organiza
 
 	db := r.dbFrom(ctx).WithContext(ctx)
 	if patch.LogoObjectID != nil && !patch.ClearLogo {
-		valid, err := r.organizationLogoExists(db, id.UUID(), *patch.LogoObjectID)
+		valid, err := r.organizationObjectExists(db, id.UUID(), *patch.LogoObjectID)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func (r *OrganizationRepo) CreateStorageObject(ctx context.Context, object apppo
 	}).Error
 }
 
-func (r *OrganizationRepo) organizationLogoExists(db *gorm.DB, organizationID, objectID uuid.UUID) (bool, error) {
+func (r *OrganizationRepo) organizationObjectExists(db *gorm.DB, organizationID, objectID uuid.UUID) (bool, error) {
 	var n int64
 	err := db.Table("storage.objects").
 		Where("id = ? AND organization_id = ? AND deleted_at IS NULL", objectID, organizationID).
