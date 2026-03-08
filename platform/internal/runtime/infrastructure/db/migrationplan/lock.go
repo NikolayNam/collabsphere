@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 )
 
 func WriteManifestLock(path string, entries []LockEntry) error {
@@ -29,4 +31,48 @@ func WriteManifestLock(path string, entries []LockEntry) error {
 	}
 
 	return os.WriteFile(path, buf.Bytes(), 0o644)
+}
+
+func ReadManifestLock(path string) ([]LockEntry, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	entries := make([]LockEntry, 0, len(lines))
+
+	for idx, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.Split(rawLine, "|")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid manifest.lock line %d: expected 3 fields", idx+1)
+		}
+
+		version := strings.TrimSpace(parts[0])
+		source := strings.TrimSpace(parts[1])
+		output := strings.TrimSpace(parts[2])
+
+		if version == "" || source == "" || output == "" {
+			return nil, fmt.Errorf("invalid manifest.lock line %d: empty field", idx+1)
+		}
+		if _, err := strconv.Atoi(version); err != nil {
+			return nil, fmt.Errorf("invalid manifest.lock line %d: invalid version %q", idx+1, version)
+		}
+
+		entries = append(entries, LockEntry{
+			Version: version,
+			Source:  source,
+			Output:  output,
+		})
+	}
+
+	return entries, nil
 }
