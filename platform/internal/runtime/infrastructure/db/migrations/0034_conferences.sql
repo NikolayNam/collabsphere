@@ -26,7 +26,7 @@ CREATE TABLE collab.conferences
     channel_id            uuid        NOT NULL,
     kind                  text        NOT NULL,
     status                text        NOT NULL DEFAULT 'scheduled',
-    provider              text        NOT NULL DEFAULT 'jitsi',
+    provider              text        NOT NULL DEFAULT 'mediasoup',
     title                 text        NOT NULL,
     jitsi_room_name       text        NOT NULL,
     scheduled_start_at    timestamptz NULL,
@@ -59,7 +59,7 @@ CREATE TABLE collab.conferences
     CONSTRAINT chk_collab_conferences_status
         CHECK (status IN ('scheduled', 'live', 'ended', 'cancelled')),
     CONSTRAINT chk_collab_conferences_provider
-        CHECK (provider IN ('jitsi')),
+        CHECK (provider IN ('jitsi', 'mediasoup')),
     CONSTRAINT chk_collab_conferences_title_not_blank
         CHECK (btrim(title) <> ''),
     CONSTRAINT chk_collab_conferences_room_not_blank

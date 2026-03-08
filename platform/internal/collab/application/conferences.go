@@ -30,13 +30,14 @@ func (s *Service) CreateConference(ctx context.Context, cmd CreateConferenceCmd)
 	if title == "" {
 		title = fmt.Sprintf("%s call", strings.Title(kind))
 	}
+	provider := s.ConferenceProvider()
 	now := s.now()
 	conference, err := s.repo.CreateConference(ctx, collabdomain.Conference{
 		ID:                  uuid.New(),
 		ChannelID:           channel.ID,
 		Kind:                collabdomain.ConferenceKind(kind),
 		Status:              collabdomain.ConferenceStatusScheduled,
-		Provider:            "jitsi",
+		Provider:            provider,
 		Title:               title,
 		JitsiRoomName:       buildConferenceRoomName(channel.GroupID, channel.ID),
 		ScheduledStartAt:    cmd.ScheduledStartAt,
@@ -66,15 +67,15 @@ func (s *Service) ListConferences(ctx context.Context, q ListConferencesQuery) (
 }
 
 func (s *Service) CreateConferenceJoinToken(ctx context.Context, cmd CreateConferenceJoinTokenCmd) (*CreateConferenceJoinTokenResult, error) {
-	if s.jitsi == nil {
-		return nil, fault.Unavailable("Jitsi join tokens are unavailable")
-	}
 	conference, err := s.repo.GetConferenceByID(ctx, cmd.ConferenceID)
 	if err != nil {
 		return nil, fault.Internal("Load conference failed", fault.WithCause(err))
 	}
 	if conference == nil {
 		return nil, fault.NotFound("Conference not found")
+	}
+	if strings.ToLower(strings.TrimSpace(conference.Provider)) != "jitsi" || s.jitsi == nil {
+		return nil, fault.Unavailable(fmt.Sprintf("Conference join flow is not implemented for provider %s", conference.Provider))
 	}
 	access, _, err := s.requireChannelAccess(ctx, conference.ChannelID, cmd.Actor)
 	if err != nil {
@@ -176,6 +177,11 @@ func (s *Service) HandleJitsiWebhook(ctx context.Context, cmd JitsiWebhookCmd) e
 	}
 	if conference == nil {
 		return fault.NotFound("Conference not found")
+	}
+	if strings.ToLower(strings.TrimSpace(conference.Provider)) != "jitsi" {
+		message := fmt.Sprintf("conference provider %s does not accept jitsi events", conference.Provider)
+		_ = s.repo.MarkJitsiWebhookProcessed(ctx, eventID, s.now(), &message)
+		return fault.Validation("Conference provider does not accept Jitsi events")
 	}
 	occurredAt := s.now()
 	if payload.OccurredAt != nil {

@@ -17,7 +17,6 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/clock"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/logger"
-	jitsisec "github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jitsi"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jwt"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/tokens"
 	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
@@ -51,15 +50,17 @@ func main() {
 		log.Fatalf("load auth jwt secret: %v", err)
 	}
 	jwtManager := jwt.NewManager(secret, conf.Auth.AccessTTL, conf.Auth.RefreshSessionTTL)
-	jitsiManager, err := jitsisec.NewManager(conf.Conference.Jitsi)
-	if err != nil {
-		log.Fatalf("init jitsi manager: %v", err)
+	conferenceProvider := conf.Conference.ProviderValue()
+	switch conferenceProvider {
+	case "jitsi", "mediasoup":
+	default:
+		log.Fatalf("unsupported conference provider: %s", conferenceProvider)
 	}
 	transcriber, err := whisper.NewClient(conf.Transcription)
 	if err != nil {
 		log.Fatalf("init transcription client: %v", err)
 	}
-	collabService := collabapp.New(collabRepo, accountRepo, storageClient, tokenGen, jwtManager, jitsiManager, clk, nil, transcriber, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
+	collabService := collabapp.New(collabRepo, accountRepo, storageClient, tokenGen, jwtManager, nil, clk, nil, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
 
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)

@@ -111,10 +111,10 @@ networks:
 
 secrets:
   jitsi_secret:
-    file: ../secrets/jitsi/jitsi_secret
+    file: secrets/jitsi/jitsi_secret
   jicofo_auth_password:
-    file: ../secrets/jitsi/jicofo_auth_password
+    file: secrets/jitsi/jicofo_auth_password
   jicofo_component_secret:
-    file: ../secrets/jitsi/jicofo_component_secret
+    file: secrets/jitsi/jicofo_component_secret
   jvb_auth_password:
-    file: ../secrets/jitsi/jvb_auth_password
+    file: secrets/jitsi/jvb_auth_password

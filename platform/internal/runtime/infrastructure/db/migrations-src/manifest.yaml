@@ -64,3 +64,4 @@ migrations:
   - org/organization_legal_documents.sql
   - org/organization_legal_document_analysis.sql
   - integration/organization_document_analysis_jobs.sql
+  - collab/conference_provider_mediasoup.sql

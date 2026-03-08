@@ -41,16 +41,30 @@ func registerCollabModule(api huma.API, router chi.Router, db *gorm.DB, conf *co
 		}
 	}
 
-	jitsiManager, err := jitsisec.NewManager(conf.Conference.Jitsi)
-	if err != nil {
-		panic(fmt.Errorf("init jitsi manager: %w", err))
+	conferenceProvider := conf.Conference.ProviderValue()
+	switch conferenceProvider {
+	case "jitsi", "mediasoup":
+	default:
+		panic(fmt.Errorf("unsupported conference provider: %s", conferenceProvider))
 	}
+
+	var jitsiManager *jitsisec.Manager
+	if conf.Conference.Jitsi.Enabled {
+		jitsiManager, err = jitsisec.NewManager(conf.Conference.Jitsi)
+		if err != nil {
+			panic(fmt.Errorf("init jitsi manager: %w", err))
+		}
+	}
+	if conferenceProvider == "jitsi" && jitsiManager == nil {
+		panic(fmt.Errorf("conference provider jitsi requires JITSI_ENABLED=true"))
+	}
+
 	transcriber, err := whisper.NewClient(conf.Transcription)
 	if err != nil {
 		panic(fmt.Errorf("init transcription client: %w", err))
 	}
 
-	service := collabapp.New(repo, accountRepo, storageClient, tokenGen, jwtManager, jitsiManager, clk, broker, transcriber, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
+	service := collabapp.New(repo, accountRepo, storageClient, tokenGen, jwtManager, jitsiManager, clk, broker, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
 	handler := collabhttp.NewHandler(service)
 	collabhttp.Register(api, handler, jwtManager)
 	if router != nil {

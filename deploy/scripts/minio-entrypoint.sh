@@ -6,7 +6,11 @@ read_file_secret() {
   tr -d '\r\n' < "$file_path"
 }
 
-export MINIO_ROOT_USER="${STORAGE_S3_ROOT_USER}"
+if [ -n "${STORAGE_S3_ROOT_USER_FILE:-}" ]; then
+  export MINIO_ROOT_USER="$(read_file_secret "${STORAGE_S3_ROOT_USER_FILE}")"
+else
+  export MINIO_ROOT_USER="${STORAGE_S3_ROOT_USER}"
+fi
 export MINIO_ROOT_PASSWORD="$(read_file_secret "${STORAGE_S3_ROOT_PASSWORD_FILE}")"
 export MINIO_BROWSER_REDIRECT_URL="${STORAGE_S3_BROWSER_REDIRECT_URL}"
 

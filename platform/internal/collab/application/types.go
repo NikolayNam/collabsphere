@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
@@ -56,37 +57,50 @@ type TranscriptionResult struct {
 }
 
 type Service struct {
-	repo           *collabpg.Repo
-	accounts       AccountReader
-	storage        ObjectStorage
-	tokens         TokenGenerator
-	jwt            AccessTokenManager
-	jitsi          JitsiTokenManager
-	clock          Clock
-	publisher      EventPublisher
-	transcriber    Transcriber
-	publicBaseURL  string
-	storageBucket  string
-	guestInviteTTL time.Duration
-	guestAccessTTL time.Duration
+	repo               *collabpg.Repo
+	accounts           AccountReader
+	storage            ObjectStorage
+	tokens             TokenGenerator
+	jwt                AccessTokenManager
+	jitsi              JitsiTokenManager
+	clock              Clock
+	publisher          EventPublisher
+	transcriber        Transcriber
+	conferenceProvider string
+	publicBaseURL      string
+	storageBucket      string
+	guestInviteTTL     time.Duration
+	guestAccessTTL     time.Duration
 }
 
-func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tokens TokenGenerator, jwt AccessTokenManager, jitsi JitsiTokenManager, clock Clock, publisher EventPublisher, transcriber Transcriber, publicBaseURL, storageBucket string, guestInviteTTL, guestAccessTTL time.Duration) *Service {
-	return &Service{
-		repo:           repo,
-		accounts:       accounts,
-		storage:        storage,
-		tokens:         tokens,
-		jwt:            jwt,
-		jitsi:          jitsi,
-		clock:          clock,
-		publisher:      publisher,
-		transcriber:    transcriber,
-		publicBaseURL:  publicBaseURL,
-		storageBucket:  storageBucket,
-		guestInviteTTL: guestInviteTTL,
-		guestAccessTTL: guestAccessTTL,
+func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tokens TokenGenerator, jwt AccessTokenManager, jitsi JitsiTokenManager, clock Clock, publisher EventPublisher, transcriber Transcriber, conferenceProvider, publicBaseURL, storageBucket string, guestInviteTTL, guestAccessTTL time.Duration) *Service {
+	provider := strings.ToLower(strings.TrimSpace(conferenceProvider))
+	if provider == "" {
+		provider = "mediasoup"
 	}
+	return &Service{
+		repo:               repo,
+		accounts:           accounts,
+		storage:            storage,
+		tokens:             tokens,
+		jwt:                jwt,
+		jitsi:              jitsi,
+		clock:              clock,
+		publisher:          publisher,
+		transcriber:        transcriber,
+		conferenceProvider: provider,
+		publicBaseURL:      publicBaseURL,
+		storageBucket:      storageBucket,
+		guestInviteTTL:     guestInviteTTL,
+		guestAccessTTL:     guestAccessTTL,
+	}
+}
+
+func (s *Service) ConferenceProvider() string {
+	if strings.TrimSpace(s.conferenceProvider) == "" {
+		return "mediasoup"
+	}
+	return s.conferenceProvider
 }
 
 type CreateChannelCmd struct {

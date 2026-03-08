@@ -103,7 +103,8 @@ type Redis struct {
 }
 
 type Conference struct {
-	Jitsi Jitsi
+	Provider string `env:"CONFERENCE_PROVIDER" envDefault:"mediasoup"`
+	Jitsi    Jitsi
 }
 
 type Jitsi struct {
@@ -253,6 +254,19 @@ func (r Redis) Validate() error {
 		return errors.New("realtime redis typing ttl must be positive")
 	default:
 		return nil
+	}
+}
+
+func (c Conference) ProviderValue() string {
+	provider := strings.ToLower(strings.TrimSpace(c.Provider))
+	if provider == "" {
+		return "mediasoup"
+	}
+	switch provider {
+	case "jitsi", "mediasoup":
+		return provider
+	default:
+		return provider
 	}
 }
 
