@@ -45,9 +45,9 @@ volumes:
 networks:
   internal.network:
     name: internal.network
-    external: true
+    driver: bridge
+    external: false
 
 secrets:
   s3_garage_rpc_secret:
     file: secrets/s3/s3_secret
-
