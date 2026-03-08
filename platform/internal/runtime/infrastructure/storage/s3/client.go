@@ -25,14 +25,15 @@ const (
 )
 
 type Client struct {
-	endpoint    *url.URL
-	region      string
-	accessKey   string
-	secretKey   string
-	pathStyle   bool
-	presignTTL  time.Duration
-	downloadTTL time.Duration
-	httpClient  *http.Client
+	endpoint       *url.URL
+	publicEndpoint *url.URL
+	region         string
+	accessKey      string
+	secretKey      string
+	pathStyle      bool
+	presignTTL     time.Duration
+	downloadTTL    time.Duration
+	httpClient     *http.Client
 }
 
 func NewClient(cfg config.S3) (*Client, error) {
@@ -40,37 +41,54 @@ func NewClient(cfg config.S3) (*Client, error) {
 		return nil, err
 	}
 
-	endpoint, err := url.Parse(strings.TrimSpace(cfg.Endpoint))
+	endpoint, err := parseEndpoint("storage s3 endpoint", cfg.Endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("parse storage s3 endpoint: %w", err)
+		return nil, err
+	}
+
+	publicEndpoint := endpoint
+	if strings.TrimSpace(cfg.PublicEndpoint) != "" {
+		publicEndpoint, err = parseEndpoint("storage s3 public endpoint", cfg.PublicEndpoint)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &Client{
+		endpoint:       endpoint,
+		publicEndpoint: publicEndpoint,
+		region:         strings.TrimSpace(cfg.Region),
+		accessKey:      strings.TrimSpace(cfg.AccessKey),
+		secretKey:      strings.TrimSpace(cfg.SecretKey),
+		pathStyle:      cfg.PathStyle,
+		presignTTL:     cfg.PresignTTL,
+		downloadTTL:    cfg.DownloadTTL,
+		httpClient:     &http.Client{Timeout: 2 * time.Minute},
+	}, nil
+}
+
+func parseEndpoint(label, raw string) (*url.URL, error) {
+	endpoint, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", label, err)
 	}
 	if endpoint.Scheme == "" || endpoint.Host == "" {
-		return nil, fmt.Errorf("storage s3 endpoint must include scheme and host")
+		return nil, fmt.Errorf("%s must include scheme and host", label)
 	}
 
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/")
 	endpoint.RawPath = ""
 	endpoint.RawQuery = ""
 	endpoint.Fragment = ""
-
-	return &Client{
-		endpoint:    endpoint,
-		region:      strings.TrimSpace(cfg.Region),
-		accessKey:   strings.TrimSpace(cfg.AccessKey),
-		secretKey:   strings.TrimSpace(cfg.SecretKey),
-		pathStyle:   cfg.PathStyle,
-		presignTTL:  cfg.PresignTTL,
-		downloadTTL: cfg.DownloadTTL,
-		httpClient:  &http.Client{Timeout: 2 * time.Minute},
-	}, nil
+	return endpoint, nil
 }
 
 func (c *Client) PresignPutObject(ctx context.Context, bucket, objectKey string) (string, time.Time, error) {
-	return c.presign(ctx, http.MethodPut, bucket, objectKey, c.presignTTL)
+	return c.presign(ctx, c.publicEndpoint, http.MethodPut, bucket, objectKey, c.presignTTL)
 }
 
 func (c *Client) ReadObject(ctx context.Context, bucket, objectKey string) (io.ReadCloser, error) {
-	signedURL, _, err := c.presign(ctx, http.MethodGet, bucket, objectKey, c.downloadTTL)
+	signedURL, _, err := c.presign(ctx, c.endpoint, http.MethodGet, bucket, objectKey, c.downloadTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +110,7 @@ func (c *Client) ReadObject(ctx context.Context, bucket, objectKey string) (io.R
 	return resp.Body, nil
 }
 
-func (c *Client) presign(_ context.Context, method, bucket, objectKey string, expiresIn time.Duration) (string, time.Time, error) {
+func (c *Client) presign(_ context.Context, endpoint *url.URL, method, bucket, objectKey string, expiresIn time.Duration) (string, time.Time, error) {
 	bucket = strings.TrimSpace(bucket)
 	objectKey = strings.Trim(strings.TrimSpace(objectKey), "/")
 	if bucket == "" {
@@ -107,7 +125,7 @@ func (c *Client) presign(_ context.Context, method, bucket, objectKey string, ex
 
 	now := time.Now().UTC()
 	expiresAt := now.Add(expiresIn)
-	requestURL, rawPath, err := c.objectURL(bucket, objectKey)
+	requestURL, rawPath, err := c.objectURL(endpoint, bucket, objectKey)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -148,17 +166,17 @@ func (c *Client) presign(_ context.Context, method, bucket, objectKey string, ex
 	return signed.String(), expiresAt, nil
 }
 
-func (c *Client) objectURL(bucket, objectKey string) (*url.URL, string, error) {
-	out := *c.endpoint
+func (c *Client) objectURL(endpoint *url.URL, bucket, objectKey string) (*url.URL, string, error) {
+	out := *endpoint
 
 	pathParts := make([]string, 0, 3)
-	if strings.TrimSpace(c.endpoint.Path) != "" {
-		pathParts = append(pathParts, strings.Trim(c.endpoint.Path, "/"))
+	if strings.TrimSpace(endpoint.Path) != "" {
+		pathParts = append(pathParts, strings.Trim(endpoint.Path, "/"))
 	}
 	if c.pathStyle {
 		pathParts = append(pathParts, bucket, objectKey)
 	} else {
-		out.Host = bucket + "." + c.endpoint.Host
+		out.Host = bucket + "." + endpoint.Host
 		pathParts = append(pathParts, objectKey)
 	}
 
