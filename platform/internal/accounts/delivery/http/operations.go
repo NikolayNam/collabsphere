@@ -50,5 +50,6 @@ var createAvatarUploadOp = huma.Operation{
 	Path:        "/accounts/me/avatar-upload",
 	Tags:        []string{"Accounts"},
 	Summary:     "Create presigned upload for account avatar",
+	Description: "This endpoint does not accept multipart file content. Send JSON metadata (fileName, contentType, sizeBytes, checksumSHA256) to receive a presigned upload URL. Then upload the raw file bytes with HTTP PUT to body.uploadUrl. After the upload succeeds, call PATCH /api/v1/accounts/me with avatarObjectId = body.objectId.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }

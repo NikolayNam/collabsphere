@@ -36,6 +36,7 @@ var createOrganizationLogoUploadOp = huma.Operation{
 	Path:        "/organizations/{id}/logo-upload",
 	Tags:        []string{"Organizations"},
 	Summary:     "Create presigned upload for organization logo",
+	Description: "This endpoint does not accept multipart file content. Send JSON metadata to receive a presigned upload URL. Then upload the raw file bytes with HTTP PUT to body.uploadUrl. After the upload succeeds, call PATCH /api/v1/organizations/{id} with logoObjectId = body.objectId.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
@@ -72,6 +73,7 @@ var createCooperationPriceListUploadOp = huma.Operation{
 	Path:        "/organizations/{id}/cooperation-application/price-list-upload",
 	Tags:        []string{"Organizations"},
 	Summary:     "Create presigned upload for cooperation price list",
+	Description: "This endpoint only returns a presigned upload URL. Upload the raw file bytes with HTTP PUT to body.uploadUrl, then call PATCH /api/v1/organizations/{id}/cooperation-application with priceListObjectId = body.objectId.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
@@ -81,6 +83,7 @@ var createOrganizationLegalDocumentUploadOp = huma.Operation{
 	Path:        "/organizations/{id}/legal-documents/upload",
 	Tags:        []string{"Organizations"},
 	Summary:     "Create presigned upload for organization legal document",
+	Description: "This endpoint only returns a presigned upload URL. Upload the raw file bytes with HTTP PUT to body.uploadUrl, then call POST /api/v1/organizations/{id}/legal-documents with objectId = body.objectId and document metadata.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
