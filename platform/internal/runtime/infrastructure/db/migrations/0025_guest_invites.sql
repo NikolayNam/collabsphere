@@ -4,7 +4,7 @@ CREATE TABLE collab.guest_invites
 (
     id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     channel_id           uuid        NOT NULL,
-    email                citext      NOT NULL,
+    email                text      NOT NULL,
     token_hash           text        NOT NULL,
     can_post             boolean     NOT NULL DEFAULT true,
     visible_from_seq     bigint      NOT NULL DEFAULT 0,

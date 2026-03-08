@@ -1,11 +1,31 @@
 -- +goose Up
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'auth') THEN
+            RAISE EXCEPTION 'schema "auth" does not exist';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'auth'
+                     AND c.relname = 'guest_identities'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "auth.guest_identities" already exists';
+        END IF;
+    END
+$$;
+-- +goose StatementEnd
+
 
 CREATE TABLE auth.guest_identities
 (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     invite_id        uuid        NOT NULL,
     channel_id       uuid        NOT NULL,
-    email            citext      NOT NULL,
+    email            text      NOT NULL,
     display_name     text        NOT NULL,
     accepted_at      timestamptz NOT NULL DEFAULT now(),
     expires_at       timestamptz NOT NULL,

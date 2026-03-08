@@ -5,7 +5,7 @@ CREATE TABLE auth.guest_identities
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     invite_id        uuid        NOT NULL,
     channel_id       uuid        NOT NULL,
-    email            citext      NOT NULL,
+    email            text      NOT NULL,
     display_name     text        NOT NULL,
     accepted_at      timestamptz NOT NULL DEFAULT now(),
     expires_at       timestamptz NOT NULL,
