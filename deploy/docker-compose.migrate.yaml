@@ -5,7 +5,7 @@ services:
     profiles: [ "migrate" ]
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
-      - .env
+      - .env.dev
     volumes:
       - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
       - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro

@@ -50,3 +50,4 @@ platform/cmd/knowgen
 platform/.gocache
 /platform/.gocache/
 platform/internal/runtime/infrastructure/db/migrations-src/manifest.lock
+deploy/.env.dev

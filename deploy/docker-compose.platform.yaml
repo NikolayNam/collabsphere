@@ -9,7 +9,7 @@ services:
       context: ../platform                  # parent directory (collabsphere)
       dockerfile: ../platform/Dockerfile    # path to your Dockerfile relative to context
     env_file:
-      - .env
+      - .env.dev
     secrets:
       - dev_password
       - neon_password

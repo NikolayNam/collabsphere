@@ -9,7 +9,7 @@ services:
     networks:
       - internal.network
     env_file:
-      - .env
+      - .env.dev
     secrets:
       - dev_password
     healthcheck:

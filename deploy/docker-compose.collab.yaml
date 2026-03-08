@@ -2,17 +2,17 @@ name: collabsphere
 
 services:
   minio:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: quay.io/minio/minio:${MINIO_IMAGE_VERSION:-RELEASE.2025-09-07T16-13-09Z}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     env_file:
-      - .env
+      - .env.dev
     secrets:
       - minio_secret
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
-      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_secret
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/s3_secret
       MINIO_BROWSER_REDIRECT_URL: "${MINIO_BROWSER_REDIRECT_URL:-http://localhost:9001}"
     networks:
       - internal.network
@@ -20,14 +20,14 @@ services:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
-      - minio.data:/data
+      - s3.data:/data
 
   minio-init:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: quay.io/minio/mc:${MINIO_MC_IMAGE_VERSION:-RELEASE.2025-07-21T05-28-08Z}
     restart: "no"
     env_file:
-      - .env
+      - .env.dev
     depends_on:
       - minio
     secrets:
@@ -49,11 +49,11 @@ services:
       STORAGE_S3_BUCKET: "${STORAGE_S3_BUCKET:-collabsphere}"
 
   jitsi-web:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: jitsi/web:${JITSI_WEB_IMAGE_VERSION:-web-1.0.9105-1}
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.dev
     depends_on:
       - jitsi-prosody
       - jitsi-jicofo
@@ -94,11 +94,11 @@ services:
       XMPP_PORT: "5222"
 
   jitsi-prosody:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: jitsi/prosody:${JITSI_PROSODY_IMAGE_VERSION:-prosody-13.0.4}
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.dev
     secrets:
       - jitsi_secret
     networks:
@@ -141,11 +141,11 @@ services:
       XMPP_PORT: "5222"
 
   jitsi-jicofo:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: jitsi/jicofo:${JITSI_JICOFO_IMAGE_VERSION:-jicofo-1.0-1172-1}
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.dev
     depends_on:
       - jitsi-prosody
     networks:
@@ -173,11 +173,11 @@ services:
       JVB_XMPP_PORT: "5222"
 
   jitsi-jvb:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: jitsi/jvb:${JITSI_JVB_IMAGE_VERSION:-jvb-2.3-272-g0360d0488-1}
     restart: unless-stopped
     env_file:
-      - .env
+      - .env.dev
     depends_on:
       - jitsi-prosody
     networks:
@@ -200,8 +200,8 @@ services:
       PUBLIC_URL: "${JITSI_PUBLIC_URL:-https://localhost:8443}"
 
 volumes:
-  minio.data:
-    name: minio.data
+  s3.data:
+    name: s3.data
   jitsi.web.config:
     name: jitsi.web.config
   jitsi.transcripts:
