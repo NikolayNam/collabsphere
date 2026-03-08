@@ -345,6 +345,7 @@ func toUploadResponse(objectID uuid.UUID, bucket, objectKey, uploadURL string, e
 	resp.Body.ObjectID = objectID
 	resp.Body.Bucket = bucket
 	resp.Body.ObjectKey = objectKey
+	resp.Body.UploadMethod = http.MethodPut
 	resp.Body.UploadURL = uploadURL
 	resp.Body.ExpiresAt = expiresAt
 	resp.Body.FileName = fileName

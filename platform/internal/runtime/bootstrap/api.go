@@ -18,6 +18,9 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 	if cfg.Components == nil {
 		cfg.Components = &huma.Components{}
 	}
+	if cfg.Components.Schemas == nil {
+		cfg.Components.Schemas = huma.NewMapRegistry("#/components/schemas/", newSchemaNamer())
+	}
 	if cfg.Components.SecuritySchemes == nil {
 		cfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{}
 	}
