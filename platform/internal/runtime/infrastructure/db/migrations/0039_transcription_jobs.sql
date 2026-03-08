@@ -1,5 +1,26 @@
 -- +goose Up
 
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'integration') THEN
+            RAISE EXCEPTION 'schema "integration" does not exist';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'integration'
+                     AND c.relname = 'transcription_jobs'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "integration.transcription_jobs" already exists';
+        END IF;
+    END
+$$;
+-- +goose StatementEnd
+
+
 CREATE TABLE integration.transcription_jobs
 (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),

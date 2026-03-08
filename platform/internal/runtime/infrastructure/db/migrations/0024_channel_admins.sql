@@ -1,11 +1,32 @@
 -- +goose Up
 
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'collab') THEN
+            RAISE EXCEPTION 'schema "collab" does not exist';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'collab'
+                     AND c.relname = 'chanel_admins'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "collab.chanel_admins" already exists';
+        END IF;
+    END
+$$;
+-- +goose StatementEnd
+
+
 CREATE TABLE collab.channel_admins
 (
-    channel_id  uuid        NOT NULL,
-    account_id  uuid        NOT NULL,
-    created_at  timestamptz NOT NULL DEFAULT now(),
-    created_by  uuid        NULL,
+    channel_id uuid        NOT NULL,
+    account_id uuid        NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by uuid        NULL,
     PRIMARY KEY (channel_id, account_id),
     CONSTRAINT fk_collab_channel_admins_channel
         FOREIGN KEY (channel_id)
