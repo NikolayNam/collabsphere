@@ -1,5 +1,34 @@
 -- +goose Up
 
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'collab') THEN
+            RAISE EXCEPTION 'schema "collab" does not exist';
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'iam') THEN
+            RAISE EXCEPTION 'schema "iam" does not exist';
+        END IF;
+
+        IF to_regclass('iam.accounts') IS NULL THEN
+            RAISE EXCEPTION 'table "iam.accounts" does not exist; run orders migration first';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'collab'
+                     AND c.relname = 'message_reactions'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "collab.message_reactions" already exists';
+        END IF;
+    END
+$$;
+-- +goose StatementEnd
+
+
 CREATE TABLE collab.message_reactions
 (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

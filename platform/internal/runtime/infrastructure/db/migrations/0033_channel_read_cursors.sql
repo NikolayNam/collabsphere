@@ -1,14 +1,34 @@
 -- +goose Up
 
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'collab') THEN
+            RAISE EXCEPTION 'schema "collab" does not exist';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'collab'
+                     AND c.relname = 'channel_read_cursors'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "collab.channel_read_cursors" already exists';
+        END IF;
+    END
+$$;
+-- +goose StatementEnd
+
 CREATE TABLE collab.channel_read_cursors
 (
-    id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    channel_id         uuid        NOT NULL,
-    actor_type         text        NOT NULL,
-    account_id         uuid        NULL,
-    guest_id           uuid        NULL,
-    last_read_seq      bigint      NOT NULL DEFAULT 0,
-    last_read_at       timestamptz NOT NULL DEFAULT now(),
+    id            uuid PRIMARY KEY     DEFAULT gen_random_uuid(),
+    channel_id    uuid        NOT NULL,
+    actor_type    text        NOT NULL,
+    account_id    uuid        NULL,
+    guest_id      uuid        NULL,
+    last_read_seq bigint      NOT NULL DEFAULT 0,
+    last_read_at  timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT fk_collab_channel_read_cursors_channel
         FOREIGN KEY (channel_id)
             REFERENCES collab.channels (id)
@@ -28,8 +48,8 @@ CREATE TABLE collab.channel_read_cursors
     CONSTRAINT chk_collab_channel_read_cursors_actor_match
         CHECK (
             (actor_type = 'account' AND account_id IS NOT NULL AND guest_id IS NULL)
-            OR (actor_type = 'guest' AND guest_id IS NOT NULL AND account_id IS NULL)
-        ),
+                OR (actor_type = 'guest' AND guest_id IS NOT NULL AND account_id IS NULL)
+            ),
     CONSTRAINT chk_collab_channel_read_cursors_last_read_seq_nonneg
         CHECK (last_read_seq >= 0)
 );

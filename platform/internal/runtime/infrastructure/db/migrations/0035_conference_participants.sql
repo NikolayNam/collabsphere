@@ -1,15 +1,44 @@
 -- +goose Up
 
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'collab') THEN
+            RAISE EXCEPTION 'schema "collab" does not exist';
+        END IF;
+
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'iam') THEN
+            RAISE EXCEPTION 'schema "iam" does not exist';
+        END IF;
+
+        IF to_regclass('iam.accounts') IS NULL THEN
+            RAISE EXCEPTION 'table "iam.accounts" does not exist; run orders migration first';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'collab'
+                     AND c.relname = 'conference_participants'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "collab.conference_participants" already exists';
+        END IF;
+
+    END
+$$;
+-- +goose StatementEnd
+
 CREATE TABLE collab.conference_participants
 (
-    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    conference_id  uuid        NOT NULL,
-    actor_type     text        NOT NULL,
-    account_id     uuid        NULL,
-    guest_id       uuid        NULL,
-    joined_at      timestamptz NOT NULL DEFAULT now(),
-    left_at        timestamptz NULL,
-    role           text        NOT NULL DEFAULT 'participant',
+    id            uuid PRIMARY KEY     DEFAULT gen_random_uuid(),
+    conference_id uuid        NOT NULL,
+    actor_type    text        NOT NULL,
+    account_id    uuid        NULL,
+    guest_id      uuid        NULL,
+    joined_at     timestamptz NOT NULL DEFAULT now(),
+    left_at       timestamptz NULL,
+    role          text        NOT NULL DEFAULT 'participant',
     CONSTRAINT fk_collab_conference_participants_conference
         FOREIGN KEY (conference_id)
             REFERENCES collab.conferences (id)
@@ -27,8 +56,8 @@ CREATE TABLE collab.conference_participants
     CONSTRAINT chk_collab_conference_participants_actor_match
         CHECK (
             (actor_type = 'account' AND account_id IS NOT NULL AND guest_id IS NULL)
-            OR (actor_type = 'guest' AND guest_id IS NOT NULL AND account_id IS NULL)
-        ),
+                OR (actor_type = 'guest' AND guest_id IS NOT NULL AND account_id IS NULL)
+            ),
     CONSTRAINT chk_collab_conference_participants_left_valid
         CHECK (left_at IS NULL OR left_at >= joined_at),
     CONSTRAINT chk_collab_conference_participants_role

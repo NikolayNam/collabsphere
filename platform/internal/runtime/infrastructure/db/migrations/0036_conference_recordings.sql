@@ -1,5 +1,26 @@
 -- +goose Up
 
+
+-- +goose StatementBegin
+DO
+$$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'collab') THEN
+            RAISE EXCEPTION 'schema "collab" does not exist';
+        END IF;
+
+        IF EXISTS (SELECT 1
+                   FROM pg_class c
+                            JOIN pg_namespace n ON n.oid = c.relnamespace
+                   WHERE n.nspname = 'collab'
+                     AND c.relname = 'conference_recordings'
+                     AND c.relkind IN ('r', 'p')) THEN
+            RAISE EXCEPTION 'table "collab.conference_recordings" already exists';
+        END IF;
+    END
+$$;
+-- +goose StatementEnd
+
 CREATE TABLE collab.conference_recordings
 (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
