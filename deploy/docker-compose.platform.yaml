@@ -51,8 +51,8 @@ volumes:
 
 secrets:
   dev_password:
-    file: secrets/postgres/dev/db_password
+    file: deploy/secrets/postgres/dev/db_password
   neon_password:
-    file: secrets/postgres/prod/db_password
+    file: deploy/secrets/postgres/prod/db_password
   jwt_secret:
-    file: secrets/jwt/jwt_secret
+    file: deploy/secrets/jwt/jwt_secret
