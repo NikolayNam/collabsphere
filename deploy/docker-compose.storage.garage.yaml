@@ -3,7 +3,7 @@ name: collabsphere
 services:
   s3:
     profiles: [ "local" ]
-    image: dxflrs/garage:${STORAGE_S3_GARAGE_IMAGE_VERSION:-latest}
+    image: dxflrs/garage:${STORAGE_S3_GARAGE_IMAGE_VERSION:-v1.3.1}
     restart: unless-stopped
     env_file:
       - .env.dev
@@ -20,7 +20,7 @@ services:
 
   s3-init:
     profiles: [ "local" ]
-    image: dxflrs/garage:${STORAGE_S3_GARAGE_IMAGE_VERSION:-latest}
+    image: dxflrs/garage:${STORAGE_S3_GARAGE_IMAGE_VERSION:-v1.3.1}
     restart: "no"
     env_file:
       - .env.dev
@@ -50,3 +50,4 @@ networks:
 secrets:
   s3_garage_rpc_secret:
     file: secrets/s3/s3_secret
+
