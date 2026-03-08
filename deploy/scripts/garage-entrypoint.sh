@@ -1,7 +1,13 @@
 #!/bin/sh
 set -eu
 
-rpc_secret="$(tr -d '\r\n' < "${STORAGE_S3_GARAGE_RPC_SECRET_FILE}")"
+raw_secret="$(tr -d '\r\n' < "${STORAGE_S3_GARAGE_RPC_SECRET_FILE}")"
+if printf '%s' "$raw_secret" | grep -Eq '^[0-9a-fA-F]{64}$'; then
+  rpc_secret="$(printf '%s' "$raw_secret" | tr 'A-F' 'a-f')"
+else
+  rpc_secret="$(printf '%s' "$raw_secret" | sha256sum | awk '{print $1}')"
+fi
+
 mkdir -p /etc/garage
 cat > /etc/garage/garage.toml <<EOF
 metadata_dir = "/var/lib/garage/meta"
