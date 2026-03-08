@@ -44,6 +44,7 @@ type S3 struct {
 	Region         string        `env:"STORAGE_S3_REGION" envDefault:"us-east-1"`
 	AccessKey      string        `env:"STORAGE_S3_ACCESS_KEY"`
 	SecretKey      string        `env:"STORAGE_S3_SECRET_KEY"`
+	SecretKeyFile  string        `env:"STORAGE_S3_SECRET_KEY_FILE"`
 	Bucket         string        `env:"STORAGE_S3_BUCKET"`
 	PathStyle      bool          `env:"STORAGE_S3_PATH_STYLE" envDefault:"true"`
 	PresignTTL     time.Duration `env:"STORAGE_S3_PRESIGN_TTL" envDefault:"15m"`
@@ -99,14 +100,15 @@ type Conference struct {
 }
 
 type Jitsi struct {
-	Enabled   bool          `env:"JITSI_ENABLED" envDefault:"false"`
-	BaseURL   string        `env:"JITSI_BASE_URL"`
-	Domain    string        `env:"JITSI_DOMAIN"`
-	AppID     string        `env:"JITSI_APP_ID"`
-	AppSecret string        `env:"JITSI_APP_SECRET"`
-	Issuer    string        `env:"JITSI_ISSUER"`
-	Audience  string        `env:"JITSI_AUDIENCE" envDefault:"jitsi"`
-	TokenTTL  time.Duration `env:"JITSI_TOKEN_TTL" envDefault:"2h"`
+	Enabled       bool          `env:"JITSI_ENABLED" envDefault:"false"`
+	BaseURL       string        `env:"JITSI_BASE_URL"`
+	Domain        string        `env:"JITSI_DOMAIN"`
+	AppID         string        `env:"JITSI_APP_ID"`
+	AppSecret     string        `env:"JITSI_APP_SECRET"`
+	AppSecretFile string        `env:"JITSI_APP_SECRET_FILE"`
+	Issuer        string        `env:"JITSI_ISSUER"`
+	Audience      string        `env:"JITSI_AUDIENCE" envDefault:"jitsi"`
+	TokenTTL      time.Duration `env:"JITSI_TOKEN_TTL" envDefault:"2h"`
 }
 
 type Transcription struct {
@@ -181,9 +183,52 @@ func (a Auth) JWTSecretValue() (string, error) {
 	return secret, nil
 }
 
+func (s S3) SecretKeyValue() (string, error) {
+	if strings.TrimSpace(s.SecretKey) != "" {
+		return s.SecretKey, nil
+	}
+	if strings.TrimSpace(s.SecretKeyFile) == "" {
+		return "", errors.New("storage s3 secret key is empty")
+	}
+
+	b, err := os.ReadFile(s.SecretKeyFile)
+	if err != nil {
+		return "", err
+	}
+
+	secret := strings.TrimSpace(string(b))
+	if secret == "" {
+		return "", errors.New("storage s3 secret key file is empty")
+	}
+	return secret, nil
+}
+
+func (j Jitsi) AppSecretValue() (string, error) {
+	if strings.TrimSpace(j.AppSecret) != "" {
+		return j.AppSecret, nil
+	}
+	if strings.TrimSpace(j.AppSecretFile) == "" {
+		return "", errors.New("jitsi app secret is empty")
+	}
+
+	b, err := os.ReadFile(j.AppSecretFile)
+	if err != nil {
+		return "", err
+	}
+
+	secret := strings.TrimSpace(string(b))
+	if secret == "" {
+		return "", errors.New("jitsi app secret file is empty")
+	}
+	return secret, nil
+}
+
 func (s S3) Validate() error {
 	if !s.Enabled {
 		return nil
+	}
+	if _, err := s.SecretKeyValue(); err != nil {
+		return err
 	}
 
 	switch {
@@ -193,8 +238,6 @@ func (s S3) Validate() error {
 		return errors.New("storage s3 region is empty")
 	case strings.TrimSpace(s.AccessKey) == "":
 		return errors.New("storage s3 access key is empty")
-	case strings.TrimSpace(s.SecretKey) == "":
-		return errors.New("storage s3 secret key is empty")
 	case strings.TrimSpace(s.Bucket) == "":
 		return errors.New("storage s3 bucket is empty")
 	case s.PresignTTL <= 0:
@@ -229,6 +272,9 @@ func (j Jitsi) Validate() error {
 	if !j.Enabled {
 		return nil
 	}
+	if _, err := j.AppSecretValue(); err != nil {
+		return err
+	}
 
 	switch {
 	case strings.TrimSpace(j.BaseURL) == "":
@@ -237,8 +283,6 @@ func (j Jitsi) Validate() error {
 		return errors.New("jitsi domain is empty")
 	case strings.TrimSpace(j.AppID) == "":
 		return errors.New("jitsi app id is empty")
-	case strings.TrimSpace(j.AppSecret) == "":
-		return errors.New("jitsi app secret is empty")
 	case j.TokenTTL <= 0:
 		return errors.New("jitsi token ttl must be positive")
 	default:

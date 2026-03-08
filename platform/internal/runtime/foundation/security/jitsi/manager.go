@@ -45,13 +45,17 @@ func NewManager(cfg config.Jitsi) (*Manager, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	appSecret, err := cfg.AppSecretValue()
+	if err != nil {
+		return nil, err
+	}
 	return &Manager{
 		baseURL:   strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 		domain:    strings.TrimSpace(cfg.Domain),
 		issuer:    cfg.IssuerValue(),
 		audience:  strings.TrimSpace(cfg.Audience),
 		appID:     strings.TrimSpace(cfg.AppID),
-		appSecret: []byte(strings.TrimSpace(cfg.AppSecret)),
+		appSecret: []byte(appSecret),
 	}, nil
 }
 
