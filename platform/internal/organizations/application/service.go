@@ -138,27 +138,43 @@ type AddOrganizationLegalDocumentCmd struct {
 	Title          string
 }
 
-type Service struct {
-	create      *create_organization.Handler
-	getById     *get_organization_by_id.Handler
-	repo        ports.OrganizationRepository
-	memberships memberPorts.MembershipRepository
-	clock       ports.Clock
-	storage     ports.ObjectStorage
-	bucket      string
+type GetOrganizationLegalDocumentAnalysisQuery struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	DocumentID     uuid.UUID
 }
 
-func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, categoryProvisioner ports.ProductCategoryProvisioner, txm sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, bucket string) *Service {
+type ReprocessOrganizationLegalDocumentAnalysisCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	DocumentID     uuid.UUID
+}
+
+type Service struct {
+	create                  *create_organization.Handler
+	getById                 *get_organization_by_id.Handler
+	repo                    ports.OrganizationRepository
+	memberships             memberPorts.MembershipRepository
+	clock                   ports.Clock
+	storage                 ports.ObjectStorage
+	bucket                  string
+	legalDocumentAnalyzer   ports.LegalDocumentAnalyzer
+	legalDocumentAIProvider string
+}
+
+func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, categoryProvisioner ports.ProductCategoryProvisioner, txm sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, bucket string, analyzer ports.LegalDocumentAnalyzer, legalDocumentAIProvider string) *Service {
 	creator := create_with_owner.New(txm, repo, membershipRepo, categoryProvisioner)
 
 	return &Service{
-		create:      create_organization.NewHandler(creator, clock),
-		getById:     get_organization_by_id.NewHandler(repo),
-		repo:        repo,
-		memberships: membershipRepo,
-		clock:       clock,
-		storage:     storage,
-		bucket:      strings.TrimSpace(bucket),
+		create:                  create_organization.NewHandler(creator, clock),
+		getById:                 get_organization_by_id.NewHandler(repo),
+		repo:                    repo,
+		memberships:             membershipRepo,
+		clock:                   clock,
+		storage:                 storage,
+		bucket:                  strings.TrimSpace(bucket),
+		legalDocumentAnalyzer:   analyzer,
+		legalDocumentAIProvider: strings.TrimSpace(legalDocumentAIProvider),
 	}
 }
 
@@ -360,7 +376,16 @@ func (s *Service) AddOrganizationLegalDocument(ctx context.Context, cmd AddOrgan
 	if err != nil {
 		return nil, apperrors.InvalidInput(err.Error())
 	}
-	return s.repo.CreateOrganizationLegalDocument(ctx, document)
+	created, err := s.repo.CreateOrganizationLegalDocument(ctx, document)
+	if err != nil {
+		return nil, err
+	}
+	if created != nil && s.legalDocumentAIProvider != "" {
+		if err := s.repo.EnsureOrganizationLegalDocumentAnalysis(ctx, created, s.legalDocumentAIProvider, s.clock.Now()); err != nil {
+			return nil, fault.Internal("Queue legal document analysis failed", fault.WithCause(err))
+		}
+	}
+	return created, nil
 }
 
 func (s *Service) ListOrganizationLegalDocuments(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID) ([]domain.OrganizationLegalDocument, error) {
@@ -368,6 +393,69 @@ func (s *Service) ListOrganizationLegalDocuments(ctx context.Context, organizati
 		return nil, err
 	}
 	return s.repo.ListOrganizationLegalDocuments(ctx, organizationID)
+}
+
+func (s *Service) GetOrganizationLegalDocumentAnalysis(ctx context.Context, q GetOrganizationLegalDocumentAnalysisQuery) (*domain.OrganizationLegalDocumentAnalysis, error) {
+	if err := s.requireOrganizationAccess(ctx, q.OrganizationID, q.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	analysis, err := s.repo.GetOrganizationLegalDocumentAnalysis(ctx, q.OrganizationID, q.DocumentID)
+	if err != nil {
+		return nil, err
+	}
+	if analysis == nil {
+		return nil, fault.NotFound("Organization legal document analysis not found")
+	}
+	return analysis, nil
+}
+
+func (s *Service) ReprocessOrganizationLegalDocumentAnalysis(ctx context.Context, cmd ReprocessOrganizationLegalDocumentAnalysisCmd) (*domain.OrganizationLegalDocumentAnalysis, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	if s.legalDocumentAIProvider == "" {
+		return nil, fault.Unavailable("Legal document analysis is unavailable")
+	}
+	document, err := s.repo.GetOrganizationLegalDocumentByID(ctx, cmd.OrganizationID, cmd.DocumentID)
+	if err != nil {
+		return nil, err
+	}
+	if document == nil {
+		return nil, fault.NotFound("Organization legal document not found")
+	}
+	if err := s.repo.EnsureOrganizationLegalDocumentAnalysis(ctx, document, s.legalDocumentAIProvider, s.clock.Now()); err != nil {
+		return nil, fault.Internal("Queue legal document analysis failed", fault.WithCause(err))
+	}
+	return s.repo.GetOrganizationLegalDocumentAnalysis(ctx, cmd.OrganizationID, cmd.DocumentID)
+}
+
+func (s *Service) ProcessNextLegalDocumentAnalysisJob(ctx context.Context) (bool, error) {
+	if s.legalDocumentAnalyzer == nil || s.storage == nil {
+		return false, nil
+	}
+	lease, err := s.repo.LeaseNextOrganizationLegalDocumentAnalysisJob(ctx, s.clock.Now(), 2*time.Minute)
+	if err != nil {
+		return false, fault.Internal("Lease legal document analysis job failed", fault.WithCause(err))
+	}
+	if lease == nil {
+		return false, nil
+	}
+	body, err := s.storage.ReadObject(ctx, lease.Bucket, lease.ObjectKey)
+	if err != nil {
+		_ = s.repo.FailOrganizationLegalDocumentAnalysisJob(ctx, lease.JobID, lease.DocumentID, lease.Provider, err.Error(), s.clock.Now().Add(30*time.Second))
+		return true, fault.Internal("Read legal document object failed", fault.WithCause(err))
+	}
+	defer body.Close()
+	result, err := s.legalDocumentAnalyzer.Analyze(ctx, lease.FileName, lease.MimeType, body)
+	if err != nil {
+		_ = s.repo.FailOrganizationLegalDocumentAnalysisJob(ctx, lease.JobID, lease.DocumentID, lease.Provider, err.Error(), s.clock.Now().Add(30*time.Second))
+		return true, fault.Internal("Legal document analysis failed", fault.WithCause(err))
+	}
+	if err := s.repo.CompleteOrganizationLegalDocumentAnalysisJob(ctx, lease.JobID, lease.DocumentID, lease.Provider, result, s.clock.Now()); err != nil {
+		_ = s.repo.FailOrganizationLegalDocumentAnalysisJob(ctx, lease.JobID, lease.DocumentID, lease.Provider, err.Error(), s.clock.Now().Add(30*time.Second))
+		return true, fault.Internal("Store legal document analysis failed", fault.WithCause(err))
+	}
+	return true, nil
 }
 
 func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID, requireOwner bool) error {

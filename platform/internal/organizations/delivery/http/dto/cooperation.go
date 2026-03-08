@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,6 +65,29 @@ type OrganizationLegalDocumentsResponse struct {
 	} `json:"body"`
 }
 
+type OrganizationLegalDocumentAnalysisBody struct {
+	ID                   uuid.UUID       `json:"id"`
+	DocumentID           uuid.UUID       `json:"documentId"`
+	OrganizationID       uuid.UUID       `json:"organizationId"`
+	Status               string          `json:"status"`
+	Provider             string          `json:"provider"`
+	ExtractedText        *string         `json:"extractedText,omitempty"`
+	Summary              *string         `json:"summary,omitempty"`
+	ExtractedFields      json.RawMessage `json:"extractedFields"`
+	DetectedDocumentType *string         `json:"detectedDocumentType,omitempty"`
+	ConfidenceScore      *float64        `json:"confidenceScore,omitempty"`
+	RequestedAt          time.Time       `json:"requestedAt"`
+	StartedAt            *time.Time      `json:"startedAt,omitempty"`
+	CompletedAt          *time.Time      `json:"completedAt,omitempty"`
+	UpdatedAt            *time.Time      `json:"updatedAt,omitempty"`
+	LastError            *string         `json:"lastError,omitempty"`
+}
+
+type OrganizationLegalDocumentAnalysisResponse struct {
+	Status int                                   `json:"-"`
+	Body   OrganizationLegalDocumentAnalysisBody `json:"body"`
+}
+
 type GetCooperationApplicationInput struct {
 	ID string `path:"id" format:"uuid" doc:"Organization ID"`
 }
@@ -125,4 +149,14 @@ type CreateOrganizationLegalDocumentInput struct {
 
 type ListOrganizationLegalDocumentsInput struct {
 	ID string `path:"id" format:"uuid" doc:"Organization ID"`
+}
+
+type GetOrganizationLegalDocumentAnalysisInput struct {
+	ID         string `path:"id" format:"uuid" doc:"Organization ID"`
+	DocumentID string `path:"document_id" format:"uuid" doc:"Legal document ID"`
+}
+
+type ReprocessOrganizationLegalDocumentAnalysisInput struct {
+	ID         string `path:"id" format:"uuid" doc:"Organization ID"`
+	DocumentID string `path:"document_id" format:"uuid" doc:"Legal document ID"`
 }

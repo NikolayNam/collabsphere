@@ -36,15 +36,23 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	priceListUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, priceListUpload, h.CreateCooperationPriceListUpload)
 
-	legalUpload := createOrganizationLegalDocumentUploadOp
-	legalUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
-	huma.Register(api, legalUpload, h.CreateOrganizationLegalDocumentUpload)
+	legalDocumentUpload := createOrganizationLegalDocumentUploadOp
+	legalDocumentUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, legalDocumentUpload, h.CreateOrganizationLegalDocumentUpload)
 
-	createLegal := createOrganizationLegalDocumentOp
-	createLegal.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
-	huma.Register(api, createLegal, h.CreateOrganizationLegalDocument)
+	createLegalDocument := createOrganizationLegalDocumentOp
+	createLegalDocument.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, createLegalDocument, h.CreateOrganizationLegalDocument)
 
-	listLegal := listOrganizationLegalDocumentsOp
-	listLegal.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
-	huma.Register(api, listLegal, h.ListOrganizationLegalDocuments)
+	listLegalDocuments := listOrganizationLegalDocumentsOp
+	listLegalDocuments.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, listLegalDocuments, h.ListOrganizationLegalDocuments)
+
+	getAnalysis := getOrganizationLegalDocumentAnalysisOp
+	getAnalysis.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, getAnalysis, h.GetOrganizationLegalDocumentAnalysis)
+
+	reprocessAnalysis := reprocessOrganizationLegalDocumentAnalysisOp
+	reprocessAnalysis.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, reprocessAnalysis, h.ReprocessOrganizationLegalDocumentAnalysis)
 }

@@ -260,6 +260,54 @@ func (h *Handler) ListOrganizationLegalDocuments(ctx context.Context, input *dto
 	return mapper.ToOrganizationLegalDocumentsResponse(documents, http.StatusOK), nil
 }
 
+func (h *Handler) GetOrganizationLegalDocumentAnalysis(ctx context.Context, input *dto.GetOrganizationLegalDocumentAnalysisInput) (*dto.OrganizationLegalDocumentAnalysisResponse, error) {
+	actorID, err := principalOrganizationActorUUID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.ID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	documentID, err := parseUUID(input.DocumentID, "Invalid legal document ID")
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	analysis, err := h.svc.GetOrganizationLegalDocumentAnalysis(ctx, application.GetOrganizationLegalDocumentAnalysisQuery{
+		OrganizationID: organizationID,
+		ActorAccountID: actorID,
+		DocumentID:     documentID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return mapper.ToOrganizationLegalDocumentAnalysisResponse(analysis, http.StatusOK), nil
+}
+
+func (h *Handler) ReprocessOrganizationLegalDocumentAnalysis(ctx context.Context, input *dto.ReprocessOrganizationLegalDocumentAnalysisInput) (*dto.OrganizationLegalDocumentAnalysisResponse, error) {
+	actorID, err := principalOrganizationActorUUID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.ID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	documentID, err := parseUUID(input.DocumentID, "Invalid legal document ID")
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	analysis, err := h.svc.ReprocessOrganizationLegalDocumentAnalysis(ctx, application.ReprocessOrganizationLegalDocumentAnalysisCmd{
+		OrganizationID: organizationID,
+		ActorAccountID: actorID,
+		DocumentID:     documentID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return mapper.ToOrganizationLegalDocumentAnalysisResponse(analysis, http.StatusOK), nil
+}
+
 func principalOrganizationActor(ctx context.Context) (accdomain.AccountID, error) {
 	principal := authmw.PrincipalFromContext(ctx)
 	if !principal.IsAccount() {
@@ -282,6 +330,14 @@ func parseOrganizationID(raw string) (orgdomain.OrganizationID, error) {
 		return orgdomain.OrganizationID{}, fault.Validation("Invalid organization ID")
 	}
 	return orgdomain.OrganizationIDFromUUID(parsed)
+}
+
+func parseUUID(raw, message string) (uuid.UUID, error) {
+	parsed, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, fault.Validation(message)
+	}
+	return parsed, nil
 }
 
 func toUploadResponse(objectID uuid.UUID, bucket, objectKey, uploadURL string, expiresAt time.Time, fileName string, sizeBytes int64, status int) *dto.UploadResponse {

@@ -58,6 +58,32 @@ func ToOrganizationLegalDocumentsResponse(documents []domain.OrganizationLegalDo
 	return response
 }
 
+func ToOrganizationLegalDocumentAnalysisResponse(analysis *domain.OrganizationLegalDocumentAnalysis, status int) *dto.OrganizationLegalDocumentAnalysisResponse {
+	if analysis == nil {
+		return nil
+	}
+	return &dto.OrganizationLegalDocumentAnalysisResponse{
+		Status: status,
+		Body: dto.OrganizationLegalDocumentAnalysisBody{
+			ID:                   analysis.ID(),
+			DocumentID:           analysis.DocumentID(),
+			OrganizationID:       analysis.OrganizationID().UUID(),
+			Status:               string(analysis.Status()),
+			Provider:             analysis.Provider(),
+			ExtractedText:        analysis.ExtractedText(),
+			Summary:              analysis.Summary(),
+			ExtractedFields:      analysis.ExtractedFieldsJSON(),
+			DetectedDocumentType: analysis.DetectedDocumentType(),
+			ConfidenceScore:      analysis.ConfidenceScore(),
+			RequestedAt:          analysis.RequestedAt(),
+			StartedAt:            analysis.StartedAt(),
+			CompletedAt:          analysis.CompletedAt(),
+			UpdatedAt:            analysis.UpdatedAt(),
+			LastError:            analysis.LastError(),
+		},
+	}
+}
+
 func toOrganizationLegalDocumentBody(document *domain.OrganizationLegalDocument) dto.OrganizationLegalDocumentBody {
 	return dto.OrganizationLegalDocumentBody{
 		ID:                  document.ID(),

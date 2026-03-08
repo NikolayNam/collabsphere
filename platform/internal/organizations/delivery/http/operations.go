@@ -101,3 +101,21 @@ var listOrganizationLegalDocumentsOp = huma.Operation{
 	Summary:     "List organization legal documents",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var getOrganizationLegalDocumentAnalysisOp = huma.Operation{
+	OperationID: "get-organization-legal-document-analysis",
+	Method:      "GET",
+	Path:        "/organizations/{id}/legal-documents/{document_id}/analysis",
+	Tags:        []string{"Organizations"},
+	Summary:     "Get machine analysis result for organization legal document",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var reprocessOrganizationLegalDocumentAnalysisOp = huma.Operation{
+	OperationID: "reprocess-organization-legal-document-analysis",
+	Method:      "POST",
+	Path:        "/organizations/{id}/legal-documents/{document_id}/analysis",
+	Tags:        []string{"Organizations"},
+	Summary:     "Requeue machine analysis for organization legal document",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
