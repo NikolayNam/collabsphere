@@ -89,6 +89,7 @@ var createProductImportUploadOp = huma.Operation{
 	Path:        "/organizations/{organization_id}/product-imports/uploads",
 	Tags:        []string{"Catalog"},
 	Summary:     "Create presigned upload for product import file",
+	Description: "This endpoint does not accept multipart file content. Send JSON metadata to receive a presigned upload URL. Then upload the raw file bytes with HTTP PUT to body.uploadUrl. After the upload succeeds, call POST /api/v1/organizations/{organization_id}/product-imports with sourceObjectId = body.objectId.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 

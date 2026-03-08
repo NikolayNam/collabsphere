@@ -129,24 +129,25 @@ type DeleteMessageInput struct {
 type CreateAttachmentUploadInput struct {
 	ChannelID string `path:"channel_id"`
 	Body      struct {
-		OrganizationID *string `json:"organizationId,omitempty"`
-		FileName       string  `json:"fileName"`
-		ContentType    *string `json:"contentType,omitempty"`
-		SizeBytes      int64   `json:"sizeBytes"`
-		ChecksumSHA256 *string `json:"checksumSha256,omitempty"`
+		OrganizationID *string `json:"organizationId,omitempty" doc:"Optional organization owner of the file. Use it when the attachment belongs to an organization-scoped object."`
+		FileName       string  `json:"fileName" doc:"Original file name. This endpoint does not receive file bytes; it only prepares a presigned upload."`
+		ContentType    *string `json:"contentType,omitempty" doc:"Optional MIME type that should be used when uploading the file to the presigned URL."`
+		SizeBytes      int64   `json:"sizeBytes" doc:"Declared file size in bytes."`
+		ChecksumSHA256 *string `json:"checksumSha256,omitempty" doc:"Optional SHA-256 checksum of the file contents in hex format."`
 	}
 }
 
 type AttachmentUploadResponse struct {
 	Status int
 	Body   struct {
-		ObjectID  uuid.UUID `json:"objectId"`
-		UploadURL string    `json:"uploadUrl"`
-		ExpiresAt time.Time `json:"expiresAt"`
-		Bucket    string    `json:"bucket"`
-		ObjectKey string    `json:"objectKey"`
-		FileName  string    `json:"fileName"`
-		SizeBytes int64     `json:"sizeBytes"`
+		ObjectID     uuid.UUID `json:"objectId" doc:"Internal object ID. Include it in attachmentObjectIds when creating the channel message after the file upload succeeds."`
+		UploadMethod string    `json:"uploadMethod" doc:"HTTP method to use when uploading raw file bytes to uploadUrl. Usually PUT."`
+		UploadURL    string    `json:"uploadUrl" doc:"Presigned storage URL. Send the raw file bytes to this URL, not JSON metadata."`
+		ExpiresAt    time.Time `json:"expiresAt" doc:"Expiration time of the presigned upload URL."`
+		Bucket       string    `json:"bucket" doc:"Storage bucket where the file will be uploaded."`
+		ObjectKey    string    `json:"objectKey" doc:"Storage object key reserved for this upload."`
+		FileName     string    `json:"fileName" doc:"Original file name stored in object metadata."`
+		SizeBytes    int64     `json:"sizeBytes" doc:"Declared file size in bytes."`
 	}
 }
 
