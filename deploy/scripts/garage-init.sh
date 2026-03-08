@@ -20,32 +20,49 @@ root_domain = ""
 EOF
 
 if [ -f /run/generated/s3/.garage_initialized ]; then
+  echo "garage-init: already initialized"
   exit 0
 fi
 
+echo "garage-init: waiting for garage status"
 until /garage -c /etc/garage/garage.toml status >/dev/null 2>&1; do
   sleep 2
 done
 
-node_id="$(/garage -c /etc/garage/garage.toml node id | head -n 1 | tr -d '\r\n' | xargs)"
-[ -n "$node_id" ]
-
-/garage -c /etc/garage/garage.toml layout assign -z "${STORAGE_S3_GARAGE_ZONE}" -c "${STORAGE_S3_GARAGE_CAPACITY}" "$node_id" || true
-/garage -c /etc/garage/garage.toml layout apply --version 1 || true
-/garage -c /etc/garage/garage.toml bucket create "${STORAGE_S3_BUCKET}" || true
-
-key_output="$(/garage -c /etc/garage/garage.toml key create "${STORAGE_S3_GARAGE_KEY_NAME}" 2>/dev/null || true)"
-if [ -z "$key_output" ]; then
-  echo "garage key create did not return credentials; manual key bootstrap is required" >&2
+status_output="$(/garage -c /etc/garage/garage.toml status)"
+node_id="$(printf '%s\n' "$status_output" | awk '/^[0-9a-f][0-9a-f]+[[:space:]]/ { print $1; exit }')"
+if [ -z "$node_id" ]; then
+  echo "garage-init: unable to extract node id from garage status" >&2
+  printf '%s\n' "$status_output" >&2
   exit 1
 fi
 
-access_key="$(printf '%s\n' "$key_output" | awk '/Key ID:/ {print $3; exit}')"
-secret_key="$(printf '%s\n' "$key_output" | awk '/Secret key:/ {print $3; exit}')"
-[ -n "$access_key" ]
-[ -n "$secret_key" ]
+echo "garage-init: assigning layout to node ${node_id}"
+/garage -c /etc/garage/garage.toml layout assign -z "${STORAGE_S3_GARAGE_ZONE}" -c "${STORAGE_S3_GARAGE_CAPACITY}" "$node_id" || true
+/garage -c /etc/garage/garage.toml layout apply --version 1 || true
 
+echo "garage-init: creating bucket ${STORAGE_S3_BUCKET}"
+/garage -c /etc/garage/garage.toml bucket create "${STORAGE_S3_BUCKET}" || true
+
+echo "garage-init: creating key ${STORAGE_S3_GARAGE_KEY_NAME}"
+key_output="$(/garage -c /etc/garage/garage.toml key create "${STORAGE_S3_GARAGE_KEY_NAME}" 2>/dev/null || true)"
+if [ -z "$key_output" ]; then
+  echo "garage-init: key create returned no credentials; manual key bootstrap may be required" >&2
+  exit 1
+fi
+
+access_key="$(printf '%s\n' "$key_output" | awk -F': ' '/^Key ID:/ {print $2; exit}')"
+secret_key="$(printf '%s\n' "$key_output" | awk -F': ' '/^Secret key:/ {print $2; exit}')"
+if [ -z "$access_key" ] || [ -z "$secret_key" ]; then
+  echo "garage-init: unable to parse created key credentials" >&2
+  printf '%s\n' "$key_output" >&2
+  exit 1
+fi
+
+echo "garage-init: allowing key on bucket"
 /garage -c /etc/garage/garage.toml bucket allow --read --write --owner "${STORAGE_S3_BUCKET}" --key "${STORAGE_S3_GARAGE_KEY_NAME}" || true
 printf '%s' "$access_key" > /run/generated/s3/access_key
 printf '%s' "$secret_key" > /run/generated/s3/secret_key
 touch /run/generated/s3/.garage_initialized
+
+echo "garage-init: completed"
