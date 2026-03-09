@@ -53,3 +53,13 @@ var createAvatarUploadOp = huma.Operation{
 	Description: "This endpoint does not accept multipart file content. Send JSON metadata (fileName, contentType, sizeBytes, checksumSHA256) to receive a presigned upload URL. Then upload the raw file bytes with HTTP PUT to body.uploadUrl. After the upload succeeds, call PATCH /api/v1/accounts/me with avatarObjectId = body.objectId.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var uploadMyAvatarOp = huma.Operation{
+	OperationID: "upload-my-account-avatar",
+	Method:      "POST",
+	Path:        "/accounts/me/avatar",
+	Tags:        []string{"Accounts"},
+	Summary:     "Upload account avatar directly",
+	Description: "Single-step avatar upload using multipart/form-data. Send the image file in the `file` field. The backend uploads the object to S3-compatible storage and immediately attaches it to the current account profile.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

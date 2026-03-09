@@ -104,11 +104,42 @@ func (h *Handler) CreateAvatarUpload(ctx context.Context, input *dto.CreateAvata
 	resp.Body.ObjectID = result.ObjectID
 	resp.Body.Bucket = result.Bucket
 	resp.Body.ObjectKey = result.ObjectKey
+	resp.Body.UploadMethod = http.MethodPut
 	resp.Body.UploadURL = result.UploadURL
 	resp.Body.ExpiresAt = result.ExpiresAt
 	resp.Body.FileName = result.FileName
 	resp.Body.SizeBytes = result.SizeBytes
 	return resp, nil
+}
+
+func (h *Handler) UploadMyAvatar(ctx context.Context, input *dto.UploadMyAvatarInput) (*dto.AccountProfileResponse, error) {
+	accountID, err := principalAccountID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Avatar file is required"))
+	}
+	defer form.File.Close()
+
+	fileName := form.File.Filename
+	if fileName == "" {
+		fileName = "avatar.bin"
+	}
+
+	acc, err := h.svc.UploadAvatar(ctx, application.UploadAvatarCmd{
+		AccountID:   accountID,
+		FileName:    fileName,
+		ContentType: form.File.ContentType,
+		SizeBytes:   form.File.Size,
+		Body:        form.File,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return mapper.ToAccountProfileResponse(acc, http.StatusOK), nil
 }
 
 func principalAccountID(ctx context.Context) (accdomain.AccountID, error) {

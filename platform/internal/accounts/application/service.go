@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -44,6 +45,14 @@ type CreateAvatarUploadCmd struct {
 	ContentType    *string
 	SizeBytes      *int64
 	ChecksumSHA256 *string
+}
+
+type UploadAvatarCmd struct {
+	AccountID   domain.AccountID
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	Body        io.Reader
 }
 
 type CreateAvatarUploadResult struct {
@@ -181,6 +190,69 @@ func (s *Service) CreateAvatarUpload(ctx context.Context, cmd CreateAvatarUpload
 		FileName:  object.FileName,
 		SizeBytes: object.SizeBytes,
 	}, nil
+}
+
+func (s *Service) UploadAvatar(ctx context.Context, cmd UploadAvatarCmd) (*domain.Account, error) {
+	if cmd.AccountID.IsZero() {
+		return nil, apperrors.InvalidInput("Account ID is required")
+	}
+	if s.storage == nil || s.bucket == "" {
+		return nil, fault.Unavailable("Avatar upload is unavailable")
+	}
+	if cmd.Body == nil {
+		return nil, apperrors.InvalidInput("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, apperrors.InvalidInput("file size must be non-negative")
+	}
+
+	account, err := s.repo.GetByID(ctx, cmd.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
+		return nil, apperrors.AccountNotFound()
+	}
+
+	fileName := sanitizeFileName(strings.TrimSpace(cmd.FileName), "avatar.bin")
+	contentType := strings.TrimSpace(cmd.ContentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	now := s.clock.Now()
+	objectID := uuid.New()
+	objectKey := buildAccountAvatarObjectKey(cmd.AccountID.UUID(), objectID, fileName, now)
+	objectContentType := &contentType
+	object := ports.StorageObject{
+		ID:             objectID,
+		OrganizationID: nil,
+		Bucket:         s.bucket,
+		ObjectKey:      objectKey,
+		FileName:       fileName,
+		ContentType:    objectContentType,
+		SizeBytes:      cmd.SizeBytes,
+		ChecksumSHA256: nil,
+		CreatedAt:      now,
+	}
+	if err := s.repo.CreateStorageObject(ctx, object); err != nil {
+		return nil, fault.Internal("Create avatar object failed", fault.WithCause(err))
+	}
+	if err := s.storage.PutObject(ctx, object.Bucket, object.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload avatar failed", fault.WithCause(err))
+	}
+
+	updated, err := s.repo.UpdateProfile(ctx, cmd.AccountID, domain.AccountProfilePatch{
+		AvatarObjectID: &objectID,
+		UpdatedAt:      now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if updated == nil {
+		return nil, apperrors.AccountNotFound()
+	}
+	return updated, nil
 }
 
 func buildAccountAvatarObjectKey(accountID, objectID uuid.UUID, fileName string, now time.Time) string {
