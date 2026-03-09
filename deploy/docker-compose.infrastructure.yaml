@@ -28,12 +28,9 @@ volumes:
 
 networks:
   internal.network:
-    name: internal.network
+    name: ${INTERNAL_NETWORK_NAME}
     driver: bridge
     external: false
-  web.network:
-    name: web.network
-    external: true
 
 secrets:
   dev_password:

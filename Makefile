@@ -14,7 +14,8 @@ PLATFORM_FILE := docker-compose.platform.yaml
 STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
 
-NETWORK_NAME := web.network
+# посмотри в .env какой EXTERNAL_NETWORK_NAME
+NETWORK_NAME := external.network
 
 LOG_DIR := ./logs/docker
 APP_LOG := $(LOG_DIR)/app.log

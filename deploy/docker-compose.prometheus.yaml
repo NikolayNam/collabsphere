@@ -13,11 +13,11 @@ services:
 
 networks:
   internal.network:
-    name: internal.network
+    name: ${INTERNAL_NETWORK_NAME}
     driver: bridge
     external: false
-  web.network:
-    name: web.network
+  external.network:
+    name: ${EXTERNAL_NETWORK_NAME}
     external: true
 
 secrets:

@@ -19,7 +19,7 @@ services:
 
 networks:
   internal.network:
-    name: internal.network
+    name: ${INTERNAL_NETWORK_NAME}
     driver: bridge
     external: false
 
