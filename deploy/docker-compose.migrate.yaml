@@ -33,8 +33,7 @@ services:
 networks:
   internal.network:
     name: ${INTERNAL_NETWORK_NAME}
-    driver: bridge
-    external: false
+    external: true
 
 secrets:
   dev_password:

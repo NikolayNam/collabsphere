@@ -1,3 +1,5 @@
-BEGIN;
+-- +goose Up
 SELECT 1;
-COMMIT;
+
+-- +goose Down
+SELECT 1;
