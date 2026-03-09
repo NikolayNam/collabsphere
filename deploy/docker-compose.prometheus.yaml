@@ -1,0 +1,33 @@
+name: collabsphere
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.21.0
+    ports:
+      - 9000:9090
+    volumes:
+      - ./prometheus:/etc/prometheus
+    command: '--web.enable-lifecycle --config.file=/etc/prometheus/prometheus.yml'
+    depends_on:
+      - s3
+
+networks:
+  internal.network:
+    name: internal.network
+    driver: bridge
+    external: false
+  web.network:
+    name: web.network
+    external: true
+
+secrets:
+  dev_password:
+    file: secrets/postgres/dev/db_password
+  neon_password:
+    file: secrets/postgres/prod/db_password
+  jwt_secret_key:
+    file: secrets/jwt/jwt_secret_key
+  s3_access_key:
+    file: secrets/s3/s3_access_key
+  s3_secret_key:
+    file: secrets/s3/s3_secret_key

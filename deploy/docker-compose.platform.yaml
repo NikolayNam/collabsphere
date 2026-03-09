@@ -13,9 +13,9 @@ services:
     secrets:
       - dev_password
       - neon_password
-      - jwt_secret
+      - jwt_secret_key
       - s3_access_key
-      - s3_secret
+      - s3_secret_key
     networks:
       - internal.network
       - web.network
@@ -25,16 +25,12 @@ services:
       test: [ "CMD-SHELL", "curl -fsSL http://localhost:8080/health" ]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
       start_period: 15s
     command: [ "/api" ]
     depends_on:
       postgres:
         condition: service_healthy
-      s3:
-        condition: service_started
-      s3-init:
-        condition: service_completed_successfully
 
 networks:
   internal.network:
@@ -47,12 +43,12 @@ networks:
 
 secrets:
   dev_password:
-    file: deploy/secrets/postgres/dev/db_password
+    file: secrets/postgres/dev/db_password
   neon_password:
-    file: deploy/secrets/postgres/prod/db_password
-  jwt_secret:
-    file: deploy/secrets/jwt/jwt_secret
+    file: secrets/postgres/prod/db_password
+  jwt_secret_key:
+    file: secrets/jwt/jwt_secret_key
   s3_access_key:
-    file: deploy/secrets/s3/s3_access_key
-  s3_secret:
-    file: deploy/secrets/s3/s3_secret
+    file: secrets/s3/s3_access_key
+  s3_secret_key:
+    file: secrets/s3/s3_secret_key
