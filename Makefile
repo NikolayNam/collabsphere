@@ -47,9 +47,15 @@ MIGRATE_COMPOSE_ARGS = \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile migrate
 
-.PHONY: cloudsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations
+SEED_COMPOSE_ARGS = \
+	$(ENV_FILE) \
+	-p collabsphere-seed \
+	-f deploy/docker-compose.migrate.yaml \
+	--profile seed
 
-cloudsphere-init: network up-dev migrate
+.PHONY: collabsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations
+
+collabsphere-init: network up-dev migrate
 
 network:
 	@docker network create $(NETWORK_NAME) >/dev/null 2>&1 || true
@@ -102,8 +108,8 @@ migrate:
 
 seed:
 	@mkdir -p $(dir $(SEED_LOG))
-	@docker compose $(MIGRATE_COMPOSE_ARGS) \
-		run --rm --build -e SEED_CMD=$(SEED_CMD) migrate /seed \
+	@docker compose $(SEED_COMPOSE_ARGS) \
+		run --rm --build -e SEED_CMD=$(SEED_CMD) seed \
 		> $(SEED_LOG) 2>&1 \
 	|| (echo "seed failed; tail:"; tail -n 160 $(SEED_LOG) || true; exit 1)
 
