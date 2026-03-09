@@ -9,7 +9,7 @@ PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
 ENV_FILE := --env-file $(DEPLOY_DIR)/.env.dev
 
-INFRA_FILE := docker-compose.infrastructure.yaml
+INFRA_FILE := docker-compose.postgres.yaml
 PLATFORM_FILE := docker-compose.platform.yaml
 STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
