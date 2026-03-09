@@ -53,7 +53,7 @@ SEED_COMPOSE_ARGS = \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile seed
 
-.PHONY: collabsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations
+.PHONY: collabsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations seed-reset-demo
 
 collabsphere-init: network up-dev migrate
 
@@ -137,6 +137,9 @@ seed-status:
 
 seed-reset:
 	@$(MAKE) seed SEED_CMD=reset
+
+seed-reset-demo:
+	@$(MAKE) seed SEED_CMD=reset-demo
 
 codebase:
 	@mkdir -p $(LOG_DIR)

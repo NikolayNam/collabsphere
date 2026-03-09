@@ -56,6 +56,9 @@ func main() {
 		err = goose.Down(db, dir)
 	case "reset":
 		err = goose.Reset(db, dir)
+	case "reset-demo":
+		baseVersion := int64(1)
+		err = goose.DownTo(db, dir, baseVersion)
 	case "status":
 		err = goose.Status(db, dir)
 	case "version":
@@ -65,7 +68,7 @@ func main() {
 			log.Printf("seed: current version=%d", v)
 		}
 	default:
-		log.Fatalf("seed: unsupported SEED_CMD=%q (supported: up, down, reset, status, version)", cmd)
+		log.Fatalf("seed: unsupported SEED_CMD=%q (supported: up, down, reset, reset-demo, status, version)", cmd)
 	}
 
 	if err != nil {
