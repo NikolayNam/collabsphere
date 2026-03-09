@@ -65,7 +65,7 @@ VALUES
 
 -- +goose StatementBegin
 DO
-
+$$
     DECLARE
         v_inserted_count integer;
         v_pending_count  integer;
@@ -118,10 +118,11 @@ DO
         END IF;
     END;
 $$;
+-- +goose StatementEnd
 
 -- +goose StatementBegin
 DO
-
+$$
     DECLARE
         v_inserted_count integer;
     BEGIN
@@ -175,7 +176,7 @@ DO
             RAISE EXCEPTION 'product_categories seed failed: missing organization-scoped categories after backfill';
         END IF;
     END;
-;
+$$;
 -- +goose StatementEnd
 
 -- +goose Down
@@ -220,4 +221,3 @@ WHERE code IN (
                'sparkling_water',
                'juice'
     );
-
