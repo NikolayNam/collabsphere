@@ -8,13 +8,26 @@ services:
       - .env.dev
     volumes:
       - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
-      - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
     secrets:
       - dev_password
       - neon_password
     networks:
       - internal.network
     command: [ "/migrate" ]
+    restart: "no"
+  seed:
+    profiles: [ "seed" ]
+    image: colabsphere-api:${IMAGE_TAG}
+    env_file:
+      - .env.dev
+    volumes:
+      - ../platform/internal/runtime/infrastructure/db/seeds:/app/migrations:ro
+    secrets:
+      - dev_password
+      - neon_password
+    networks:
+      - internal.network
+    command: [ "/seed" ]
     restart: "no"
 
 networks:
