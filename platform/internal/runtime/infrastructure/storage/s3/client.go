@@ -96,6 +96,36 @@ func (c *Client) PresignPutObject(ctx context.Context, bucket, objectKey string)
 	return c.presign(ctx, c.publicEndpoint, http.MethodPut, bucket, objectKey, c.presignTTL)
 }
 
+func (c *Client) PutObject(ctx context.Context, bucket, objectKey string, body io.Reader, size int64, contentType string) error {
+	signedURL, _, err := c.presign(ctx, c.endpoint, http.MethodPut, bucket, objectKey, c.presignTTL)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, signedURL, body)
+	if err != nil {
+		return fmt.Errorf("build s3 put request: %w", err)
+	}
+	if size >= 0 {
+		req.ContentLength = size
+	}
+	if strings.TrimSpace(contentType) != "" {
+		req.Header.Set("Content-Type", strings.TrimSpace(contentType))
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("upload s3 object: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusNoContent {
+		payload, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("upload s3 object: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(payload)))
+	}
+	return nil
+}
+
 func (c *Client) ReadObject(ctx context.Context, bucket, objectKey string) (io.ReadCloser, error) {
 	signedURL, _, err := c.presign(ctx, c.endpoint, http.MethodGet, bucket, objectKey, c.downloadTTL)
 	if err != nil {

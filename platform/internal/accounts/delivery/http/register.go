@@ -21,4 +21,8 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	avatarUpload := createAvatarUploadOp
 	avatarUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, avatarUpload, h.CreateAvatarUpload)
+
+	uploadAvatar := uploadMyAvatarOp
+	uploadAvatar.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, uploadAvatar, h.UploadMyAvatar)
 }

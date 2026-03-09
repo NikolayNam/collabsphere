@@ -1,6 +1,9 @@
 package dto
 
-import "github.com/google/uuid"
+import (
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/google/uuid"
+)
 
 type GetMyAccountInput struct{}
 
@@ -24,4 +27,12 @@ type CreateAvatarUploadInput struct {
 		SizeBytes      *int64  `json:"sizeBytes,omitempty" minimum:"0" doc:"Optional file size in bytes for metadata and validation."`
 		ChecksumSHA256 *string `json:"checksumSHA256,omitempty" maxLength:"64" doc:"Optional SHA-256 checksum of the file contents in hex format."`
 	}
+}
+
+type UploadMyAvatarForm struct {
+	File huma.FormFile `form:"file" contentType:"image/*" required:"true" doc:"Avatar image file. Upload it directly with multipart/form-data."`
+}
+
+type UploadMyAvatarInput struct {
+	RawBody huma.MultipartFormFiles[UploadMyAvatarForm]
 }
