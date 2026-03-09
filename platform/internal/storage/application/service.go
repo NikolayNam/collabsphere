@@ -1,0 +1,281 @@
+package application
+
+import (
+	"context"
+	"time"
+
+	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
+	authdomain "github.com/NikolayNam/collabsphere/internal/auth/domain"
+	collabdomain "github.com/NikolayNam/collabsphere/internal/collab/domain"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
+	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/google/uuid"
+)
+
+type ObjectStorage interface {
+	PresignGetObject(ctx context.Context, bucket, objectKey string) (string, time.Time, error)
+}
+
+type Repository interface {
+	GetObjectByID(ctx context.Context, objectID uuid.UUID) (*StoredObject, error)
+	AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.UUID) (bool, error)
+	ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error)
+	ListRelatedChannelIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error)
+	ListAccountFiles(ctx context.Context, accountID uuid.UUID) ([]ListedFile, error)
+	ListOrganizationFiles(ctx context.Context, organizationID uuid.UUID) ([]ListedFile, error)
+}
+
+type ChannelAccessResolver interface {
+	ResolveChannelAccessForAccount(ctx context.Context, channelID, accountID uuid.UUID) (collabdomain.Access, error)
+	ResolveChannelAccessForGuest(ctx context.Context, channelID, guestID uuid.UUID) (collabdomain.Access, error)
+}
+
+type StoredObject struct {
+	ID             uuid.UUID
+	Bucket         string
+	ObjectKey      string
+	FileName       string
+	ContentType    *string
+	SizeBytes      int64
+	OrganizationID *uuid.UUID
+	CreatedAt      time.Time
+}
+
+type ListedFile struct {
+	ObjectID       uuid.UUID
+	OrganizationID *uuid.UUID
+	FileName       string
+	ContentType    *string
+	SizeBytes      int64
+	CreatedAt      time.Time
+	SourceType     string
+	SourceID       *uuid.UUID
+}
+
+type DownloadObjectQuery struct {
+	ObjectID uuid.UUID
+	Actor    authdomain.Principal
+}
+
+type DownloadObjectResult struct {
+	ObjectID       uuid.UUID
+	FileName       string
+	ContentType    *string
+	SizeBytes      int64
+	DownloadURL    string
+	ExpiresAt      time.Time
+	CreatedAt      time.Time
+	OrganizationID *uuid.UUID
+}
+
+type ListMyFilesQuery struct {
+	Actor authdomain.Principal
+}
+
+type ListOrganizationFilesQuery struct {
+	OrganizationID uuid.UUID
+	Actor          authdomain.Principal
+}
+
+type Service struct {
+	repo        Repository
+	memberships memberports.MembershipRepository
+	channels    ChannelAccessResolver
+	storage     ObjectStorage
+}
+
+func New(repo Repository, memberships memberports.MembershipRepository, channels ChannelAccessResolver, storage ObjectStorage) *Service {
+	return &Service{repo: repo, memberships: memberships, channels: channels, storage: storage}
+}
+
+func (s *Service) CreateDownload(ctx context.Context, q DownloadObjectQuery) (*DownloadObjectResult, error) {
+	if q.ObjectID == uuid.Nil {
+		return nil, fault.Validation("Object ID is required")
+	}
+	if !q.Actor.Authenticated {
+		return nil, fault.Unauthorized("Authentication required")
+	}
+	if s.storage == nil {
+		return nil, fault.Unavailable("File download is unavailable")
+	}
+
+	obj, err := s.repo.GetObjectByID(ctx, q.ObjectID)
+	if err != nil {
+		return nil, fault.Internal("Load storage object failed", fault.WithCause(err))
+	}
+	if obj == nil {
+		return nil, fault.NotFound("Storage object not found")
+	}
+
+	allowed, err := s.canDownload(ctx, obj, q.Actor)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fault.Forbidden("Storage object access denied")
+	}
+
+	url, expiresAt, err := s.storage.PresignGetObject(ctx, obj.Bucket, obj.ObjectKey)
+	if err != nil {
+		return nil, fault.Internal("Presign file download failed", fault.WithCause(err))
+	}
+
+	return &DownloadObjectResult{
+		ObjectID:       obj.ID,
+		FileName:       obj.FileName,
+		ContentType:    obj.ContentType,
+		SizeBytes:      obj.SizeBytes,
+		DownloadURL:    url,
+		ExpiresAt:      expiresAt,
+		CreatedAt:      obj.CreatedAt,
+		OrganizationID: obj.OrganizationID,
+	}, nil
+}
+
+func (s *Service) ListMyFiles(ctx context.Context, q ListMyFilesQuery) ([]ListedFile, error) {
+	if !q.Actor.IsAccount() {
+		return nil, fault.Unauthorized("Account authentication required")
+	}
+	files, err := s.repo.ListAccountFiles(ctx, q.Actor.AccountID)
+	if err != nil {
+		return nil, fault.Internal("List account files failed", fault.WithCause(err))
+	}
+	return files, nil
+}
+
+func (s *Service) ListOrganizationFiles(ctx context.Context, q ListOrganizationFilesQuery) ([]ListedFile, error) {
+	if q.OrganizationID == uuid.Nil {
+		return nil, fault.Validation("Organization ID is required")
+	}
+	if !q.Actor.IsAccount() {
+		return nil, fault.Unauthorized("Account authentication required")
+	}
+	allowed, err := s.accountHasOrganizationAccess(ctx, q.OrganizationID, q.Actor.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, fault.Forbidden("Organization access denied")
+	}
+	files, err := s.repo.ListOrganizationFiles(ctx, q.OrganizationID)
+	if err != nil {
+		return nil, fault.Internal("List organization files failed", fault.WithCause(err))
+	}
+	return files, nil
+}
+
+func (s *Service) canDownload(ctx context.Context, obj *StoredObject, actor authdomain.Principal) (bool, error) {
+	switch {
+	case actor.IsAccount():
+		return s.accountCanDownload(ctx, obj, actor.AccountID)
+	case actor.IsGuest():
+		return s.guestCanDownload(ctx, obj, actor)
+	default:
+		return false, fault.Unauthorized("Authentication required")
+	}
+}
+
+func (s *Service) accountCanDownload(ctx context.Context, obj *StoredObject, accountUUID uuid.UUID) (bool, error) {
+	ownsAvatar, err := s.repo.AccountOwnsAvatar(ctx, accountUUID, obj.ID)
+	if err != nil {
+		return false, fault.Internal("Check avatar ownership failed", fault.WithCause(err))
+	}
+	if ownsAvatar {
+		return true, nil
+	}
+
+	orgIDs, err := s.repo.ListRelatedOrganizationIDs(ctx, obj.ID)
+	if err != nil {
+		return false, fault.Internal("Resolve organization file access failed", fault.WithCause(err))
+	}
+	for _, orgUUID := range uniqueUUIDs(orgIDs) {
+		allowed, accessErr := s.accountHasOrganizationAccess(ctx, orgUUID, accountUUID)
+		if accessErr != nil {
+			return false, accessErr
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+
+	channelIDs, err := s.repo.ListRelatedChannelIDs(ctx, obj.ID)
+	if err != nil {
+		return false, fault.Internal("Resolve channel file access failed", fault.WithCause(err))
+	}
+	for _, channelID := range uniqueUUIDs(channelIDs) {
+		if s.channels == nil {
+			break
+		}
+		access, accessErr := s.channels.ResolveChannelAccessForAccount(ctx, channelID, accountUUID)
+		if accessErr != nil {
+			return false, fault.Internal("Resolve collab access failed", fault.WithCause(accessErr))
+		}
+		if access.Allowed && access.CanRead {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *Service) guestCanDownload(ctx context.Context, obj *StoredObject, actor authdomain.Principal) (bool, error) {
+	channelIDs, err := s.repo.ListRelatedChannelIDs(ctx, obj.ID)
+	if err != nil {
+		return false, fault.Internal("Resolve guest file access failed", fault.WithCause(err))
+	}
+	for _, channelID := range uniqueUUIDs(channelIDs) {
+		if actor.ChannelID != uuid.Nil && actor.ChannelID != channelID {
+			continue
+		}
+		if s.channels == nil {
+			break
+		}
+		access, accessErr := s.channels.ResolveChannelAccessForGuest(ctx, channelID, actor.GuestID)
+		if accessErr != nil {
+			return false, fault.Internal("Resolve guest collab access failed", fault.WithCause(accessErr))
+		}
+		if access.Allowed && access.CanRead {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Service) accountHasOrganizationAccess(ctx context.Context, organizationUUID, accountUUID uuid.UUID) (bool, error) {
+	if organizationUUID == uuid.Nil || accountUUID == uuid.Nil || s.memberships == nil {
+		return false, nil
+	}
+	organizationID, err := orgdomain.OrganizationIDFromUUID(organizationUUID)
+	if err != nil {
+		return false, nil
+	}
+	accountID, err := accdomain.AccountIDFromUUID(accountUUID)
+	if err != nil {
+		return false, fault.Unauthorized("Authentication required")
+	}
+	membership, err := s.memberships.GetMemberByAccount(ctx, organizationID, accountID)
+	if err != nil {
+		return false, fault.Internal("Resolve organization membership failed", fault.WithCause(err))
+	}
+	return membership != nil && membership.IsActive() && !membership.IsRemoved(), nil
+}
+
+func uniqueUUIDs(values []uuid.UUID) []uuid.UUID {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[uuid.UUID]struct{}, len(values))
+	out := make([]uuid.UUID, 0, len(values))
+	for _, value := range values {
+		if value == uuid.Nil {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}

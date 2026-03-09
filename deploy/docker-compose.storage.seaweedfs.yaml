@@ -57,6 +57,9 @@ services:
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
     entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-s3.sh" ]
+    secrets:
+      - s3_access_key
+      - s3_secret_key
     networks:
       - internal.network
     ports:
@@ -67,11 +70,27 @@ services:
       - volume
       - filer
 
+  s3-init:
+    image: minio/mc:${STORAGE_S3_INIT_IMAGE_VERSION:-RELEASE.2025-07-21T05-28-08Z}
+    env_file:
+      - .env.dev
+    volumes:
+      - ./scripts/seaweedfs:/bootstrap:ro
+    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-init.sh" ]
+    secrets:
+      - s3_access_key
+      - s3_secret_key
+    networks:
+      - internal.network
+    depends_on:
+      - s3
+    restart: "no"
+
 volumes:
   storage.volume.data:
-    name: storage.filer.data
+    name: ${STORAGE_VOLUME_DATA_VOLUME:-storage.volume.data}
   storage.filer.data:
-    name: storage.filer.data
+    name: ${STORAGE_FILER_DATA_VOLUME:-storage.filer.data}
 
 networks:
   internal.network:

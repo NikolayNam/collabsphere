@@ -96,6 +96,10 @@ func (c *Client) PresignPutObject(ctx context.Context, bucket, objectKey string)
 	return c.presign(ctx, c.publicEndpoint, http.MethodPut, bucket, objectKey, c.presignTTL)
 }
 
+func (c *Client) PresignGetObject(ctx context.Context, bucket, objectKey string) (string, time.Time, error) {
+	return c.presign(ctx, c.publicEndpoint, http.MethodGet, bucket, objectKey, c.downloadTTL)
+}
+
 func (c *Client) PutObject(ctx context.Context, bucket, objectKey string, body io.Reader, size int64, contentType string) error {
 	signedURL, _, err := c.presign(ctx, c.endpoint, http.MethodPut, bucket, objectKey, c.presignTTL)
 	if err != nil {
