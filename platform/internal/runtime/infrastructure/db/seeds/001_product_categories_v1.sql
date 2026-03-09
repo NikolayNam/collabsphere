@@ -63,8 +63,9 @@ VALUES
     ('sparkling_water', 'soft_drinks', 'Газированная вода', 10),
     ('juice', 'soft_drinks', 'Соки', 20);
 
+-- +goose StatementBegin
 DO
-$$
+
     DECLARE
         v_inserted_count integer;
         v_pending_count  integer;
@@ -118,8 +119,9 @@ $$
     END;
 $$;
 
+-- +goose StatementBegin
 DO
-$$
+
     DECLARE
         v_inserted_count integer;
     BEGIN
@@ -173,7 +175,8 @@ $$
             RAISE EXCEPTION 'product_categories seed failed: missing organization-scoped categories after backfill';
         END IF;
     END;
-$$;
+;
+-- +goose StatementEnd
 
 -- +goose Down
 
@@ -217,3 +220,4 @@ WHERE code IN (
                'sparkling_water',
                'juice'
     );
+
