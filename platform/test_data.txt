@@ -1,5 +1,14 @@
 Demo seed is applied with `make seed-up` after migrations.
 
+Seed files:
+- `001_product_categories_v1.sql` — базовые шаблоны категорий и backfill org-scoped категорий.
+- `010_demo_accounts_v1.sql` — demo-аккаунты, пароли и аватары.
+- `020_demo_organizations_v1.sql` — demo-организации, логотипы, документы-объекты и membership'ы.
+- `030_demo_catalog_v1.sql` — org-scoped категории для demo-организаций и demo-SKU.
+- `040_demo_groups_and_collab_v1.sql` — группа, участники, каналы, сообщения.
+- `050_demo_onboarding_v1.sql` — заявка на сотрудничество, юрдокументы, OCR/analysis состояния.
+- `999_sequences_fix.sql` — технический no-op placeholder.
+
 Accounts:
 - owner@demo.collabsphere.local / OwnerPass123!
 - manager@demo.collabsphere.local / ManagerPass123!
