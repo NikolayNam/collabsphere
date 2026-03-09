@@ -11,8 +11,8 @@ import (
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpbind"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
-	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 	"github.com/google/uuid"
 )
 
@@ -341,23 +341,11 @@ func (h *Handler) GetProductImport(ctx context.Context, input *dto.GetProductImp
 }
 
 func currentActorAccountID(ctx context.Context) (accdomain.AccountID, error) {
-	principal := authmw.PrincipalFromContext(ctx)
-	if !principal.Authenticated {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	accountID, err := accdomain.AccountIDFromUUID(principal.AccountID)
-	if err != nil {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	return accountID, nil
+	return httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required"))
 }
 
 func parseOrganizationID(value string) (orgdomain.OrganizationID, error) {
-	id, err := uuid.Parse(value)
-	if err != nil || id == uuid.Nil {
-		return orgdomain.OrganizationID{}, catalogapp.ErrValidation
-	}
-	return orgdomain.OrganizationIDFromUUID(id)
+	return httpbind.ParseOrganizationID(value, catalogapp.ErrValidation)
 }
 
 func parseOptionalCategoryID(value *string) (*catalogdomain.ProductCategoryID, error) {
@@ -408,9 +396,5 @@ func parseProductID(value string) (catalogdomain.ProductID, error) {
 }
 
 func parseUUID(value string) (uuid.UUID, error) {
-	id, err := uuid.Parse(strings.TrimSpace(value))
-	if err != nil || id == uuid.Nil {
-		return uuid.Nil, catalogapp.ErrValidation
-	}
-	return id, nil
+	return httpbind.ParseUUID(value, catalogapp.ErrValidation)
 }

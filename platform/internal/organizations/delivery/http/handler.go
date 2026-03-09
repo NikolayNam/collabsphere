@@ -13,8 +13,8 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/organizations/delivery/http/mapper"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpbind"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
-	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 )
 
 type Handler struct {
@@ -309,35 +309,19 @@ func (h *Handler) ReprocessOrganizationLegalDocumentAnalysis(ctx context.Context
 }
 
 func principalOrganizationActor(ctx context.Context) (accdomain.AccountID, error) {
-	principal := authmw.PrincipalFromContext(ctx)
-	if !principal.IsAccount() {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	return accdomain.AccountIDFromUUID(principal.AccountID)
+	return httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required"))
 }
 
 func principalOrganizationActorUUID(ctx context.Context) (uuid.UUID, error) {
-	principal := authmw.PrincipalFromContext(ctx)
-	if !principal.IsAccount() {
-		return uuid.Nil, fault.Unauthorized("Authentication required")
-	}
-	return principal.AccountID, nil
+	return httpbind.RequireAccountUUID(ctx, fault.Unauthorized("Authentication required"))
 }
 
 func parseOrganizationID(raw string) (orgdomain.OrganizationID, error) {
-	parsed, err := uuid.Parse(raw)
-	if err != nil {
-		return orgdomain.OrganizationID{}, fault.Validation("Invalid organization ID")
-	}
-	return orgdomain.OrganizationIDFromUUID(parsed)
+	return httpbind.ParseOrganizationID(raw, fault.Validation("Invalid organization ID"))
 }
 
 func parseUUID(raw, message string) (uuid.UUID, error) {
-	parsed, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.Nil, fault.Validation(message)
-	}
-	return parsed, nil
+	return httpbind.ParseUUID(raw, fault.Validation(message))
 }
 
 func toUploadResponse(objectID uuid.UUID, bucket, objectKey, uploadURL string, expiresAt time.Time, fileName string, sizeBytes int64, status int) *dto.UploadResponse {

@@ -6,8 +6,8 @@ import (
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpbind"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
-	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 
 	"github.com/NikolayNam/collabsphere/internal/accounts/application"
 	"github.com/NikolayNam/collabsphere/internal/accounts/delivery/http/dto"
@@ -143,13 +143,5 @@ func (h *Handler) UploadMyAvatar(ctx context.Context, input *dto.UploadMyAvatarI
 }
 
 func principalAccountID(ctx context.Context) (accdomain.AccountID, error) {
-	principal := authmw.PrincipalFromContext(ctx)
-	if !principal.IsAccount() {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	accountID, err := accdomain.AccountIDFromUUID(principal.AccountID)
-	if err != nil {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	return accountID, nil
+	return httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required"))
 }

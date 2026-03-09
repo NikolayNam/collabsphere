@@ -2,15 +2,13 @@ package http
 
 import (
 	"context"
-	"strings"
 
 	authdomain "github.com/NikolayNam/collabsphere/internal/auth/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpbind"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
-	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 	storageapp "github.com/NikolayNam/collabsphere/internal/storage/application"
 	"github.com/NikolayNam/collabsphere/internal/storage/delivery/http/dto"
-	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -22,9 +20,9 @@ func NewHandler(svc *storageapp.Service) *Handler {
 }
 
 func (h *Handler) DownloadObject(ctx context.Context, input *dto.DownloadObjectInput) (*dto.DownloadObjectResponse, error) {
-	objectID, err := uuid.Parse(strings.TrimSpace(input.ObjectID))
-	if err != nil || objectID == uuid.Nil {
-		return nil, humaerr.From(ctx, fault.Validation("Invalid identifier"))
+	objectID, err := httpbind.ParseUUID(input.ObjectID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
 	}
 	result, err := h.svc.CreateDownload(ctx, storageapp.DownloadObjectQuery{ObjectID: objectID, Actor: principal(ctx)})
 	if err != nil {
@@ -51,9 +49,9 @@ func (h *Handler) ListMyFiles(ctx context.Context, _ *dto.ListMyFilesInput) (*dt
 }
 
 func (h *Handler) ListOrganizationFiles(ctx context.Context, input *dto.ListOrganizationFilesInput) (*dto.ListFilesResponse, error) {
-	organizationID, err := uuid.Parse(strings.TrimSpace(input.OrganizationID))
-	if err != nil || organizationID == uuid.Nil {
-		return nil, humaerr.From(ctx, fault.Validation("Invalid identifier"))
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
 	}
 	files, err := h.svc.ListOrganizationFiles(ctx, storageapp.ListOrganizationFilesQuery{
 		OrganizationID: organizationID,
@@ -66,7 +64,7 @@ func (h *Handler) ListOrganizationFiles(ctx context.Context, input *dto.ListOrga
 }
 
 func principal(ctx context.Context) authdomain.Principal {
-	return authmw.PrincipalFromContext(ctx)
+	return httpbind.Principal(ctx)
 }
 
 func listFilesResponse(files []storageapp.ListedFile) *dto.ListFilesResponse {

@@ -12,9 +12,8 @@ import (
 	groupsdomain "github.com/NikolayNam/collabsphere/internal/groups/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpbind"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
-	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
-	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -147,37 +146,17 @@ func (h *Handler) ListMembers(ctx context.Context, input *dto.ListMembersInput) 
 }
 
 func currentActorAccountID(ctx context.Context) (accdomain.AccountID, error) {
-	principal := authmw.PrincipalFromContext(ctx)
-	if !principal.Authenticated {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	accountID, err := accdomain.AccountIDFromUUID(principal.AccountID)
-	if err != nil {
-		return accdomain.AccountID{}, fault.Unauthorized("Authentication required")
-	}
-	return accountID, nil
+	return httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required"))
 }
 
 func parseGroupID(value string) (groupsdomain.GroupID, error) {
-	id, err := uuid.Parse(value)
-	if err != nil || id == uuid.Nil {
-		return groupsdomain.GroupID{}, groupsapp.ErrValidation
-	}
-	return groupsdomain.GroupIDFromUUID(id)
+	return httpbind.ParseGroupID(value, groupsapp.ErrValidation)
 }
 
 func parseAccountID(value string) (accdomain.AccountID, error) {
-	id, err := uuid.Parse(value)
-	if err != nil || id == uuid.Nil {
-		return accdomain.AccountID{}, groupsapp.ErrValidation
-	}
-	return accdomain.AccountIDFromUUID(id)
+	return httpbind.ParseAccountID(value, groupsapp.ErrValidation)
 }
 
 func parseOrganizationID(value string) (orgdomain.OrganizationID, error) {
-	id, err := uuid.Parse(value)
-	if err != nil || id == uuid.Nil {
-		return orgdomain.OrganizationID{}, groupsapp.ErrValidation
-	}
-	return orgdomain.OrganizationIDFromUUID(id)
+	return httpbind.ParseOrganizationID(value, groupsapp.ErrValidation)
 }
