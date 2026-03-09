@@ -128,10 +128,6 @@ migrate-down:
 
 seed-up:
 	@$(MAKE) seed SEED_CMD=up
-
-seed-down:
-	@$(MAKE) seed SEED_CMD=down
-
 seed-status:
 	@$(MAKE) seed SEED_CMD=status
 

@@ -39,6 +39,5 @@ Commands:
 - make migrate-up
 - make seed-up
 - make seed-status
-- make seed-down (rollback one seed step)
 - make seed-reset-demo (remove only demo seeds and keep 001_product_categories_v1.sql)
 - make seed-reset (remove all seeded data, including 001_product_categories_v1.sql)
