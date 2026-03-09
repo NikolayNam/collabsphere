@@ -21,7 +21,7 @@ services:
     env_file:
       - .env.dev
     volumes:
-      - ../platform/internal/runtime/infrastructure/db/seeds:/app/migrations:ro
+      - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
     secrets:
       - dev_password
       - neon_password
