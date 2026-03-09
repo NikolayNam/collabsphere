@@ -32,9 +32,9 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	deleteMessage.Middlewares = secured
 	huma.Register(api, deleteMessage, h.DeleteMessage)
 
-	attachUpload := createAttachmentUploadOp
-	attachUpload.Middlewares = secured
-	huma.Register(api, attachUpload, h.CreateAttachmentUpload)
+	uploadAttachment := uploadAttachmentOp
+	uploadAttachment.Middlewares = secured
+	huma.Register(api, uploadAttachment, h.UploadAttachment)
 
 	readCursor := updateReadCursorOp
 	readCursor.Middlewares = secured
@@ -72,5 +72,4 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	getTranscript := getConferenceTranscriptOp
 	getTranscript.Middlewares = secured
 	huma.Register(api, getTranscript, h.GetConferenceTranscript)
-
 }

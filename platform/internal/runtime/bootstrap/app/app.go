@@ -38,9 +38,6 @@ func New(conf *config.Config) *App {
 
 	api := bootstrap.NewAPI(apiV1, conf)
 
-	router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/api/v1/docs", http.StatusTemporaryRedirect)
-	})
 	router.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/openapi.yaml", http.StatusTemporaryRedirect)
 	})

@@ -63,6 +63,89 @@ func (r *Repo) GetObjectByID(ctx context.Context, objectID uuid.UUID) (*storagea
 	}, nil
 }
 
+func (r *Repo) GetAccountAvatarObjectID(ctx context.Context, accountID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "iam.accounts", "avatar_object_id", "id = ? AND deleted_at IS NULL", accountID)
+}
+
+func (r *Repo) GetOrganizationLogoObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "org.organizations", "logo_object_id", "id = ? AND deleted_at IS NULL", organizationID)
+}
+
+func (r *Repo) GetCooperationPriceListObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "org.cooperation_applications", "price_list_object_id", "organization_id = ?", organizationID)
+}
+
+func (r *Repo) GetOrganizationLegalDocumentObjectID(ctx context.Context, organizationID, documentID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "org.organization_legal_documents", "object_id", "organization_id = ? AND id = ? AND deleted_at IS NULL", organizationID, documentID)
+}
+
+func (r *Repo) GetProductImportSourceObjectID(ctx context.Context, organizationID, batchID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "catalog.product_import_batches", "source_object_id", "organization_id = ? AND id = ?", organizationID, batchID)
+}
+
+func (r *Repo) GetConferenceChannelID(ctx context.Context, conferenceID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "collab.conferences", "channel_id", "id = ?", conferenceID)
+}
+
+func (r *Repo) GetConferenceRecordingObjectID(ctx context.Context, conferenceID, recordingID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "collab.conference_recordings", "object_id", "conference_id = ? AND id = ?", conferenceID, recordingID)
+}
+
+func (r *Repo) ListConferenceRecordings(ctx context.Context, conferenceID uuid.UUID) ([]storageapp.ConferenceRecordingFile, error) {
+	var rows []struct {
+		RecordingID  uuid.UUID  `gorm:"column:recording_id"`
+		ConferenceID uuid.UUID  `gorm:"column:conference_id"`
+		ObjectID     uuid.UUID  `gorm:"column:object_id"`
+		FileName     string     `gorm:"column:file_name"`
+		ContentType  *string    `gorm:"column:content_type"`
+		SizeBytes    int64      `gorm:"column:size_bytes"`
+		CreatedAt    time.Time  `gorm:"column:created_at"`
+		CreatedBy    *uuid.UUID `gorm:"column:created_by"`
+		DurationSec  *int32     `gorm:"column:duration_sec"`
+		MimeType     *string    `gorm:"column:mime_type"`
+	}
+	if err := r.db.WithContext(ctx).
+		Table("collab.conference_recordings AS cr").
+		Select("cr.id AS recording_id, cr.conference_id, cr.object_id, so.file_name, so.content_type, so.size_bytes, cr.created_at, cr.created_by, cr.duration_sec, cr.mime_type").
+		Joins("JOIN storage.objects AS so ON so.id = cr.object_id").
+		Where("cr.conference_id = ? AND so.deleted_at IS NULL", conferenceID).
+		Order("cr.created_at DESC").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]storageapp.ConferenceRecordingFile, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, storageapp.ConferenceRecordingFile{
+			RecordingID:  row.RecordingID,
+			ConferenceID: row.ConferenceID,
+			ObjectID:     row.ObjectID,
+			FileName:     row.FileName,
+			ContentType:  row.ContentType,
+			SizeBytes:    row.SizeBytes,
+			CreatedAt:    row.CreatedAt,
+			CreatedBy:    row.CreatedBy,
+			DurationSec:  row.DurationSec,
+			MimeType:     row.MimeType,
+		})
+	}
+	return out, nil
+}
+func (r *Repo) ChannelHasAttachmentObject(ctx context.Context, channelID, objectID uuid.UUID) (bool, error) {
+	var count int64
+	query := `
+		SELECT COUNT(*)
+		FROM collab.message_attachments AS ma
+		JOIN collab.messages AS m ON m.id = ma.message_id
+		WHERE m.channel_id = @channel_id
+		  AND ma.object_id = @object_id
+		  AND m.deleted_at IS NULL
+	`
+	if err := r.db.WithContext(ctx).Raw(query, sql.Named("channel_id", channelID), sql.Named("object_id", objectID)).Scan(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *Repo) AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.UUID) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
@@ -232,6 +315,23 @@ func (r *Repo) ListOrganizationFiles(ctx context.Context, organizationID uuid.UU
 		return nil, err
 	}
 	return mapListedFiles(rows), nil
+}
+
+func (r *Repo) queryOptionalObjectID(ctx context.Context, table, column, where string, args ...any) (*uuid.UUID, error) {
+	var row struct {
+		ObjectID *uuid.UUID `gorm:"column:object_id"`
+	}
+	if err := r.db.WithContext(ctx).
+		Table(table).
+		Select(column+" AS object_id").
+		Where(where, args...).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return row.ObjectID, nil
 }
 
 func mapListedFiles(rows []listedFileRow) []storageapp.ListedFile {

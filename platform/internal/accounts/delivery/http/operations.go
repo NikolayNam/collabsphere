@@ -8,6 +8,7 @@ var createAccountOp = huma.Operation{
 	Path:        "/accounts",
 	Tags:        []string{"Accounts"},
 	Summary:     "Create account",
+	Description: "Creates a new account with email and password credentials. This is the public signup entrypoint for a new user.",
 }
 
 var getAccountByIdOp = huma.Operation{
@@ -16,6 +17,7 @@ var getAccountByIdOp = huma.Operation{
 	Path:        "/accounts/{id}",
 	Tags:        []string{"Accounts"},
 	Summary:     "Get account by id",
+	Description: "Returns an account profile by account id. Intended for internal or backoffice-style lookups rather than self-service profile editing.",
 }
 
 var getAccountByEmailOp = huma.Operation{
@@ -24,6 +26,7 @@ var getAccountByEmailOp = huma.Operation{
 	Path:        "/accounts/by-email",
 	Tags:        []string{"Accounts"},
 	Summary:     "Get account by email",
+	Description: "Resolves an account profile by email address. Useful for administrative or integration flows that need identity lookup before relationship management.",
 }
 
 var getMyAccountOp = huma.Operation{
@@ -32,6 +35,7 @@ var getMyAccountOp = huma.Operation{
 	Path:        "/accounts/me",
 	Tags:        []string{"Accounts"},
 	Summary:     "Get current account profile",
+	Description: "Returns the profile of the authenticated account, including current profile fields and avatar attachment metadata when present.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
@@ -41,16 +45,7 @@ var updateMyAccountOp = huma.Operation{
 	Path:        "/accounts/me",
 	Tags:        []string{"Accounts"},
 	Summary:     "Update current account profile",
-	Security:    []map[string][]string{{"bearerAuth": {}}},
-}
-
-var createAvatarUploadOp = huma.Operation{
-	OperationID: "create-account-avatar-upload",
-	Method:      "POST",
-	Path:        "/accounts/me/avatar-upload",
-	Tags:        []string{"Accounts"},
-	Summary:     "Create presigned upload for account avatar",
-	Description: "This endpoint does not accept multipart file content. Send JSON metadata (fileName, contentType, sizeBytes, checksumSHA256) to receive a presigned upload URL. Then upload the raw file bytes with HTTP PUT to body.uploadUrl. After the upload succeeds, call PATCH /api/v1/accounts/me with avatarObjectId = body.objectId.",
+	Description: "Updates mutable profile fields of the authenticated account. This route does not upload file bytes directly; avatar upload has its own subject-specific endpoint.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
@@ -58,7 +53,7 @@ var uploadMyAvatarOp = huma.Operation{
 	OperationID: "upload-my-account-avatar",
 	Method:      "POST",
 	Path:        "/accounts/me/avatar",
-	Tags:        []string{"Accounts"},
+	Tags:        []string{"Accounts / Files"},
 	Summary:     "Upload account avatar directly",
 	Description: "Single-step avatar upload using multipart/form-data. Send the image file in the `file` field. The backend uploads the object to S3-compatible storage and immediately attaches it to the current account profile.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},

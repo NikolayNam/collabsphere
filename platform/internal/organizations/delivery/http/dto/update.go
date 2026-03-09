@@ -1,6 +1,9 @@
 package dto
 
-import "github.com/google/uuid"
+import (
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/google/uuid"
+)
 
 type UpdateOrganizationInput struct {
 	ID   string `path:"id" format:"uuid" doc:"Organization ID"`
@@ -18,12 +21,11 @@ type UpdateOrganizationInput struct {
 	}
 }
 
-type CreateOrganizationLogoUploadInput struct {
-	ID   string `path:"id" format:"uuid" doc:"Organization ID"`
-	Body struct {
-		FileName       string  `json:"fileName" required:"true" maxLength:"512" doc:"Original file name. This endpoint does not receive file bytes; it only prepares a presigned upload."`
-		ContentType    *string `json:"contentType,omitempty" maxLength:"255" doc:"Optional MIME type that should be used when uploading the file to the presigned URL."`
-		SizeBytes      *int64  `json:"sizeBytes,omitempty" minimum:"0" doc:"Optional file size in bytes for metadata and validation."`
-		ChecksumSHA256 *string `json:"checksumSHA256,omitempty" maxLength:"64" doc:"Optional SHA-256 checksum of the file contents in hex format."`
-	}
+type UploadOrganizationLogoForm struct {
+	File huma.FormFile `form:"file" contentType:"image/*" required:"true" doc:"Organization logo image file. Upload it directly with multipart/form-data."`
+}
+
+type UploadOrganizationLogoInput struct {
+	ID      string `path:"id" format:"uuid" doc:"Organization ID"`
+	RawBody huma.MultipartFormFiles[UploadOrganizationLogoForm]
 }

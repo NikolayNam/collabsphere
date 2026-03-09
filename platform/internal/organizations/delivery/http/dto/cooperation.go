@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 )
 
@@ -117,34 +118,13 @@ type SubmitCooperationApplicationInput struct {
 	ID string `path:"id" format:"uuid" doc:"Organization ID"`
 }
 
-type CreateCooperationPriceListUploadInput struct {
-	ID   string `path:"id" format:"uuid" doc:"Organization ID"`
-	Body struct {
-		FileName       string  `json:"fileName" required:"true" maxLength:"512"`
-		ContentType    *string `json:"contentType,omitempty" maxLength:"255"`
-		SizeBytes      *int64  `json:"sizeBytes,omitempty" minimum:"0"`
-		ChecksumSHA256 *string `json:"checksumSHA256,omitempty" maxLength:"64"`
-	}
+type UploadCooperationPriceListForm struct {
+	File huma.FormFile `form:"file" required:"true" doc:"Price list file. Upload it directly with multipart/form-data."`
 }
 
-type CreateLegalDocumentUploadInput struct {
-	ID   string `path:"id" format:"uuid" doc:"Organization ID"`
-	Body struct {
-		DocumentType   string  `json:"documentType" required:"true" maxLength:"64"`
-		FileName       string  `json:"fileName" required:"true" maxLength:"512"`
-		ContentType    *string `json:"contentType,omitempty" maxLength:"255"`
-		SizeBytes      *int64  `json:"sizeBytes,omitempty" minimum:"0"`
-		ChecksumSHA256 *string `json:"checksumSHA256,omitempty" maxLength:"64"`
-	}
-}
-
-type CreateOrganizationLegalDocumentInput struct {
-	ID   string `path:"id" format:"uuid" doc:"Organization ID"`
-	Body struct {
-		DocumentType string    `json:"documentType" required:"true" maxLength:"64"`
-		ObjectID     uuid.UUID `json:"objectId" required:"true"`
-		Title        string    `json:"title" required:"true" maxLength:"255"`
-	}
+type UploadCooperationPriceListInput struct {
+	ID      string `path:"id" format:"uuid" doc:"Organization ID"`
+	RawBody huma.MultipartFormFiles[UploadCooperationPriceListForm]
 }
 
 type ListOrganizationLegalDocumentsInput struct {
@@ -159,4 +139,15 @@ type GetOrganizationLegalDocumentAnalysisInput struct {
 type ReprocessOrganizationLegalDocumentAnalysisInput struct {
 	ID         string `path:"id" format:"uuid" doc:"Organization ID"`
 	DocumentID string `path:"document_id" format:"uuid" doc:"Legal document ID"`
+}
+
+type UploadOrganizationLegalDocumentForm struct {
+	DocumentType string        `form:"documentType" required:"true" doc:"Legal document type."`
+	Title        string        `form:"title" doc:"Optional document title. If omitted, the original file name is used."`
+	File         huma.FormFile `form:"file" required:"true" doc:"Legal document file. Upload it directly with multipart/form-data."`
+}
+
+type UploadOrganizationLegalDocumentInput struct {
+	ID      string `path:"id" format:"uuid" doc:"Organization ID"`
+	RawBody huma.MultipartFormFiles[UploadOrganizationLegalDocumentForm]
 }

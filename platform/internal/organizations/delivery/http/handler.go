@@ -2,10 +2,8 @@ package http
 
 import (
 	"context"
-	"net/http"
-	"time"
-
 	"github.com/google/uuid"
+	"net/http"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application"
@@ -80,7 +78,7 @@ func (h *Handler) UpdateOrganization(ctx context.Context, input *dto.UpdateOrgan
 	return mapper.ToOrganizationResponse(organization, http.StatusOK), nil
 }
 
-func (h *Handler) CreateOrganizationLogoUpload(ctx context.Context, input *dto.CreateOrganizationLogoUploadInput) (*dto.UploadResponse, error) {
+func (h *Handler) UploadOrganizationLogo(ctx context.Context, input *dto.UploadOrganizationLogoInput) (*dto.OrganizationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -89,20 +87,28 @@ func (h *Handler) CreateOrganizationLogoUpload(ctx context.Context, input *dto.C
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	result, err := h.svc.CreateOrganizationLogoUpload(ctx, application.CreateOrganizationLogoUploadCmd{
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Logo file is required"))
+	}
+	defer form.File.Close()
+	fileName := form.File.Filename
+	if fileName == "" {
+		fileName = "logo.bin"
+	}
+	organization, err := h.svc.UploadOrganizationLogo(ctx, application.UploadOrganizationLogoCmd{
 		OrganizationID: organizationID,
 		ActorAccountID: actorID,
-		FileName:       input.Body.FileName,
-		ContentType:    input.Body.ContentType,
-		SizeBytes:      input.Body.SizeBytes,
-		ChecksumSHA256: input.Body.ChecksumSHA256,
+		FileName:       fileName,
+		ContentType:    form.File.ContentType,
+		SizeBytes:      form.File.Size,
+		Body:           form.File,
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return toUploadResponse(result.ObjectID, result.Bucket, result.ObjectKey, result.UploadURL, result.ExpiresAt, result.FileName, result.SizeBytes, http.StatusCreated), nil
+	return mapper.ToOrganizationResponse(organization, http.StatusOK), nil
 }
-
 func (h *Handler) GetCooperationApplication(ctx context.Context, input *dto.GetCooperationApplicationInput) (*dto.CooperationApplicationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
@@ -175,7 +181,7 @@ func (h *Handler) SubmitCooperationApplication(ctx context.Context, input *dto.S
 	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
 }
 
-func (h *Handler) CreateCooperationPriceListUpload(ctx context.Context, input *dto.CreateCooperationPriceListUploadInput) (*dto.UploadResponse, error) {
+func (h *Handler) UploadCooperationPriceList(ctx context.Context, input *dto.UploadCooperationPriceListInput) (*dto.CooperationApplicationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -184,21 +190,30 @@ func (h *Handler) CreateCooperationPriceListUpload(ctx context.Context, input *d
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	result, err := h.svc.CreateCooperationPriceListUpload(ctx, application.CreateCooperationPriceListUploadCmd{
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Price list file is required"))
+	}
+	defer form.File.Close()
+	fileName := form.File.Filename
+	if fileName == "" {
+		fileName = "price-list.xlsx"
+	}
+	applicationView, err := h.svc.UploadCooperationPriceList(ctx, application.UploadCooperationPriceListCmd{
 		OrganizationID: organizationID,
 		ActorAccountID: actorID,
-		FileName:       input.Body.FileName,
-		ContentType:    input.Body.ContentType,
-		SizeBytes:      input.Body.SizeBytes,
-		ChecksumSHA256: input.Body.ChecksumSHA256,
+		FileName:       fileName,
+		ContentType:    form.File.ContentType,
+		SizeBytes:      form.File.Size,
+		Body:           form.File,
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return toUploadResponse(result.ObjectID, result.Bucket, result.ObjectKey, result.UploadURL, result.ExpiresAt, result.FileName, result.SizeBytes, http.StatusCreated), nil
+	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
 }
 
-func (h *Handler) CreateOrganizationLegalDocumentUpload(ctx context.Context, input *dto.CreateLegalDocumentUploadInput) (*dto.UploadResponse, error) {
+func (h *Handler) UploadOrganizationLegalDocument(ctx context.Context, input *dto.UploadOrganizationLegalDocumentInput) (*dto.OrganizationLegalDocumentResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -207,43 +222,30 @@ func (h *Handler) CreateOrganizationLegalDocumentUpload(ctx context.Context, inp
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	result, err := h.svc.CreateLegalDocumentUpload(ctx, application.CreateLegalDocumentUploadCmd{
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Legal document file is required"))
+	}
+	defer form.File.Close()
+	fileName := form.File.Filename
+	if fileName == "" {
+		fileName = "document.pdf"
+	}
+	document, err := h.svc.UploadOrganizationLegalDocument(ctx, application.UploadOrganizationLegalDocumentCmd{
 		OrganizationID: organizationID,
 		ActorAccountID: actorID,
-		DocumentType:   input.Body.DocumentType,
-		FileName:       input.Body.FileName,
-		ContentType:    input.Body.ContentType,
-		SizeBytes:      input.Body.SizeBytes,
-		ChecksumSHA256: input.Body.ChecksumSHA256,
-	})
-	if err != nil {
-		return nil, humaerr.From(ctx, err)
-	}
-	return toUploadResponse(result.ObjectID, result.Bucket, result.ObjectKey, result.UploadURL, result.ExpiresAt, result.FileName, result.SizeBytes, http.StatusCreated), nil
-}
-
-func (h *Handler) CreateOrganizationLegalDocument(ctx context.Context, input *dto.CreateOrganizationLegalDocumentInput) (*dto.OrganizationLegalDocumentResponse, error) {
-	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil {
-		return nil, humaerr.From(ctx, err)
-	}
-	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil {
-		return nil, humaerr.From(ctx, err)
-	}
-	document, err := h.svc.AddOrganizationLegalDocument(ctx, application.AddOrganizationLegalDocumentCmd{
-		OrganizationID: organizationID,
-		ActorAccountID: actorID,
-		DocumentType:   input.Body.DocumentType,
-		ObjectID:       input.Body.ObjectID,
-		Title:          input.Body.Title,
+		DocumentType:   form.DocumentType,
+		Title:          form.Title,
+		FileName:       fileName,
+		ContentType:    form.File.ContentType,
+		SizeBytes:      form.File.Size,
+		Body:           form.File,
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
 	return mapper.ToOrganizationLegalDocumentResponse(document, http.StatusCreated), nil
 }
-
 func (h *Handler) ListOrganizationLegalDocuments(ctx context.Context, input *dto.ListOrganizationLegalDocumentsInput) (*dto.OrganizationLegalDocumentsResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
@@ -322,17 +324,4 @@ func parseOrganizationID(raw string) (orgdomain.OrganizationID, error) {
 
 func parseUUID(raw, message string) (uuid.UUID, error) {
 	return httpbind.ParseUUID(raw, fault.Validation(message))
-}
-
-func toUploadResponse(objectID uuid.UUID, bucket, objectKey, uploadURL string, expiresAt time.Time, fileName string, sizeBytes int64, status int) *dto.UploadResponse {
-	resp := &dto.UploadResponse{Status: status}
-	resp.Body.ObjectID = objectID
-	resp.Body.Bucket = bucket
-	resp.Body.ObjectKey = objectKey
-	resp.Body.UploadMethod = http.MethodPut
-	resp.Body.UploadURL = uploadURL
-	resp.Body.ExpiresAt = expiresAt
-	resp.Body.FileName = fileName
-	resp.Body.SizeBytes = sizeBytes
-	return resp
 }

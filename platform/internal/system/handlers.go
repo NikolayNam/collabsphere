@@ -6,8 +6,17 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+var healthOp = huma.Operation{
+	OperationID: "get-health",
+	Method:      "GET",
+	Path:        "/health",
+	Tags:        []string{"System"},
+	Summary:     "Get health",
+	Description: "Simple liveness and readiness probe for the API process.",
+}
+
 func Register(api huma.API) {
-	huma.Get(api, "/health", healthHandler)
+	huma.Register(api, healthOp, healthHandler)
 }
 
 func healthHandler(ctx context.Context, input *struct{}) (*HealthOutput, error) {

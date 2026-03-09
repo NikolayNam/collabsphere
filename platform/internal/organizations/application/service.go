@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -48,6 +49,15 @@ type CreateOrganizationLogoUploadCmd struct {
 	ContentType    *string
 	SizeBytes      *int64
 	ChecksumSHA256 *string
+}
+
+type UploadOrganizationLogoCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
 }
 
 type CreateOrganizationLogoUploadResult struct {
@@ -99,6 +109,15 @@ type CreateCooperationPriceListUploadCmd struct {
 	ChecksumSHA256 *string
 }
 
+type UploadCooperationPriceListCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
+}
+
 type CreateCooperationPriceListUploadResult struct {
 	ObjectID  uuid.UUID
 	Bucket    string
@@ -119,6 +138,17 @@ type CreateLegalDocumentUploadCmd struct {
 	ChecksumSHA256 *string
 }
 
+type UploadOrganizationLegalDocumentCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	DocumentType   string
+	Title          string
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
+}
+
 type CreateLegalDocumentUploadResult struct {
 	ObjectID     uuid.UUID
 	Bucket       string
@@ -129,7 +159,6 @@ type CreateLegalDocumentUploadResult struct {
 	SizeBytes    int64
 	DocumentType string
 }
-
 type AddOrganizationLegalDocumentCmd struct {
 	OrganizationID domain.OrganizationID
 	ActorAccountID uuid.UUID
@@ -234,6 +263,37 @@ func (s *Service) CreateOrganizationLogoUpload(ctx context.Context, cmd CreateOr
 	}, nil
 }
 
+func (s *Service) UploadOrganizationLogo(ctx context.Context, cmd UploadOrganizationLogoCmd) (*domain.Organization, error) {
+	if cmd.Body == nil {
+		return nil, apperrors.InvalidInput("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, apperrors.InvalidInput("file size must be non-negative")
+	}
+	contentType := cmd.ContentType
+	sizeBytes := cmd.SizeBytes
+	upload, err := s.CreateOrganizationLogoUpload(ctx, CreateOrganizationLogoUploadCmd{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		FileName:       cmd.FileName,
+		ContentType:    &contentType,
+		SizeBytes:      &sizeBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/octet-stream"
+	}
+	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload organization logo failed", fault.WithCause(err))
+	}
+	return s.UpdateOrganizationProfile(ctx, UpdateOrganizationProfileCmd{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		LogoObjectID:   &upload.ObjectID,
+	})
+}
 func (s *Service) GetCooperationApplication(ctx context.Context, q GetCooperationApplicationQuery) (*domain.CooperationApplication, error) {
 	if err := s.requireOrganizationAccess(ctx, q.OrganizationID, q.ActorAccountID, true); err != nil {
 		return nil, err
@@ -336,6 +396,37 @@ func (s *Service) CreateCooperationPriceListUpload(ctx context.Context, cmd Crea
 	}, nil
 }
 
+func (s *Service) UploadCooperationPriceList(ctx context.Context, cmd UploadCooperationPriceListCmd) (*domain.CooperationApplication, error) {
+	if cmd.Body == nil {
+		return nil, apperrors.InvalidInput("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, apperrors.InvalidInput("file size must be non-negative")
+	}
+	contentType := cmd.ContentType
+	sizeBytes := cmd.SizeBytes
+	upload, err := s.CreateCooperationPriceListUpload(ctx, CreateCooperationPriceListUploadCmd{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		FileName:       cmd.FileName,
+		ContentType:    &contentType,
+		SizeBytes:      &sizeBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/octet-stream"
+	}
+	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload cooperation price list failed", fault.WithCause(err))
+	}
+	return s.UpdateCooperationApplication(ctx, UpdateCooperationApplicationCmd{
+		OrganizationID:    cmd.OrganizationID,
+		ActorAccountID:    cmd.ActorAccountID,
+		PriceListObjectID: &upload.ObjectID,
+	})
+}
 func (s *Service) CreateLegalDocumentUpload(ctx context.Context, cmd CreateLegalDocumentUploadCmd) (*CreateLegalDocumentUploadResult, error) {
 	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
@@ -360,6 +451,47 @@ func (s *Service) CreateLegalDocumentUpload(ctx context.Context, cmd CreateLegal
 	}, nil
 }
 
+func (s *Service) UploadOrganizationLegalDocument(ctx context.Context, cmd UploadOrganizationLegalDocumentCmd) (*domain.OrganizationLegalDocument, error) {
+	if cmd.Body == nil {
+		return nil, apperrors.InvalidInput("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, apperrors.InvalidInput("file size must be non-negative")
+	}
+	contentType := cmd.ContentType
+	sizeBytes := cmd.SizeBytes
+	upload, err := s.CreateLegalDocumentUpload(ctx, CreateLegalDocumentUploadCmd{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		DocumentType:   cmd.DocumentType,
+		FileName:       cmd.FileName,
+		ContentType:    &contentType,
+		SizeBytes:      &sizeBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/octet-stream"
+	}
+	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload organization legal document failed", fault.WithCause(err))
+	}
+	title := strings.TrimSpace(cmd.Title)
+	if title == "" {
+		title = strings.TrimSpace(filepath.Base(cmd.FileName))
+	}
+	if title == "" || title == "." || title == string(filepath.Separator) {
+		title = "Document"
+	}
+	return s.AddOrganizationLegalDocument(ctx, AddOrganizationLegalDocumentCmd{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		DocumentType:   cmd.DocumentType,
+		ObjectID:       upload.ObjectID,
+		Title:          title,
+	})
+}
 func (s *Service) AddOrganizationLegalDocument(ctx context.Context, cmd AddOrganizationLegalDocumentCmd) (*domain.OrganizationLegalDocument, error) {
 	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err

@@ -44,9 +44,9 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	getProduct.Middlewares = secured
 	huma.Register(api, getProduct, h.GetProductByID)
 
-	createImportUpload := createProductImportUploadOp
-	createImportUpload.Middlewares = secured
-	huma.Register(api, createImportUpload, h.CreateProductImportUpload)
+	uploadImport := uploadProductImportOp
+	uploadImport.Middlewares = secured
+	huma.Register(api, uploadImport, h.UploadProductImport)
 
 	runImport := runProductImportOp
 	runImport.Middlewares = secured

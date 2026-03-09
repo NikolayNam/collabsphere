@@ -85,33 +85,6 @@ func (h *Handler) UpdateMyAccount(ctx context.Context, input *dto.UpdateMyAccoun
 	return mapper.ToAccountProfileResponse(acc, http.StatusOK), nil
 }
 
-func (h *Handler) CreateAvatarUpload(ctx context.Context, input *dto.CreateAvatarUploadInput) (*dto.UploadResponse, error) {
-	accountID, err := principalAccountID(ctx)
-	if err != nil {
-		return nil, humaerr.From(ctx, err)
-	}
-	result, err := h.svc.CreateAvatarUpload(ctx, application.CreateAvatarUploadCmd{
-		AccountID:      accountID,
-		FileName:       input.Body.FileName,
-		ContentType:    input.Body.ContentType,
-		SizeBytes:      input.Body.SizeBytes,
-		ChecksumSHA256: input.Body.ChecksumSHA256,
-	})
-	if err != nil {
-		return nil, humaerr.From(ctx, err)
-	}
-	resp := &dto.UploadResponse{Status: http.StatusCreated}
-	resp.Body.ObjectID = result.ObjectID
-	resp.Body.Bucket = result.Bucket
-	resp.Body.ObjectKey = result.ObjectKey
-	resp.Body.UploadMethod = http.MethodPut
-	resp.Body.UploadURL = result.UploadURL
-	resp.Body.ExpiresAt = result.ExpiresAt
-	resp.Body.FileName = result.FileName
-	resp.Body.SizeBytes = result.SizeBytes
-	return resp, nil
-}
-
 func (h *Handler) UploadMyAvatar(ctx context.Context, input *dto.UploadMyAvatarInput) (*dto.AccountProfileResponse, error) {
 	accountID, err := principalAccountID(ctx)
 	if err != nil {

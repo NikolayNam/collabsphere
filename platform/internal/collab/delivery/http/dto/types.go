@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 )
 
@@ -126,29 +127,19 @@ type DeleteMessageInput struct {
 	MessageID string `path:"message_id"`
 }
 
-type CreateAttachmentUploadInput struct {
-	ChannelID string `path:"channel_id"`
-	Body      struct {
-		OrganizationID *string `json:"organizationId,omitempty" doc:"Optional organization owner of the file. Use it when the attachment belongs to an organization-scoped object."`
-		FileName       string  `json:"fileName" doc:"Original file name. This endpoint does not receive file bytes; it only prepares a presigned upload."`
-		ContentType    *string `json:"contentType,omitempty" doc:"Optional MIME type that should be used when uploading the file to the presigned URL."`
-		SizeBytes      int64   `json:"sizeBytes" doc:"Declared file size in bytes."`
-		ChecksumSHA256 *string `json:"checksumSha256,omitempty" doc:"Optional SHA-256 checksum of the file contents in hex format."`
-	}
+type UploadAttachmentForm struct {
+	OrganizationID string        `form:"organizationId" doc:"Optional organization owner of the file. Use it when the attachment belongs to an organization-scoped object."`
+	File           huma.FormFile `form:"file" required:"true" doc:"Attachment file. Upload it directly with multipart/form-data."`
 }
 
-type AttachmentUploadResponse struct {
+type UploadAttachmentInput struct {
+	ChannelID string `path:"channel_id"`
+	RawBody   huma.MultipartFormFiles[UploadAttachmentForm]
+}
+
+type AttachmentObjectResponse struct {
 	Status int
-	Body   struct {
-		ObjectID     uuid.UUID `json:"objectId" doc:"Internal object ID. Include it in attachmentObjectIds when creating the channel message after the file upload succeeds."`
-		UploadMethod string    `json:"uploadMethod" doc:"HTTP method to use when uploading raw file bytes to uploadUrl. Usually PUT."`
-		UploadURL    string    `json:"uploadUrl" doc:"Presigned storage URL. Send the raw file bytes to this URL, not JSON metadata."`
-		ExpiresAt    time.Time `json:"expiresAt" doc:"Expiration time of the presigned upload URL."`
-		Bucket       string    `json:"bucket" doc:"Storage bucket where the file will be uploaded."`
-		ObjectKey    string    `json:"objectKey" doc:"Storage object key reserved for this upload."`
-		FileName     string    `json:"fileName" doc:"Original file name stored in object metadata."`
-		SizeBytes    int64     `json:"sizeBytes" doc:"Declared file size in bytes."`
-	}
+	Body   AttachmentPayload
 }
 
 type UpdateReadCursorInput struct {

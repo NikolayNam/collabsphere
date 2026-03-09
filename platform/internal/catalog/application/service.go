@@ -2,13 +2,15 @@ package application
 
 import (
 	"context"
+	"io"
 
+	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product_category"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product_import_upload"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/delete_product"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/delete_product_category"
-	"github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
+	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/get_product_by_id"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/get_product_import"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/list_product_categories"
@@ -19,10 +21,11 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product_category"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
+	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 )
 
 var (
-	ErrValidation = errors.ErrValidation
+	ErrValidation = catalogerrors.ErrValidation
 )
 
 type CreateProductCategoryCmd = create_product_category.Command
@@ -40,6 +43,15 @@ type RunProductImportCmd = run_product_import.Command
 type GetProductImportQuery = get_product_import.Query
 type ProductImportView = productimport.View
 
+type UploadProductImportCmd struct {
+	OrganizationID orgdomain.OrganizationID
+	ActorAccountID accdomain.AccountID
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
+}
+
 type Service struct {
 	createCategory     *create_product_category.Handler
 	updateCategory     *update_product_category.Handler
@@ -53,6 +65,7 @@ type Service struct {
 	createImportUpload *create_product_import_upload.Handler
 	runImport          *run_product_import.Handler
 	getImport          *get_product_import.Handler
+	storage            ports.ObjectStorage
 }
 
 func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock, storage ports.ObjectStorage, storageBucket string) *Service {
@@ -69,6 +82,7 @@ func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, m
 		createImportUpload: create_product_import_upload.NewHandler(repo, organizations, memberships, clock, storage, storageBucket),
 		runImport:          run_product_import.NewHandler(repo, organizations, memberships, clock, storage),
 		getImport:          get_product_import.NewHandler(repo, organizations, memberships),
+		storage:            storage,
 	}
 }
 
@@ -118,4 +132,40 @@ func (s *Service) RunProductImport(ctx context.Context, cmd RunProductImportCmd)
 
 func (s *Service) GetProductImport(ctx context.Context, q GetProductImportQuery) (*ProductImportView, error) {
 	return s.getImport.Handle(ctx, q)
+}
+
+func (s *Service) UploadProductImport(ctx context.Context, cmd UploadProductImportCmd) (*ProductImportView, error) {
+	if cmd.Body == nil {
+		return nil, catalogerrors.ProductImportFileInvalid("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, catalogerrors.ProductImportFileInvalid("file size must be non-negative")
+	}
+	if s.createImportUpload == nil || s.runImport == nil || s.storage == nil {
+		return nil, catalogerrors.ProductImportUnavailable()
+	}
+
+	contentType := cmd.ContentType
+	sizeBytes := cmd.SizeBytes
+	upload, err := s.createImportUpload.Handle(ctx, create_product_import_upload.Command{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		FileName:       cmd.FileName,
+		ContentType:    &contentType,
+		SizeBytes:      &sizeBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, cmd.ContentType); err != nil {
+		return nil, catalogerrors.Internal("upload product import file", err)
+	}
+
+	return s.runImport.Handle(ctx, run_product_import.Command{
+		OrganizationID: cmd.OrganizationID,
+		ActorAccountID: cmd.ActorAccountID,
+		SourceObjectID: upload.ObjectID,
+		Mode:           nil,
+	})
 }

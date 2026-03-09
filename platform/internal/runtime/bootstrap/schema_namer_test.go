@@ -4,32 +4,29 @@ import (
 	"reflect"
 	"testing"
 
-	accdto "github.com/NikolayNam/collabsphere/internal/accounts/delivery/http/dto"
 	authdto "github.com/NikolayNam/collabsphere/internal/auth/delivery/http/dto"
 	catalogdto "github.com/NikolayNam/collabsphere/internal/catalog/delivery/http/dto"
-	orgdto "github.com/NikolayNam/collabsphere/internal/organizations/delivery/http/dto"
+	collabdto "github.com/NikolayNam/collabsphere/internal/collab/delivery/http/dto"
 	"github.com/danielgtaylor/huma/v2"
 )
 
 func TestSchemaNamerDisambiguatesDuplicateNamedTypesAcrossPackages(t *testing.T) {
 	registry := huma.NewMapRegistry("#/components/schemas/", newSchemaNamer())
 
-	var accountUploadSchema *huma.Schema
-	var organizationUploadSchema *huma.Schema
 	var authEmptySchema *huma.Schema
 	var catalogEmptySchema *huma.Schema
+	var collabEmptySchema *huma.Schema
 
 	assertNotPanics(t, func() {
-		accountUploadSchema = registry.Schema(reflect.TypeOf(accdto.UploadResponse{}), true, "")
-		organizationUploadSchema = registry.Schema(reflect.TypeOf(orgdto.UploadResponse{}), true, "")
 		authEmptySchema = registry.Schema(reflect.TypeOf(authdto.EmptyResponse{}), true, "")
 		catalogEmptySchema = registry.Schema(reflect.TypeOf(catalogdto.EmptyResponse{}), true, "")
+		collabEmptySchema = registry.Schema(reflect.TypeOf(collabdto.EmptyResponse{}), true, "")
 	})
 
-	if accountUploadSchema.Ref == organizationUploadSchema.Ref {
-		t.Fatalf("expected unique schema refs for duplicate UploadResponse types, got %q", accountUploadSchema.Ref)
-	}
 	if authEmptySchema.Ref == catalogEmptySchema.Ref {
+		t.Fatalf("expected unique schema refs for duplicate EmptyResponse types, got %q", authEmptySchema.Ref)
+	}
+	if authEmptySchema.Ref == collabEmptySchema.Ref {
 		t.Fatalf("expected unique schema refs for duplicate EmptyResponse types, got %q", authEmptySchema.Ref)
 	}
 }
@@ -37,24 +34,38 @@ func TestSchemaNamerDisambiguatesDuplicateNamedTypesAcrossPackages(t *testing.T)
 func TestSchemaNamerDisambiguatesAnonymousBodyTypesWithSameHint(t *testing.T) {
 	registry := huma.NewMapRegistry("#/components/schemas/", newSchemaNamer())
 
-	accountBodyField, ok := reflect.TypeOf(accdto.UploadResponse{}).FieldByName("Body")
-	if !ok {
-		t.Fatal("accounts UploadResponse is missing Body field")
-	}
-	organizationBodyField, ok := reflect.TypeOf(orgdto.UploadResponse{}).FieldByName("Body")
-	if !ok {
-		t.Fatal("organizations UploadResponse is missing Body field")
+	type firstResponse struct {
+		Status int
+		Body   struct {
+			ObjectID string `json:"objectId"`
+		}
 	}
 
-	var accountBodySchema *huma.Schema
-	var organizationBodySchema *huma.Schema
+	type secondResponse struct {
+		Status int
+		Body   struct {
+			Name string `json:"name"`
+		}
+	}
+
+	firstBodyField, ok := reflect.TypeOf(firstResponse{}).FieldByName("Body")
+	if !ok {
+		t.Fatal("firstResponse is missing Body field")
+	}
+	secondBodyField, ok := reflect.TypeOf(secondResponse{}).FieldByName("Body")
+	if !ok {
+		t.Fatal("secondResponse is missing Body field")
+	}
+
+	var firstBodySchema *huma.Schema
+	var secondBodySchema *huma.Schema
 	assertNotPanics(t, func() {
-		accountBodySchema = registry.Schema(accountBodyField.Type, true, "UploadResponseBody")
-		organizationBodySchema = registry.Schema(organizationBodyField.Type, true, "UploadResponseBody")
+		firstBodySchema = registry.Schema(firstBodyField.Type, true, "UploadResponseBody")
+		secondBodySchema = registry.Schema(secondBodyField.Type, true, "UploadResponseBody")
 	})
 
-	if accountBodySchema.Ref == organizationBodySchema.Ref {
-		t.Fatalf("expected unique schema refs for anonymous body types, got %q", accountBodySchema.Ref)
+	if firstBodySchema.Ref == secondBodySchema.Ref {
+		t.Fatalf("expected unique schema refs for anonymous body types, got %q", firstBodySchema.Ref)
 	}
 }
 

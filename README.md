@@ -20,7 +20,7 @@ CollabSphere - backend-платформа на Go для управления а
 | Область | Текущая технология |
 | --- | --- |
 | HTTP API | Go 1.26, `chi`, `huma` |
-| OpenAPI / docs | `huma`, Swagger UI на `/api/v1/docs` |
+| OpenAPI / docs | `huma`, Scalar API reference на `/api/v1/docs` |
 | Доступ к БД | `gorm`, `pgx` |
 | База данных | PostgreSQL |
 | Миграции | `goose` + генерация bundled SQL |
@@ -94,7 +94,7 @@ make migrate-up
 
 После запуска:
 
-- Swagger UI: [http://localhost:8080/docs](http://localhost:8080/docs)
+- Scalar API reference: [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
 - OpenAPI YAML: [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
 - Health-check: [http://localhost:8080/health](http://localhost:8080/health)
 
@@ -115,7 +115,7 @@ make migrate-down
 docker network create web.network 2>$null
 
 docker compose `
-  -f deploy/docker-compose.infrastructure.yaml `
+  -f deploy/docker-compose.postgres.yaml `
   -f deploy/docker-compose.platform.yaml `
   --profile local up -d --build --force-recreate
 
@@ -128,7 +128,7 @@ docker compose `
 
 Проверка после запуска:
 
-- [http://localhost:8080/docs](http://localhost:8080/docs)
+- [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
 - [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
 - [http://localhost:8080/health](http://localhost:8080/health)
 
@@ -136,7 +136,7 @@ docker compose `
 
 ```bash
 docker compose \
-  -f deploy/docker-compose.infrastructure.yaml \
+  -f deploy/docker-compose.postgres.yaml \\
   -f deploy/docker-compose.platform.yaml \
   --profile local down
 ```
@@ -238,7 +238,6 @@ go -C platform test ./...
 
 Корневой router дополнительно пробрасывает удобные entrypoints:
 
-- `/docs` -> `/api/v1/docs`
 - `/openapi.yaml` -> `/api/v1/openapi.yaml`
 - `/health` -> `/api/v1/health`
 
@@ -285,6 +284,9 @@ Auth:
 ## Полезные ссылки
 
 - ADR по архитектурным границам: [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
-- Compose-файлы: `deploy/docker-compose.infrastructure.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
+- Compose-файлы: `deploy/docker-compose.postgres.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
 - Исходники API: `platform/cmd/api`, `platform/internal/`
+
+
+
 

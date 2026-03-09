@@ -23,16 +23,52 @@ func (s storageStub) PresignGetObject(ctx context.Context, bucket, objectKey str
 }
 
 type repoStub struct {
-	object       *StoredObject
-	avatarOwned  bool
-	orgIDs       []uuid.UUID
-	channelIDs   []uuid.UUID
-	accountFiles []ListedFile
-	orgFiles     []ListedFile
+	object                    *StoredObject
+	avatarObjectID            *uuid.UUID
+	organizationLogoObjectID  *uuid.UUID
+	priceListObjectID         *uuid.UUID
+	legalDocumentObjectID     *uuid.UUID
+	productImportSourceObject *uuid.UUID
+	conferenceChannelID       *uuid.UUID
+	conferenceRecordingObject *uuid.UUID
+	conferenceRecordings      []ConferenceRecordingFile
+	channelHasAttachment      bool
+	avatarOwned               bool
+	orgIDs                    []uuid.UUID
+	channelIDs                []uuid.UUID
+	accountFiles              []ListedFile
+	orgFiles                  []ListedFile
 }
 
 func (r repoStub) GetObjectByID(ctx context.Context, objectID uuid.UUID) (*StoredObject, error) {
 	return r.object, nil
+}
+func (r repoStub) GetAccountAvatarObjectID(ctx context.Context, accountID uuid.UUID) (*uuid.UUID, error) {
+	return r.avatarObjectID, nil
+}
+func (r repoStub) GetOrganizationLogoObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
+	return r.organizationLogoObjectID, nil
+}
+func (r repoStub) GetCooperationPriceListObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
+	return r.priceListObjectID, nil
+}
+func (r repoStub) GetOrganizationLegalDocumentObjectID(ctx context.Context, organizationID, documentID uuid.UUID) (*uuid.UUID, error) {
+	return r.legalDocumentObjectID, nil
+}
+func (r repoStub) GetProductImportSourceObjectID(ctx context.Context, organizationID, batchID uuid.UUID) (*uuid.UUID, error) {
+	return r.productImportSourceObject, nil
+}
+func (r repoStub) GetConferenceChannelID(ctx context.Context, conferenceID uuid.UUID) (*uuid.UUID, error) {
+	return r.conferenceChannelID, nil
+}
+func (r repoStub) GetConferenceRecordingObjectID(ctx context.Context, conferenceID, recordingID uuid.UUID) (*uuid.UUID, error) {
+	return r.conferenceRecordingObject, nil
+}
+func (r repoStub) ListConferenceRecordings(ctx context.Context, conferenceID uuid.UUID) ([]ConferenceRecordingFile, error) {
+	return r.conferenceRecordings, nil
+}
+func (r repoStub) ChannelHasAttachmentObject(ctx context.Context, channelID, objectID uuid.UUID) (bool, error) {
+	return r.channelHasAttachment, nil
 }
 func (r repoStub) AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.UUID) (bool, error) {
 	return r.avatarOwned, nil
@@ -248,5 +284,151 @@ func TestListOrganizationFilesReturnsOrganizationFiles(t *testing.T) {
 	}
 	if len(result) != 1 || result[0].SourceType != "organization_logo" {
 		t.Fatalf("unexpected result: %#v", result)
+	}
+}
+
+func TestCreateMyAvatarDownloadResolvesAvatarObject(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	accountID := uuid.New()
+	svc := New(
+		repoStub{
+			avatarObjectID: &objectID,
+			object:         &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "avatars/me.png", FileName: "me.png", SizeBytes: 42, CreatedAt: now},
+			avatarOwned:    true,
+		},
+		membershipsStub{},
+		channelAccessStub{},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateMyAvatarDownload(context.Background(), DownloadMyAvatarQuery{Actor: authdomain.NewAccountPrincipal(accountID, uuid.New())})
+	if err != nil {
+		t.Fatalf("CreateMyAvatarDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
+	}
+}
+
+func TestCreateOrganizationLogoDownloadResolvesLogoObject(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	organizationUUID := uuid.New()
+	organizationID, _ := orgdomain.OrganizationIDFromUUID(organizationUUID)
+	accountID, _ := accdomain.AccountIDFromUUID(uuid.New())
+	membership, err := memberdomain.NewMembership(memberdomain.NewMembershipParams{
+		OrganizationID: organizationID,
+		AccountID:      accountID,
+		Role:           memberdomain.MembershipRoleViewer,
+		Now:            now,
+	})
+	if err != nil {
+		t.Fatalf("NewMembership() error = %v", err)
+	}
+	svc := New(
+		repoStub{
+			organizationLogoObjectID: &objectID,
+			object:                   &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "org/logo.png", FileName: "logo.png", SizeBytes: 64, CreatedAt: now},
+			orgIDs:                   []uuid.UUID{organizationUUID},
+		},
+		membershipsStub{member: membership},
+		channelAccessStub{},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateOrganizationLogoDownload(context.Background(), DownloadOrganizationLogoQuery{OrganizationID: organizationUUID, Actor: authdomain.NewAccountPrincipal(accountID.UUID(), uuid.New())})
+	if err != nil {
+		t.Fatalf("CreateOrganizationLogoDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
+	}
+}
+
+func TestCreateChannelAttachmentDownloadRequiresAttachedObject(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	channelID := uuid.New()
+	svc := New(
+		repoStub{
+			channelHasAttachment: true,
+			object:               &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "collab/file.bin", FileName: "file.bin", SizeBytes: 42, CreatedAt: now},
+			channelIDs:           []uuid.UUID{channelID},
+		},
+		nil,
+		channelAccessStub{accountAccess: collabdomain.Access{Allowed: true, CanRead: true}},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateChannelAttachmentDownload(context.Background(), DownloadChannelAttachmentQuery{ChannelID: channelID, ObjectID: objectID, Actor: authdomain.NewAccountPrincipal(uuid.New(), uuid.New())})
+	if err != nil {
+		t.Fatalf("CreateChannelAttachmentDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
+	}
+}
+
+func TestCreateConferenceRecordingDownloadResolvesRecording(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	channelID := uuid.New()
+	conferenceID := uuid.New()
+	recordingID := uuid.New()
+	svc := New(
+		repoStub{
+			conferenceRecordingObject: &objectID,
+			object:                    &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "collab/recording.mp4", FileName: "recording.mp4", SizeBytes: 42, CreatedAt: now},
+			channelIDs:                []uuid.UUID{channelID},
+		},
+		nil,
+		channelAccessStub{accountAccess: collabdomain.Access{Allowed: true, CanRead: true}},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateConferenceRecordingDownload(context.Background(), DownloadConferenceRecordingQuery{
+		ConferenceID: conferenceID,
+		RecordingID:  recordingID,
+		Actor:        authdomain.NewAccountPrincipal(uuid.New(), uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("CreateConferenceRecordingDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
+	}
+}
+
+func TestListConferenceRecordingsReturnsItems(t *testing.T) {
+	now := time.Now().UTC()
+	conferenceID := uuid.New()
+	channelID := uuid.New()
+	svc := New(
+		repoStub{
+			conferenceChannelID: &channelID,
+			conferenceRecordings: []ConferenceRecordingFile{{
+				RecordingID:  uuid.New(),
+				ConferenceID: conferenceID,
+				ObjectID:     uuid.New(),
+				FileName:     "recording.mp4",
+				SizeBytes:    1024,
+				CreatedAt:    now,
+			}},
+		},
+		nil,
+		channelAccessStub{accountAccess: collabdomain.Access{Allowed: true, CanRead: true}},
+		nil,
+	)
+
+	items, err := svc.ListConferenceRecordings(context.Background(), ListConferenceRecordingsQuery{
+		ConferenceID: conferenceID,
+		Actor:        authdomain.NewAccountPrincipal(uuid.New(), uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("ListConferenceRecordings() error = %v", err)
+	}
+	if len(items) != 1 || items[0].ConferenceID != conferenceID {
+		t.Fatalf("unexpected result: %#v", items)
 	}
 }

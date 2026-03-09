@@ -6,9 +6,37 @@ import (
 )
 
 func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
-	op := downloadObjectOp
+	op := downloadMyAvatarOp
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
-	huma.Register(api, op, h.DownloadObject)
+	huma.Register(api, op, h.DownloadMyAvatar)
+
+	op = downloadOrganizationLogoOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadOrganizationLogo)
+
+	op = downloadCooperationPriceListOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadCooperationPriceList)
+
+	op = downloadOrganizationLegalDocumentOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadOrganizationLegalDocument)
+
+	op = downloadProductImportSourceOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadProductImportSource)
+
+	op = downloadChannelAttachmentOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadChannelAttachment)
+
+	op = listConferenceRecordingsOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.ListConferenceRecordings)
+
+	op = downloadConferenceRecordingOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadConferenceRecording)
 
 	op = listMyFilesOp
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}

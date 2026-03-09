@@ -86,24 +86,6 @@ func ToProductsResponse(products []catalogdomain.Product) *dto.ProductsResponse 
 	return resp
 }
 
-func ToProductImportUploadResponse(result *catalogapp.CreateProductImportUploadResult, status int) *dto.ProductImportUploadResponse {
-	if result == nil {
-		return nil
-	}
-	return &dto.ProductImportUploadResponse{
-		Status: status,
-		Body: dto.ProductImportUploadBody{
-			ObjectID:  result.ObjectID,
-			Bucket:    result.Bucket,
-			ObjectKey: result.ObjectKey,
-			UploadURL: result.UploadURL,
-			ExpiresAt: result.ExpiresAt,
-			FileName:  result.FileName,
-			SizeBytes: result.SizeBytes,
-		},
-	}
-}
-
 func ToProductImportResponse(view *catalogapp.ProductImportView, status int) *dto.ProductImportResponse {
 	if view == nil || view.Batch == nil {
 		return nil

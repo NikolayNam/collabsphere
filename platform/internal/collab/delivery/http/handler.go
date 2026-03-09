@@ -119,28 +119,42 @@ func (h *Handler) DeleteMessage(ctx context.Context, input *dto.DeleteMessageInp
 	return &dto.EmptyResponse{Status: 204}, nil
 }
 
-func (h *Handler) CreateAttachmentUpload(ctx context.Context, input *dto.CreateAttachmentUploadInput) (*dto.AttachmentUploadResponse, error) {
+func (h *Handler) UploadAttachment(ctx context.Context, input *dto.UploadAttachmentInput) (*dto.AttachmentObjectResponse, error) {
 	channelID, err := parseUUID(input.ChannelID)
 	if err != nil {
 		return nil, humaerr.From(ctx, authappValidation())
 	}
-	orgID, err := parseOptionalUUID(input.Body.OrganizationID)
-	if err != nil {
-		return nil, humaerr.From(ctx, authappValidation())
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Attachment file is required"))
 	}
-	res, err := h.svc.CreateAttachmentUpload(ctx, authapp.CreateAttachmentUploadCmd{ChannelID: channelID, Actor: principal(ctx), OrganizationID: orgID, FileName: input.Body.FileName, ContentType: input.Body.ContentType, SizeBytes: input.Body.SizeBytes, ChecksumSHA256: input.Body.ChecksumSHA256})
+	defer form.File.Close()
+
+	var organizationID *uuid.UUID
+	if strings.TrimSpace(form.OrganizationID) != "" {
+		organizationID, err = parseOptionalUUID(&form.OrganizationID)
+		if err != nil {
+			return nil, humaerr.From(ctx, authappValidation())
+		}
+	}
+
+	fileName := strings.TrimSpace(form.File.Filename)
+	if fileName == "" {
+		fileName = "attachment.bin"
+	}
+	attachment, err := h.svc.UploadAttachment(ctx, authapp.UploadAttachmentCmd{
+		ChannelID:      channelID,
+		Actor:          principal(ctx),
+		OrganizationID: organizationID,
+		FileName:       fileName,
+		ContentType:    strings.TrimSpace(form.File.ContentType),
+		SizeBytes:      form.File.Size,
+		Body:           form.File,
+	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	out := &dto.AttachmentUploadResponse{Status: 201}
-	out.Body.ObjectID = res.ObjectID
-	out.Body.UploadURL = res.UploadURL
-	out.Body.ExpiresAt = res.ExpiresAt
-	out.Body.Bucket = res.Bucket
-	out.Body.ObjectKey = res.ObjectKey
-	out.Body.FileName = res.FileName
-	out.Body.SizeBytes = res.SizeBytes
-	return out, nil
+	return &dto.AttachmentObjectResponse{Status: 201, Body: toAttachmentPayload(*attachment)}, nil
 }
 
 func (h *Handler) UpdateReadCursor(ctx context.Context, input *dto.UpdateReadCursorInput) (*dto.EmptyResponse, error) {
@@ -385,13 +399,26 @@ func toChannelPayload(channel collabdomain.Channel) dto.ChannelPayload {
 func toMessagePayload(message collabdomain.Message) dto.MessagePayload {
 	attachments := make([]dto.AttachmentPayload, 0, len(message.Attachments))
 	for _, attachment := range message.Attachments {
-		attachments = append(attachments, dto.AttachmentPayload{ObjectID: attachment.ObjectID, OrganizationID: attachment.OrganizationID, FileName: attachment.FileName, ContentType: attachment.ContentType, SizeBytes: attachment.SizeBytes, Bucket: attachment.Bucket, ObjectKey: attachment.ObjectKey, CreatedAt: attachment.CreatedAt})
+		attachments = append(attachments, toAttachmentPayload(attachment))
 	}
 	reactions := make([]dto.ReactionPayload, 0, len(message.Reactions))
 	for _, reaction := range message.Reactions {
 		reactions = append(reactions, dto.ReactionPayload{Emoji: reaction.Emoji, Count: reaction.Count, Mine: reaction.Mine})
 	}
 	return dto.MessagePayload{ID: message.ID, ChannelID: message.ChannelID, ChannelSeq: message.ChannelSeq, Type: string(message.Type), AuthorType: string(message.AuthorType), AuthorAccountID: message.AuthorAccountID, AuthorGuestID: message.AuthorGuestID, AuthorName: message.AuthorName, Body: message.Body, ReplyToMessageID: message.ReplyToMessageID, CreatedAt: message.CreatedAt, EditedAt: message.EditedAt, DeletedAt: message.DeletedAt, Mentions: message.Mentions, Attachments: attachments, Reactions: reactions}
+}
+
+func toAttachmentPayload(attachment collabdomain.Attachment) dto.AttachmentPayload {
+	return dto.AttachmentPayload{
+		ObjectID:       attachment.ObjectID,
+		OrganizationID: attachment.OrganizationID,
+		FileName:       attachment.FileName,
+		ContentType:    attachment.ContentType,
+		SizeBytes:      attachment.SizeBytes,
+		Bucket:         attachment.Bucket,
+		ObjectKey:      attachment.ObjectKey,
+		CreatedAt:      attachment.CreatedAt,
+	}
 }
 
 func toGuestInvitePayload(invite collabdomain.GuestInvite) dto.GuestInvitePayload {

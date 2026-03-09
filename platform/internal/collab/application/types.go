@@ -20,6 +20,7 @@ type AccountReader interface {
 
 type ObjectStorage interface {
 	PresignPutObject(ctx context.Context, bucket, objectKey string) (string, time.Time, error)
+	PutObject(ctx context.Context, bucket, objectKey string, body io.Reader, size int64, contentType string) error
 	ReadObject(ctx context.Context, bucket, objectKey string) (io.ReadCloser, error)
 }
 
@@ -149,14 +150,27 @@ type CreateAttachmentUploadCmd struct {
 	ChecksumSHA256 *string
 }
 
+type UploadAttachmentCmd struct {
+	ChannelID      uuid.UUID
+	Actor          authdomain.Principal
+	OrganizationID *uuid.UUID
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
+}
+
 type CreateAttachmentUploadResult struct {
-	ObjectID  uuid.UUID
-	UploadURL string
-	ExpiresAt time.Time
-	Bucket    string
-	ObjectKey string
-	FileName  string
-	SizeBytes int64
+	ObjectID       uuid.UUID
+	UploadURL      string
+	ExpiresAt      time.Time
+	Bucket         string
+	ObjectKey      string
+	FileName       string
+	SizeBytes      int64
+	OrganizationID *uuid.UUID
+	ContentType    *string
+	CreatedAt      time.Time
 }
 
 type UpdateReadCursorCmd struct {

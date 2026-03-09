@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
@@ -265,7 +266,7 @@ func (h *Handler) GetProductByID(ctx context.Context, input *dto.GetProductByIDI
 	return mapper.ToProductResponse(product, 200), nil
 }
 
-func (h *Handler) CreateProductImportUpload(ctx context.Context, input *dto.CreateProductImportUploadInput) (*dto.ProductImportUploadResponse, error) {
+func (h *Handler) UploadProductImport(ctx context.Context, input *dto.UploadProductImportInput) (*dto.ProductImportResponse, error) {
 	actorID, err := currentActorAccountID(ctx)
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -275,20 +276,30 @@ func (h *Handler) CreateProductImportUpload(ctx context.Context, input *dto.Crea
 		return nil, humaerr.From(ctx, catalogapp.ErrValidation)
 	}
 
-	result, err := h.svc.CreateProductImportUpload(ctx, catalogapp.CreateProductImportUploadCmd{
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Import file is required"))
+	}
+	defer form.File.Close()
+
+	fileName := strings.TrimSpace(form.File.Filename)
+	if fileName == "" {
+		fileName = "import.csv"
+	}
+
+	view, err := h.svc.UploadProductImport(ctx, catalogapp.UploadProductImportCmd{
 		OrganizationID: organizationID,
 		ActorAccountID: actorID,
-		FileName:       input.Body.FileName,
-		ContentType:    input.Body.ContentType,
-		SizeBytes:      input.Body.SizeBytes,
-		ChecksumSHA256: input.Body.ChecksumSHA256,
+		FileName:       fileName,
+		ContentType:    form.File.ContentType,
+		SizeBytes:      form.File.Size,
+		Body:           form.File,
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductImportUploadResponse(result, 201), nil
+	return mapper.ToProductImportResponse(view, http.StatusOK), nil
 }
-
 func (h *Handler) RunProductImport(ctx context.Context, input *dto.RunProductImportInput) (*dto.ProductImportResponse, error) {
 	actorID, err := currentActorAccountID(ctx)
 	if err != nil {

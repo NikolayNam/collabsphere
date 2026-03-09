@@ -198,9 +198,50 @@ func (s *Service) CreateAttachmentUpload(ctx context.Context, cmd CreateAttachme
 	if err != nil {
 		return nil, fault.Internal("Presign attachment upload failed", fault.WithCause(err))
 	}
-	return &CreateAttachmentUploadResult{ObjectID: obj.ID, UploadURL: url, ExpiresAt: expiresAt, Bucket: obj.Bucket, ObjectKey: obj.ObjectKey, FileName: obj.FileName, SizeBytes: obj.SizeBytes}, nil
+	return &CreateAttachmentUploadResult{ObjectID: obj.ID, UploadURL: url, ExpiresAt: expiresAt, Bucket: obj.Bucket, ObjectKey: obj.ObjectKey, FileName: obj.FileName, SizeBytes: obj.SizeBytes, OrganizationID: obj.OrganizationID, ContentType: obj.ContentType, CreatedAt: obj.CreatedAt}, nil
 }
 
+func (s *Service) UploadAttachment(ctx context.Context, cmd UploadAttachmentCmd) (*collabdomain.Attachment, error) {
+	if cmd.Body == nil {
+		return nil, fault.Validation("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, fault.Validation("file size must be non-negative")
+	}
+	contentType := cmd.ContentType
+	upload, err := s.CreateAttachmentUpload(ctx, CreateAttachmentUploadCmd{
+		ChannelID:      cmd.ChannelID,
+		Actor:          cmd.Actor,
+		OrganizationID: cmd.OrganizationID,
+		FileName:       cmd.FileName,
+		ContentType:    normalizeOptional(&contentType),
+		SizeBytes:      cmd.SizeBytes,
+		ChecksumSHA256: nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/octet-stream"
+	}
+	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload attachment failed", fault.WithCause(err))
+	}
+	attachmentContentType := upload.ContentType
+	if attachmentContentType == nil {
+		attachmentContentType = &contentType
+	}
+	return &collabdomain.Attachment{
+		ObjectID:       upload.ObjectID,
+		OrganizationID: upload.OrganizationID,
+		FileName:       upload.FileName,
+		ContentType:    attachmentContentType,
+		SizeBytes:      upload.SizeBytes,
+		Bucket:         upload.Bucket,
+		ObjectKey:      upload.ObjectKey,
+		CreatedAt:      upload.CreatedAt,
+	}, nil
+}
 func (s *Service) UpdateReadCursor(ctx context.Context, cmd UpdateReadCursorCmd) error {
 	access, _, err := s.requireChannelAccess(ctx, cmd.ChannelID, cmd.Actor)
 	if err != nil {
