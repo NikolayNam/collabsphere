@@ -7,7 +7,7 @@ var loginOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/auth/login",
 	Tags:        []string{"Auth"},
-	Summary:     "Login",
+	Summary:     "Create a session",
 	Description: "Authenticates an account using email and password credentials and returns access and refresh tokens.",
 }
 
@@ -16,7 +16,7 @@ var refreshOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/auth/refresh",
 	Tags:        []string{"Auth"},
-	Summary:     "Refresh tokens",
+	Summary:     "Refresh the current session",
 	Description: "Exchanges a valid refresh token for a fresh access token and refresh token pair.",
 }
 
@@ -25,7 +25,7 @@ var logoutOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/auth/logout",
 	Tags:        []string{"Auth"},
-	Summary:     "Logout",
+	Summary:     "Revoke the current session",
 	Description: "Revokes the current refresh session so the client can no longer use the associated refresh token.",
 }
 
@@ -34,7 +34,7 @@ var meOp = huma.Operation{
 	Method:      "GET",
 	Path:        "/auth/me",
 	Tags:        []string{"Auth"},
-	Summary:     "Get current user",
+	Summary:     "Get the authenticated principal",
 	Description: "Returns the authenticated principal and its current profile snapshot. For account principals this includes the current account profile fields.",
 	Security: []map[string][]string{
 		{"bearerAuth": {}},

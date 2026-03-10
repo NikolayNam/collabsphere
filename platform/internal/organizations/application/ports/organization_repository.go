@@ -20,6 +20,18 @@ type StorageObject struct {
 	CreatedAt      time.Time
 }
 
+type OrganizationVideoRecord struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	ObjectID       uuid.UUID
+	FileName       string
+	ContentType    *string
+	SizeBytes      int64
+	CreatedAt      time.Time
+	UploadedBy     *uuid.UUID
+	SortOrder      int64
+}
+
 type LegalDocumentAnalysisLease struct {
 	JobID          uuid.UUID
 	DocumentID     uuid.UUID
@@ -38,6 +50,9 @@ type OrganizationRepository interface {
 	GetByID(ctx context.Context, id domain.OrganizationID) (*domain.Organization, error)
 	UpdateProfile(ctx context.Context, id domain.OrganizationID, patch domain.OrganizationProfilePatch) (*domain.Organization, error)
 	CreateStorageObject(ctx context.Context, object StorageObject) error
+	CreateOrganizationVideo(ctx context.Context, organizationID uuid.UUID, objectID uuid.UUID, uploadedBy *uuid.UUID, createdAt time.Time) (*OrganizationVideoRecord, error)
+	ListOrganizationVideos(ctx context.Context, organizationID uuid.UUID) ([]OrganizationVideoRecord, error)
+	ListOrganizationVideoObjectIDs(ctx context.Context, organizationID uuid.UUID) ([]uuid.UUID, error)
 	GetCooperationApplication(ctx context.Context, organizationID domain.OrganizationID) (*domain.CooperationApplication, error)
 	SaveCooperationApplication(ctx context.Context, application *domain.CooperationApplication) (*domain.CooperationApplication, error)
 	CreateOrganizationLegalDocument(ctx context.Context, document *domain.OrganizationLegalDocument) (*domain.OrganizationLegalDocument, error)

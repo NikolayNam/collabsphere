@@ -29,17 +29,17 @@ type catalogProductCategoryRow struct {
 }
 
 type catalogProductRow struct {
-	ID             uuid.UUID  `gorm:"column:id"`
-	OrganizationID uuid.UUID  `gorm:"column:organization_id"`
-	CategoryID     *uuid.UUID `gorm:"column:product_type_id"`
-	Name           string     `gorm:"column:name"`
-	Description    *string    `gorm:"column:description"`
-	SKU            *string    `gorm:"column:sku"`
-	PriceAmount    *string    `gorm:"column:price_amount"`
-	CurrencyCode   *string    `gorm:"column:currency_code"`
-	IsActive       bool       `gorm:"column:is_active"`
-	CreatedAt      time.Time  `gorm:"column:created_at"`
-	UpdatedAt      time.Time  `gorm:"column:updated_at"`
+	ID                        uuid.UUID  `gorm:"column:id"`
+	OrganizationID            uuid.UUID  `gorm:"column:organization_id"`
+	CategoryID                *uuid.UUID `gorm:"column:product_type_id"`
+	Name                      string     `gorm:"column:name"`
+	Description               *string    `gorm:"column:description"`
+	SKU                       *string    `gorm:"column:sku"`
+	PriceAmount               *string    `gorm:"column:price_amount"`
+	CurrencyCode              *string    `gorm:"column:currency_code"`
+	IsActive                  bool       `gorm:"column:is_active"`
+	CreatedAt                 time.Time  `gorm:"column:created_at"`
+	UpdatedAt                 time.Time  `gorm:"column:updated_at"`
 }
 
 type storageObjectRow struct {
@@ -302,17 +302,17 @@ func rehydrateProductRow(row catalogProductRow) (*catalogdomain.Product, error) 
 		categoryID = &category
 	}
 	return catalogdomain.RehydrateProduct(catalogdomain.RehydrateProductParams{
-		ID:             productID,
-		OrganizationID: organizationID,
-		CategoryID:     categoryID,
-		Name:           row.Name,
-		Description:    row.Description,
-		SKU:            row.SKU,
-		PriceAmount:    row.PriceAmount,
-		CurrencyCode:   row.CurrencyCode,
-		IsActive:       row.IsActive,
-		CreatedAt:      row.CreatedAt,
-		UpdatedAt:      row.UpdatedAt,
+		ID:                        productID,
+		OrganizationID:            organizationID,
+		CategoryID:                categoryID,
+		Name:                      row.Name,
+		Description:               row.Description,
+		SKU:                       row.SKU,
+		PriceAmount:               row.PriceAmount,
+		CurrencyCode:              row.CurrencyCode,
+		IsActive:                  row.IsActive,
+		CreatedAt:                 row.CreatedAt,
+		UpdatedAt:                 row.UpdatedAt,
 	})
 }
 
@@ -387,3 +387,4 @@ func decodeJSONMap(value *string) map[string]any {
 	}
 	return out
 }
+

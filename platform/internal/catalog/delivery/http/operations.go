@@ -7,7 +7,7 @@ var createProductCategoryOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/organizations/{organization_id}/product-categories",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Create product category",
+	Summary:     "Create a category",
 	Description: "Creates an organization-scoped product category. Categories belong to a single organization and are not shared globally between tenants.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -17,7 +17,7 @@ var updateProductCategoryOp = huma.Operation{
 	Method:      "PATCH",
 	Path:        "/organizations/{organization_id}/product-categories/{category_id}",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Update product category",
+	Summary:     "Update a category",
 	Description: "Updates mutable fields of an organization-scoped product category, such as title, parent category, sort order, or visibility state.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -27,7 +27,7 @@ var deleteProductCategoryOp = huma.Operation{
 	Method:      "DELETE",
 	Path:        "/organizations/{organization_id}/product-categories/{category_id}",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Delete product category",
+	Summary:     "Delete a category",
 	Description: "Removes a product category from the organization catalog when domain invariants allow it.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -37,7 +37,7 @@ var listProductCategoriesOp = huma.Operation{
 	Method:      "GET",
 	Path:        "/organizations/{organization_id}/product-categories",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "List product categories",
+	Summary:     "List categories",
 	Description: "Returns the product categories available inside a single organization catalog.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -47,7 +47,7 @@ var createProductOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/organizations/{organization_id}/products",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Create product",
+	Summary:     "Create a product",
 	Description: "Creates a product in the organization catalog and links it to an organization-scoped category.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -57,8 +57,28 @@ var updateProductOp = huma.Operation{
 	Method:      "PATCH",
 	Path:        "/organizations/{organization_id}/products/{product_id}",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Update product",
-	Description: "Updates mutable product fields such as name, SKU, description, pricing, and category assignment.",
+	Summary:     "Update a product",
+	Description: "Updates mutable product fields such as name, SKU, description, pricing, category assignment, and other editable catalog metadata.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var uploadProductVideoOp = huma.Operation{
+	OperationID: "upload-product-video",
+	Method:      "POST",
+	Path:        "/organizations/{organization_id}/products/{product_id}/videos",
+	Tags:        []string{"Organizations / Catalog"},
+	Summary:     "Upload a product video",
+	Description: "Single-step product video upload using multipart/form-data. Send the video file in the `file` field. The backend uploads the object to S3-compatible storage and appends it to the product video collection.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var listProductVideosOp = huma.Operation{
+	OperationID: "list-product-videos",
+	Method:      "GET",
+	Path:        "/organizations/{organization_id}/products/{product_id}/videos",
+	Tags:        []string{"Organizations / Catalog"},
+	Summary:     "List product videos",
+	Description: "Returns the videos attached to the product in display order.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
@@ -67,7 +87,7 @@ var deleteProductOp = huma.Operation{
 	Method:      "DELETE",
 	Path:        "/organizations/{organization_id}/products/{product_id}",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Delete product",
+	Summary:     "Delete a product",
 	Description: "Removes a product from the organization catalog.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -87,7 +107,7 @@ var getProductByIDOp = huma.Operation{
 	Method:      "GET",
 	Path:        "/organizations/{organization_id}/products/{product_id}",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Get product by id",
+	Summary:     "Get a product",
 	Description: "Returns a single product from the organization catalog by product id.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -97,7 +117,7 @@ var uploadProductImportOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/organizations/{organization_id}/product-imports/upload",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Upload and process product and category import file directly",
+	Summary:     "Upload and import a catalog file",
 	Description: "Single-step product import using multipart/form-data. Send the CSV file in the `file` field. The backend uploads the object to S3-compatible storage and immediately runs the import in mode `upsert`.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -107,7 +127,7 @@ var runProductImportOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/organizations/{organization_id}/product-imports",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Process product and category import file",
+	Summary:     "Run a catalog import",
 	Description: "Processes a previously registered import source object and creates or updates categories and products in the target organization catalog.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -117,7 +137,8 @@ var getProductImportOp = huma.Operation{
 	Method:      "GET",
 	Path:        "/organizations/{organization_id}/product-imports/{batch_id}",
 	Tags:        []string{"Organizations / Catalog"},
-	Summary:     "Get product import batch",
+	Summary:     "Get an import batch",
 	Description: "Returns the current state of a product import batch, including counters, source object metadata, and validation or import errors.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+

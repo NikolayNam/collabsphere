@@ -20,15 +20,19 @@ type ObjectStorage interface {
 type Repository interface {
 	GetObjectByID(ctx context.Context, objectID uuid.UUID) (*StoredObject, error)
 	GetAccountAvatarObjectID(ctx context.Context, accountID uuid.UUID) (*uuid.UUID, error)
+	GetAccountVideoObjectID(ctx context.Context, accountID, videoID uuid.UUID) (*uuid.UUID, error)
 	GetOrganizationLogoObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error)
+	GetOrganizationVideoObjectID(ctx context.Context, organizationID, videoID uuid.UUID) (*uuid.UUID, error)
 	GetCooperationPriceListObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error)
 	GetOrganizationLegalDocumentObjectID(ctx context.Context, organizationID, documentID uuid.UUID) (*uuid.UUID, error)
 	GetProductImportSourceObjectID(ctx context.Context, organizationID, batchID uuid.UUID) (*uuid.UUID, error)
+	GetProductVideoObjectID(ctx context.Context, organizationID, productID, videoID uuid.UUID) (*uuid.UUID, error)
 	GetConferenceChannelID(ctx context.Context, conferenceID uuid.UUID) (*uuid.UUID, error)
 	GetConferenceRecordingObjectID(ctx context.Context, conferenceID, recordingID uuid.UUID) (*uuid.UUID, error)
 	ListConferenceRecordings(ctx context.Context, conferenceID uuid.UUID) ([]ConferenceRecordingFile, error)
 	ChannelHasAttachmentObject(ctx context.Context, channelID, objectID uuid.UUID) (bool, error)
 	AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.UUID) (bool, error)
+	AccountOwnsVideo(ctx context.Context, accountID, objectID uuid.UUID) (bool, error)
 	ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error)
 	ListRelatedChannelIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error)
 	ListAccountFiles(ctx context.Context, accountID uuid.UUID) ([]ListedFile, error)
@@ -104,8 +108,19 @@ type DownloadMyAvatarQuery struct {
 	Actor authdomain.Principal
 }
 
+type DownloadMyAccountVideoQuery struct {
+	VideoID uuid.UUID
+	Actor   authdomain.Principal
+}
+
 type DownloadOrganizationLogoQuery struct {
 	OrganizationID uuid.UUID
+	Actor          authdomain.Principal
+}
+
+type DownloadOrganizationVideoQuery struct {
+	OrganizationID uuid.UUID
+	VideoID        uuid.UUID
 	Actor          authdomain.Principal
 }
 
@@ -123,6 +138,13 @@ type DownloadOrganizationLegalDocumentQuery struct {
 type DownloadProductImportSourceQuery struct {
 	OrganizationID uuid.UUID
 	BatchID        uuid.UUID
+	Actor          authdomain.Principal
+}
+
+type DownloadProductVideoQuery struct {
+	OrganizationID uuid.UUID
+	ProductID      uuid.UUID
+	VideoID        uuid.UUID
 	Actor          authdomain.Principal
 }
 
@@ -241,6 +263,20 @@ func (s *Service) CreateMyAvatarDownload(ctx context.Context, q DownloadMyAvatar
 	return s.createResolvedDownload(ctx, objectID, "Account avatar not found", q.Actor)
 }
 
+func (s *Service) CreateMyAccountVideoDownload(ctx context.Context, q DownloadMyAccountVideoQuery) (*DownloadObjectResult, error) {
+	if q.VideoID == uuid.Nil {
+		return nil, fault.Validation("Account video ID is required")
+	}
+	if !q.Actor.IsAccount() {
+		return nil, fault.Unauthorized("Account authentication required")
+	}
+	objectID, err := s.repo.GetAccountVideoObjectID(ctx, q.Actor.AccountID, q.VideoID)
+	if err != nil {
+		return nil, fault.Internal("Resolve account video failed", fault.WithCause(err))
+	}
+	return s.createResolvedDownload(ctx, objectID, "Account video not found", q.Actor)
+}
+
 func (s *Service) CreateOrganizationLogoDownload(ctx context.Context, q DownloadOrganizationLogoQuery) (*DownloadObjectResult, error) {
 	if q.OrganizationID == uuid.Nil {
 		return nil, fault.Validation("Organization ID is required")
@@ -253,6 +289,23 @@ func (s *Service) CreateOrganizationLogoDownload(ctx context.Context, q Download
 		return nil, fault.Internal("Resolve organization logo failed", fault.WithCause(err))
 	}
 	return s.createResolvedDownload(ctx, objectID, "Organization logo not found", q.Actor)
+}
+
+func (s *Service) CreateOrganizationVideoDownload(ctx context.Context, q DownloadOrganizationVideoQuery) (*DownloadObjectResult, error) {
+	if q.OrganizationID == uuid.Nil {
+		return nil, fault.Validation("Organization ID is required")
+	}
+	if q.VideoID == uuid.Nil {
+		return nil, fault.Validation("Organization video ID is required")
+	}
+	if !q.Actor.IsAccount() {
+		return nil, fault.Unauthorized("Account authentication required")
+	}
+	objectID, err := s.repo.GetOrganizationVideoObjectID(ctx, q.OrganizationID, q.VideoID)
+	if err != nil {
+		return nil, fault.Internal("Resolve organization video failed", fault.WithCause(err))
+	}
+	return s.createResolvedDownload(ctx, objectID, "Organization video not found", q.Actor)
 }
 
 func (s *Service) CreateCooperationPriceListDownload(ctx context.Context, q DownloadCooperationPriceListQuery) (*DownloadObjectResult, error) {
@@ -301,6 +354,26 @@ func (s *Service) CreateProductImportSourceDownload(ctx context.Context, q Downl
 		return nil, fault.Internal("Resolve product import source failed", fault.WithCause(err))
 	}
 	return s.createResolvedDownload(ctx, objectID, "Product import source not found", q.Actor)
+}
+
+func (s *Service) CreateProductVideoDownload(ctx context.Context, q DownloadProductVideoQuery) (*DownloadObjectResult, error) {
+	if q.OrganizationID == uuid.Nil {
+		return nil, fault.Validation("Organization ID is required")
+	}
+	if q.ProductID == uuid.Nil {
+		return nil, fault.Validation("Product ID is required")
+	}
+	if q.VideoID == uuid.Nil {
+		return nil, fault.Validation("Product video ID is required")
+	}
+	if !q.Actor.IsAccount() {
+		return nil, fault.Unauthorized("Account authentication required")
+	}
+	objectID, err := s.repo.GetProductVideoObjectID(ctx, q.OrganizationID, q.ProductID, q.VideoID)
+	if err != nil {
+		return nil, fault.Internal("Resolve product video failed", fault.WithCause(err))
+	}
+	return s.createResolvedDownload(ctx, objectID, "Product video not found", q.Actor)
 }
 
 func (s *Service) CreateChannelAttachmentDownload(ctx context.Context, q DownloadChannelAttachmentQuery) (*DownloadObjectResult, error) {
@@ -378,6 +451,14 @@ func (s *Service) accountCanDownload(ctx context.Context, obj *StoredObject, acc
 		return false, fault.Internal("Check avatar ownership failed", fault.WithCause(err))
 	}
 	if ownsAvatar {
+		return true, nil
+	}
+
+	ownsVideo, err := s.repo.AccountOwnsVideo(ctx, accountUUID, obj.ID)
+	if err != nil {
+		return false, fault.Internal("Check account video ownership failed", fault.WithCause(err))
+	}
+	if ownsVideo {
 		return true, nil
 	}
 

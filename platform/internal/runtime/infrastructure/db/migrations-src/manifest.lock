@@ -48,3 +48,6 @@
 0046 | collab/conference_provider_mediasoup.sql            | 0046_conference_provider_mediasoup.sql
 0047 | collab/conference_provider_mediasoup_only.sql       | 0047_conference_provider_mediasoup_only.sql
 0048 | iam/membership_roles_v2.sql                         | 0048_membership_roles_v2.sql
+0049 | catalog/product_presentation_videos.sql             | 0049_product_presentation_videos.sql
+0050 | iam/account_videos.sql                              | 0050_account_videos.sql
+0051 | org/organization_videos.sql                         | 0051_organization_videos.sql

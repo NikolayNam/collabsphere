@@ -31,8 +31,7 @@ func (h *Handler) CreateAccount(ctx context.Context, input *dto.CreateAccountInp
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-
-	return mapper.ToAccountResponse(u, http.StatusCreated), nil
+	return h.accountResponse(ctx, u, http.StatusCreated)
 }
 
 func (h *Handler) GetAccountById(ctx context.Context, input *dto.GetAccountByIdInput) (*dto.AccountResponse, error) {
@@ -40,7 +39,7 @@ func (h *Handler) GetAccountById(ctx context.Context, input *dto.GetAccountByIdI
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToAccountResponse(u, http.StatusOK), nil
+	return h.accountResponse(ctx, u, http.StatusOK)
 }
 
 func (h *Handler) GetAccountByEmail(ctx context.Context, input *dto.GetAccountByEmailInput) (*dto.AccountResponse, error) {
@@ -48,7 +47,7 @@ func (h *Handler) GetAccountByEmail(ctx context.Context, input *dto.GetAccountBy
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToAccountResponse(u, http.StatusOK), nil
+	return h.accountResponse(ctx, u, http.StatusOK)
 }
 
 func (h *Handler) GetMyAccount(ctx context.Context, _ *dto.GetMyAccountInput) (*dto.AccountProfileResponse, error) {
@@ -60,7 +59,7 @@ func (h *Handler) GetMyAccount(ctx context.Context, _ *dto.GetMyAccountInput) (*
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToAccountProfileResponse(acc, http.StatusOK), nil
+	return h.accountProfileResponse(ctx, acc, http.StatusOK)
 }
 
 func (h *Handler) UpdateMyAccount(ctx context.Context, input *dto.UpdateMyAccountProfileInput) (*dto.AccountProfileResponse, error) {
@@ -82,7 +81,7 @@ func (h *Handler) UpdateMyAccount(ctx context.Context, input *dto.UpdateMyAccoun
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToAccountProfileResponse(acc, http.StatusOK), nil
+	return h.accountProfileResponse(ctx, acc, http.StatusOK)
 }
 
 func (h *Handler) UploadMyAvatar(ctx context.Context, input *dto.UploadMyAvatarInput) (*dto.AccountProfileResponse, error) {
@@ -112,7 +111,88 @@ func (h *Handler) UploadMyAvatar(ctx context.Context, input *dto.UploadMyAvatarI
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToAccountProfileResponse(acc, http.StatusOK), nil
+	return h.accountProfileResponse(ctx, acc, http.StatusOK)
+}
+
+func (h *Handler) UploadMyVideo(ctx context.Context, input *dto.UploadMyVideoInput) (*dto.AccountProfileResponse, error) {
+	accountID, err := principalAccountID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Account video file is required"))
+	}
+	defer form.File.Close()
+	fileName := form.File.Filename
+	if fileName == "" {
+		fileName = "video.mp4"
+	}
+	if _, err := h.svc.UploadMyVideo(ctx, application.UploadMyVideoCmd{
+		AccountID:   accountID,
+		FileName:    fileName,
+		ContentType: form.File.ContentType,
+		SizeBytes:   form.File.Size,
+		Body:        form.File,
+	}); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	acc, err := h.svc.GetMyProfile(ctx, accountID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return h.accountProfileResponse(ctx, acc, http.StatusOK)
+}
+
+func (h *Handler) ListMyVideos(ctx context.Context, _ *dto.ListMyVideosInput) (*dto.AccountVideosResponse, error) {
+	accountID, err := principalAccountID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	items, err := h.svc.ListMyVideos(ctx, accountID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	resp := &dto.AccountVideosResponse{Status: http.StatusOK}
+	resp.Body.Items = make([]dto.AccountVideoItem, 0, len(items))
+	for _, item := range items {
+		resp.Body.Items = append(resp.Body.Items, dto.AccountVideoItem{
+			ID:          item.ID,
+			ObjectID:    item.ObjectID,
+			FileName:    item.FileName,
+			ContentType: item.ContentType,
+			SizeBytes:   item.SizeBytes,
+			CreatedAt:   item.CreatedAt,
+			SortOrder:   item.SortOrder,
+		})
+	}
+	return resp, nil
+}
+
+func (h *Handler) accountResponse(ctx context.Context, a *accdomain.Account, status int) (*dto.AccountResponse, error) {
+	resp := mapper.ToAccountResponse(a, status)
+	if resp == nil || a == nil {
+		return resp, nil
+	}
+	ids, err := h.svc.ListMyVideoObjectIDs(ctx, a.ID())
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	resp.Body.VideoObjectIDs = ids
+	return resp, nil
+}
+
+func (h *Handler) accountProfileResponse(ctx context.Context, a *accdomain.Account, status int) (*dto.AccountProfileResponse, error) {
+	resp := mapper.ToAccountProfileResponse(a, status)
+	if resp == nil || a == nil {
+		return resp, nil
+	}
+	ids, err := h.svc.ListMyVideoObjectIDs(ctx, a.ID())
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	resp.Body.VideoObjectIDs = ids
+	return resp, nil
 }
 
 func principalAccountID(ctx context.Context) (accdomain.AccountID, error) {

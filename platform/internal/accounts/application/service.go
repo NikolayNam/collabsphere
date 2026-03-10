@@ -27,6 +27,16 @@ type CreateAccountCmd = create_account.Command
 type GetAccountByIdQuery = get_account_by_id.Query
 type GetAccountByEmailQuery = get_account_by_email.Query
 
+type AccountVideoView struct {
+	ID          uuid.UUID
+	ObjectID    uuid.UUID
+	FileName    string
+	ContentType *string
+	SizeBytes   int64
+	CreatedAt   time.Time
+	SortOrder   int64
+}
+
 type UpdateMyProfileCmd struct {
 	AccountID      domain.AccountID
 	DisplayName    *string
@@ -48,6 +58,14 @@ type CreateAvatarUploadCmd struct {
 }
 
 type UploadAvatarCmd struct {
+	AccountID   domain.AccountID
+	FileName    string
+	ContentType string
+	SizeBytes   int64
+	Body        io.Reader
+}
+
+type UploadMyVideoCmd struct {
 	AccountID   domain.AccountID
 	FileName    string
 	ContentType string
@@ -255,6 +273,87 @@ func (s *Service) UploadAvatar(ctx context.Context, cmd UploadAvatarCmd) (*domai
 	return updated, nil
 }
 
+func (s *Service) UploadMyVideo(ctx context.Context, cmd UploadMyVideoCmd) (*ports.AccountVideoRecord, error) {
+	if cmd.AccountID.IsZero() {
+		return nil, apperrors.InvalidInput("Account ID is required")
+	}
+	if s.storage == nil || s.bucket == "" {
+		return nil, fault.Unavailable("Account video upload is unavailable")
+	}
+	if cmd.Body == nil {
+		return nil, apperrors.InvalidInput("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, apperrors.InvalidInput("file size must be non-negative")
+	}
+	account, err := s.repo.GetByID(ctx, cmd.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	if account == nil {
+		return nil, apperrors.AccountNotFound()
+	}
+	fileName := sanitizeFileName(strings.TrimSpace(cmd.FileName), "video.mp4")
+	contentType, err := normalizeVideoContentType(fileName, cmd.ContentType)
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	objectID := uuid.New()
+	objectKey := buildAccountVideoObjectKey(cmd.AccountID.UUID(), objectID, fileName, now)
+	object := ports.StorageObject{
+		ID:             objectID,
+		OrganizationID: nil,
+		Bucket:         s.bucket,
+		ObjectKey:      objectKey,
+		FileName:       fileName,
+		ContentType:    &contentType,
+		SizeBytes:      cmd.SizeBytes,
+		CreatedAt:      now,
+	}
+	if err := s.repo.CreateStorageObject(ctx, object); err != nil {
+		return nil, fault.Internal("Create account video object failed", fault.WithCause(err))
+	}
+	if err := s.storage.PutObject(ctx, object.Bucket, object.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload account video failed", fault.WithCause(err))
+	}
+	video, err := s.repo.CreateAccountVideo(ctx, cmd.AccountID.UUID(), objectID, now)
+	if err != nil {
+		return nil, err
+	}
+	return video, nil
+}
+
+func (s *Service) ListMyVideos(ctx context.Context, accountID domain.AccountID) ([]AccountVideoView, error) {
+	if accountID.IsZero() {
+		return nil, apperrors.InvalidInput("Account ID is required")
+	}
+	items, err := s.repo.ListAccountVideos(ctx, accountID.UUID())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]AccountVideoView, 0, len(items))
+	for _, item := range items {
+		out = append(out, AccountVideoView{
+			ID:          item.ID,
+			ObjectID:    item.ObjectID,
+			FileName:    item.FileName,
+			ContentType: item.ContentType,
+			SizeBytes:   item.SizeBytes,
+			CreatedAt:   item.CreatedAt,
+			SortOrder:   item.SortOrder,
+		})
+	}
+	return out, nil
+}
+
+func (s *Service) ListMyVideoObjectIDs(ctx context.Context, accountID domain.AccountID) ([]uuid.UUID, error) {
+	if accountID.IsZero() {
+		return nil, apperrors.InvalidInput("Account ID is required")
+	}
+	return s.repo.ListAccountVideoObjectIDs(ctx, accountID.UUID())
+}
+
 func buildAccountAvatarObjectKey(accountID, objectID uuid.UUID, fileName string, now time.Time) string {
 	return strings.Join([]string{
 		"accounts",
@@ -265,6 +364,19 @@ func buildAccountAvatarObjectKey(accountID, objectID uuid.UUID, fileName string,
 		now.UTC().Format("02"),
 		objectID.String(),
 		sanitizeFileName(fileName, "avatar.bin"),
+	}, "/")
+}
+
+func buildAccountVideoObjectKey(accountID, objectID uuid.UUID, fileName string, now time.Time) string {
+	return strings.Join([]string{
+		"accounts",
+		"videos",
+		accountID.String(),
+		now.UTC().Format("2006"),
+		now.UTC().Format("01"),
+		now.UTC().Format("02"),
+		objectID.String(),
+		sanitizeFileName(fileName, "video.mp4"),
 	}, "/")
 }
 
@@ -301,4 +413,26 @@ func normalizeOptional(value *string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func normalizeVideoContentType(fileName, contentType string) (string, error) {
+	trimmedType := strings.TrimSpace(contentType)
+	if strings.HasPrefix(strings.ToLower(trimmedType), "video/") {
+		return trimmedType, nil
+	}
+
+	switch strings.ToLower(filepath.Ext(strings.TrimSpace(fileName))) {
+	case ".mp4":
+		return "video/mp4", nil
+	case ".webm":
+		return "video/webm", nil
+	case ".mov":
+		return "video/quicktime", nil
+	case ".m4v":
+		return "video/x-m4v", nil
+	case ".ogv":
+		return "video/ogg", nil
+	default:
+		return "", apperrors.InvalidInput("Only video files are supported")
+	}
 }

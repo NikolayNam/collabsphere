@@ -67,8 +67,16 @@ func (r *Repo) GetAccountAvatarObjectID(ctx context.Context, accountID uuid.UUID
 	return r.queryOptionalObjectID(ctx, "iam.accounts", "avatar_object_id", "id = ? AND deleted_at IS NULL", accountID)
 }
 
+func (r *Repo) GetAccountVideoObjectID(ctx context.Context, accountID, videoID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "iam.account_videos", "object_id", "account_id = ? AND id = ? AND deleted_at IS NULL", accountID, videoID)
+}
+
 func (r *Repo) GetOrganizationLogoObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
 	return r.queryOptionalObjectID(ctx, "org.organizations", "logo_object_id", "id = ? AND deleted_at IS NULL", organizationID)
+}
+
+func (r *Repo) GetOrganizationVideoObjectID(ctx context.Context, organizationID, videoID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "org.organization_videos", "object_id", "organization_id = ? AND id = ? AND deleted_at IS NULL", organizationID, videoID)
 }
 
 func (r *Repo) GetCooperationPriceListObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
@@ -81,6 +89,10 @@ func (r *Repo) GetOrganizationLegalDocumentObjectID(ctx context.Context, organiz
 
 func (r *Repo) GetProductImportSourceObjectID(ctx context.Context, organizationID, batchID uuid.UUID) (*uuid.UUID, error) {
 	return r.queryOptionalObjectID(ctx, "catalog.product_import_batches", "source_object_id", "organization_id = ? AND id = ?", organizationID, batchID)
+}
+
+func (r *Repo) GetProductVideoObjectID(ctx context.Context, organizationID, productID, videoID uuid.UUID) (*uuid.UUID, error) {
+	return r.queryOptionalObjectID(ctx, "catalog.product_videos", "object_id", "organization_id = ? AND product_id = ? AND id = ? AND deleted_at IS NULL", organizationID, productID, videoID)
 }
 
 func (r *Repo) GetConferenceChannelID(ctx context.Context, conferenceID uuid.UUID) (*uuid.UUID, error) {
@@ -130,6 +142,7 @@ func (r *Repo) ListConferenceRecordings(ctx context.Context, conferenceID uuid.U
 	}
 	return out, nil
 }
+
 func (r *Repo) ChannelHasAttachmentObject(ctx context.Context, channelID, objectID uuid.UUID) (bool, error) {
 	var count int64
 	query := `
@@ -155,6 +168,15 @@ func (r *Repo) AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.U
 	return count > 0, err
 }
 
+func (r *Repo) AccountOwnsVideo(ctx context.Context, accountID, objectID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Table("iam.account_videos").
+		Where("account_id = ? AND object_id = ? AND deleted_at IS NULL", accountID, objectID).
+		Count(&count).Error
+	return count > 0, err
+}
+
 func (r *Repo) ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error) {
 	var rows []struct {
 		OrganizationID uuid.UUID `gorm:"column:organization_id"`
@@ -162,6 +184,9 @@ func (r *Repo) ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUI
 	query := `
 		SELECT id AS organization_id FROM org.organizations
 		WHERE logo_object_id = @object_id AND deleted_at IS NULL
+		UNION
+		SELECT organization_id FROM org.organization_videos
+		WHERE object_id = @object_id AND deleted_at IS NULL
 		UNION
 		SELECT organization_id FROM org.cooperation_applications
 		WHERE price_list_object_id = @object_id
@@ -173,6 +198,9 @@ func (r *Repo) ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUI
 		WHERE source_object_id = @object_id
 		UNION
 		SELECT organization_id FROM catalog.product_images
+		WHERE object_id = @object_id AND deleted_at IS NULL
+		UNION
+		SELECT organization_id FROM catalog.product_videos
 		WHERE object_id = @object_id AND deleted_at IS NULL
 		UNION
 		SELECT organization_id FROM sales.order_documents
@@ -227,6 +255,18 @@ func (r *Repo) ListAccountFiles(ctx context.Context, accountID uuid.UUID) ([]sto
 		FROM iam.accounts AS a
 		JOIN storage.objects AS so ON so.id = a.avatar_object_id
 		WHERE a.id = @account_id AND a.deleted_at IS NULL AND so.deleted_at IS NULL
+		UNION ALL
+		SELECT so.id AS object_id,
+		       so.organization_id,
+		       so.file_name,
+		       so.content_type,
+		       so.size_bytes,
+		       so.created_at,
+		       'account_video' AS source_type,
+		       av.id AS source_id
+		FROM iam.account_videos AS av
+		JOIN storage.objects AS so ON so.id = av.object_id
+		WHERE av.account_id = @account_id AND av.deleted_at IS NULL AND so.deleted_at IS NULL
 		ORDER BY created_at DESC
 	`
 	if err := r.db.WithContext(ctx).Raw(query, sql.Named("account_id", accountID)).Scan(&rows).Error; err != nil {
@@ -249,6 +289,18 @@ func (r *Repo) ListOrganizationFiles(ctx context.Context, organizationID uuid.UU
 		FROM org.organizations AS o
 		JOIN storage.objects AS so ON so.id = o.logo_object_id
 		WHERE o.id = @organization_id AND o.deleted_at IS NULL AND so.deleted_at IS NULL
+		UNION ALL
+		SELECT so.id AS object_id,
+		       so.organization_id,
+		       so.file_name,
+		       so.content_type,
+		       so.size_bytes,
+		       so.created_at,
+		       'organization_video' AS source_type,
+		       ov.id AS source_id
+		FROM org.organization_videos AS ov
+		JOIN storage.objects AS so ON so.id = ov.object_id
+		WHERE ov.organization_id = @organization_id AND ov.deleted_at IS NULL AND so.deleted_at IS NULL
 		UNION ALL
 		SELECT so.id AS object_id,
 		       so.organization_id,
@@ -304,6 +356,18 @@ func (r *Repo) ListOrganizationFiles(ctx context.Context, organizationID uuid.UU
 		       so.content_type,
 		       so.size_bytes,
 		       so.created_at,
+		       'product_video' AS source_type,
+		       pv.id AS source_id
+		FROM catalog.product_videos AS pv
+		JOIN storage.objects AS so ON so.id = pv.object_id
+		WHERE pv.organization_id = @organization_id AND pv.deleted_at IS NULL AND so.deleted_at IS NULL
+		UNION ALL
+		SELECT so.id AS object_id,
+		       so.organization_id,
+		       so.file_name,
+		       so.content_type,
+		       so.size_bytes,
+		       so.created_at,
 		       'order_document' AS source_type,
 		       od.id AS source_id
 		FROM sales.order_documents AS od
@@ -323,7 +387,7 @@ func (r *Repo) queryOptionalObjectID(ctx context.Context, table, column, where s
 	}
 	if err := r.db.WithContext(ctx).
 		Table(table).
-		Select(column+" AS object_id").
+		Select(column + " AS object_id").
 		Where(where, args...).
 		Take(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -8,8 +8,17 @@ import (
 
 type DownloadMyAvatarInput struct{}
 
+type DownloadMyAccountVideoInput struct {
+	VideoID string `path:"video_id" format:"uuid" doc:"Account video ID"`
+}
+
 type DownloadOrganizationLogoInput struct {
 	OrganizationID string `path:"id" format:"uuid" doc:"Organization ID"`
+}
+
+type DownloadOrganizationVideoInput struct {
+	OrganizationID string `path:"id" format:"uuid" doc:"Organization ID"`
+	VideoID        string `path:"video_id" format:"uuid" doc:"Organization video ID"`
 }
 
 type DownloadCooperationPriceListInput struct {
@@ -24,6 +33,12 @@ type DownloadOrganizationLegalDocumentInput struct {
 type DownloadProductImportSourceInput struct {
 	OrganizationID string `path:"organization_id" format:"uuid" doc:"Organization ID"`
 	BatchID        string `path:"batch_id" format:"uuid" doc:"Product import batch ID"`
+}
+
+type DownloadProductVideoInput struct {
+	OrganizationID string `path:"organization_id" format:"uuid" doc:"Organization ID"`
+	ProductID      string `path:"product_id" format:"uuid" doc:"Product ID"`
+	VideoID        string `path:"video_id" format:"uuid" doc:"Product video ID"`
 }
 
 type DownloadChannelAttachmentInput struct {
@@ -53,7 +68,7 @@ type FileItem struct {
 	ContentType    *string    `json:"contentType,omitempty"`
 	SizeBytes      int64      `json:"sizeBytes"`
 	CreatedAt      time.Time  `json:"createdAt"`
-	SourceType     string     `json:"sourceType" doc:"Logical source of the file in the system, for example account_avatar, organization_logo, product_image or legal_document."`
+	SourceType     string     `json:"sourceType" doc:"Logical source of the file in the system, for example account_avatar, account_video, organization_logo, organization_video, product_video or legal_document."`
 	SourceID       *uuid.UUID `json:"sourceId,omitempty" doc:"Identifier of the entity that references the file."`
 }
 

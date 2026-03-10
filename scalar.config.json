@@ -1,0 +1,112 @@
+{
+  "$schema": "https://cdn.scalar.com/schema/scalar-config-next.json",
+  "scalar": "2.0.0",
+  "info": {
+    "title": "CollabSphere Docs",
+    "description": "Product documentation and API entry points for CollabSphere."
+  },
+  "siteConfig": {
+    "defaultColorMode": "dark"
+  },
+  "navigation": {
+    "routes": {
+      "/": {
+        "type": "group",
+        "title": "CollabSphere Docs",
+        "children": {
+          "/": {
+            "type": "page",
+            "filepath": "docs/content/overview.md",
+            "title": "Overview"
+          },
+          "/accounts": {
+            "type": "group",
+            "title": "Accounts",
+            "mode": "flat",
+            "children": {
+              "/profile": {
+                "type": "page",
+                "filepath": "docs/content/accounts/profile.md",
+                "title": "Profile and identity"
+              },
+              "/files": {
+                "type": "page",
+                "filepath": "docs/content/accounts/files.md",
+                "title": "Files and avatars"
+              }
+            }
+          },
+          "/organizations": {
+            "type": "group",
+            "title": "Organizations",
+            "mode": "flat",
+            "children": {
+              "/build": {
+                "type": "page",
+                "filepath": "docs/content/organizations/build.md",
+                "title": "Build an organization"
+              },
+              "/access": {
+                "type": "page",
+                "filepath": "docs/content/organizations/access.md",
+                "title": "Manage access"
+              },
+              "/profile": {
+                "type": "page",
+                "filepath": "docs/content/organizations/profile.md",
+                "title": "Profile and branding"
+              },
+              "/files": {
+                "type": "page",
+                "filepath": "docs/content/organizations/files.md",
+                "title": "Files and downloads"
+              },
+              "/onboarding": {
+                "type": "page",
+                "filepath": "docs/content/organizations/onboarding.md",
+                "title": "Onboarding and legal docs"
+              },
+              "/catalog": {
+                "type": "page",
+                "filepath": "docs/content/organizations/catalog.md",
+                "title": "Catalog and imports"
+              }
+            }
+          },
+          "/groups": {
+            "type": "page",
+            "filepath": "docs/content/groups.md",
+            "title": "Groups"
+          },
+          "/collaboration": {
+            "type": "group",
+            "title": "Collaboration",
+            "mode": "flat",
+            "children": {
+              "/channels": {
+                "type": "page",
+                "filepath": "docs/content/collaboration/channels.md",
+                "title": "Channels and messages"
+              },
+              "/conferences": {
+                "type": "page",
+                "filepath": "docs/content/collaboration/conferences.md",
+                "title": "Conferences and recordings"
+              },
+              "/files": {
+                "type": "page",
+                "filepath": "docs/content/collaboration/files.md",
+                "title": "Attachments and downloads"
+              }
+            }
+          },
+          "/api-reference": {
+            "type": "link",
+            "title": "API Reference",
+            "url": "/api/v1/docs"
+          }
+        }
+      }
+    }
+  }
+}

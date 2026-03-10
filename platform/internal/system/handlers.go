@@ -11,7 +11,7 @@ var healthOp = huma.Operation{
 	Method:      "GET",
 	Path:        "/health",
 	Tags:        []string{"System"},
-	Summary:     "Get health",
+	Summary:     "Check API health",
 	Description: "Simple liveness and readiness probe for the API process.",
 }
 

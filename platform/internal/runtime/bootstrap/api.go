@@ -25,6 +25,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 
 	cfg := huma.DefaultConfig(conf.APP.Title, conf.APP.Version)
 	cfg.CreateHooks = nil
+	cfg.DocsPath = ""
 	cfg.DocsRenderer = huma.DocsRendererScalar
 	cfg.Info.Description = strings.TrimSpace(strings.Join([]string{
 		"CollabSphere API управляет аккаунтами, организациями, каталогом и collaboration-сценариями.",

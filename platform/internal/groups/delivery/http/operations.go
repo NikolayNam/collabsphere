@@ -7,7 +7,7 @@ var createGroupOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/groups",
 	Tags:        []string{"Groups"},
-	Summary:     "Create group",
+	Summary:     "Create a group",
 	Description: "Creates a collaboration group and automatically adds the authenticated account as its first owner.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -17,7 +17,7 @@ var getGroupByIDOp = huma.Operation{
 	Method:      "GET",
 	Path:        "/groups/{id}",
 	Tags:        []string{"Groups"},
-	Summary:     "Get group by id",
+	Summary:     "Get a group by ID",
 	Description: "Returns a group visible to the authenticated actor. Group metadata is the ACL container used by channels and collaboration features.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -27,7 +27,7 @@ var addAccountMemberOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/groups/{group_id}/accounts",
 	Tags:        []string{"Groups"},
-	Summary:     "Add account to group",
+	Summary:     "Add an account member",
 	Description: "Adds an account member to the group. Ownership and membership rules are enforced by the group access model.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
@@ -37,7 +37,7 @@ var addOrganizationMemberOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/groups/{group_id}/organizations",
 	Tags:        []string{"Groups"},
-	Summary:     "Add organization to group",
+	Summary:     "Add an organization member",
 	Description: "Adds an organization to the group so its active members inherit access to the group's channels and conferences.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }

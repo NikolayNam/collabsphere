@@ -17,16 +17,28 @@ type ProductCategoryBody struct {
 }
 
 type ProductBody struct {
-	ID             uuid.UUID  `json:"id"`
-	OrganizationID uuid.UUID  `json:"organizationId"`
-	CategoryID     *uuid.UUID `json:"categoryId,omitempty"`
-	Name           string     `json:"name"`
-	Description    *string    `json:"description,omitempty"`
-	SKU            *string    `json:"sku,omitempty"`
-	PriceAmount    *string    `json:"priceAmount,omitempty"`
-	CurrencyCode   *string    `json:"currencyCode,omitempty"`
-	IsActive       bool       `json:"isActive"`
-	CreatedAt      time.Time  `json:"createdAt"`
+	ID             uuid.UUID   `json:"id"`
+	OrganizationID uuid.UUID   `json:"organizationId"`
+	CategoryID     *uuid.UUID  `json:"categoryId,omitempty"`
+	VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
+	Name           string      `json:"name"`
+	Description    *string     `json:"description,omitempty"`
+	SKU            *string     `json:"sku,omitempty"`
+	PriceAmount    *string     `json:"priceAmount,omitempty"`
+	CurrencyCode   *string     `json:"currencyCode,omitempty"`
+	IsActive       bool        `json:"isActive"`
+	CreatedAt      time.Time   `json:"createdAt"`
+}
+
+type ProductVideoItem struct {
+	ID          uuid.UUID  `json:"id"`
+	ObjectID    uuid.UUID  `json:"objectId"`
+	FileName    string     `json:"fileName"`
+	ContentType *string    `json:"contentType,omitempty"`
+	SizeBytes   int64      `json:"sizeBytes"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UploadedBy  *uuid.UUID `json:"uploadedBy,omitempty"`
+	SortOrder   int64      `json:"sortOrder"`
 }
 
 type ProductImportErrorBody struct {
@@ -79,6 +91,13 @@ type ProductsResponse struct {
 	Status int `json:"-"`
 	Body   struct {
 		Items []ProductBody `json:"items"`
+	} `json:"body"`
+}
+
+type ProductVideosResponse struct {
+	Status int `json:"-"`
+	Body   struct {
+		Items []ProductVideoItem `json:"items"`
 	} `json:"body"`
 }
 

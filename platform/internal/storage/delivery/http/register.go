@@ -10,9 +10,17 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, op, h.DownloadMyAvatar)
 
+	op = downloadMyAccountVideoOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadMyAccountVideo)
+
 	op = downloadOrganizationLogoOp
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, op, h.DownloadOrganizationLogo)
+
+	op = downloadOrganizationVideoOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadOrganizationVideo)
 
 	op = downloadCooperationPriceListOp
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
@@ -25,6 +33,10 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	op = downloadProductImportSourceOp
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, op, h.DownloadProductImportSource)
+
+	op = downloadProductVideoOp
+	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, op, h.DownloadProductVideo)
 
 	op = downloadChannelAttachmentOp
 	op.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}

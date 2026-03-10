@@ -67,3 +67,7 @@ migrations:
   - collab/conference_provider_mediasoup.sql
   - collab/conference_provider_mediasoup_only.sql
   - iam/membership_roles_v2.sql
+
+  - catalog/product_presentation_videos.sql
+  - iam/account_videos.sql
+  - org/organization_videos.sql

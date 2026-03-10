@@ -21,6 +21,10 @@ type UpdateOrganizationInput struct {
 	}
 }
 
+type ListOrganizationVideosInput struct {
+	ID string `path:"id" format:"uuid" doc:"Organization ID"`
+}
+
 type UploadOrganizationLogoForm struct {
 	File huma.FormFile `form:"file" contentType:"image/*" required:"true" doc:"Organization logo image file. Upload it directly with multipart/form-data."`
 }
@@ -28,4 +32,13 @@ type UploadOrganizationLogoForm struct {
 type UploadOrganizationLogoInput struct {
 	ID      string `path:"id" format:"uuid" doc:"Organization ID"`
 	RawBody huma.MultipartFormFiles[UploadOrganizationLogoForm]
+}
+
+type UploadOrganizationVideoForm struct {
+	File huma.FormFile `form:"file" contentType:"video/*" required:"true" doc:"Organization video file. Upload it directly with multipart/form-data."`
+}
+
+type UploadOrganizationVideoInput struct {
+	ID      string `path:"id" format:"uuid" doc:"Organization ID"`
+	RawBody huma.MultipartFormFiles[UploadOrganizationVideoForm]
 }

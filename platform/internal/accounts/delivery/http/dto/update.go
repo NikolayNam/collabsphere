@@ -7,6 +7,8 @@ import (
 
 type GetMyAccountInput struct{}
 
+type ListMyVideosInput struct{}
+
 type UpdateMyAccountProfileInput struct {
 	Body struct {
 		DisplayName    *string    `json:"displayName,omitempty" maxLength:"255"`
@@ -26,4 +28,12 @@ type UploadMyAvatarForm struct {
 
 type UploadMyAvatarInput struct {
 	RawBody huma.MultipartFormFiles[UploadMyAvatarForm]
+}
+
+type UploadMyVideoForm struct {
+	File huma.FormFile `form:"file" contentType:"video/*" required:"true" doc:"Account video file. Upload it directly with multipart/form-data."`
+}
+
+type UploadMyVideoInput struct {
+	RawBody huma.MultipartFormFiles[UploadMyVideoForm]
 }

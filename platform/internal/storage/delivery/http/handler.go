@@ -27,12 +27,40 @@ func (h *Handler) DownloadMyAvatar(ctx context.Context, _ *dto.DownloadMyAvatarI
 	return downloadResponse(result), nil
 }
 
+func (h *Handler) DownloadMyAccountVideo(ctx context.Context, input *dto.DownloadMyAccountVideoInput) (*dto.DownloadObjectResponse, error) {
+	videoID, err := httpbind.ParseUUID(input.VideoID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	result, err := h.svc.CreateMyAccountVideoDownload(ctx, storageapp.DownloadMyAccountVideoQuery{VideoID: videoID, Actor: principal(ctx)})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return downloadResponse(result), nil
+}
+
 func (h *Handler) DownloadOrganizationLogo(ctx context.Context, input *dto.DownloadOrganizationLogoInput) (*dto.DownloadObjectResponse, error) {
 	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Invalid identifier"))
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
 	result, err := h.svc.CreateOrganizationLogoDownload(ctx, storageapp.DownloadOrganizationLogoQuery{OrganizationID: organizationID, Actor: principal(ctx)})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return downloadResponse(result), nil
+}
+
+func (h *Handler) DownloadOrganizationVideo(ctx context.Context, input *dto.DownloadOrganizationVideoInput) (*dto.DownloadObjectResponse, error) {
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	videoID, err := httpbind.ParseUUID(input.VideoID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	result, err := h.svc.CreateOrganizationVideoDownload(ctx, storageapp.DownloadOrganizationVideoQuery{OrganizationID: organizationID, VideoID: videoID, Actor: principal(ctx)})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
@@ -77,6 +105,26 @@ func (h *Handler) DownloadProductImportSource(ctx context.Context, input *dto.Do
 		return nil, humaerr.From(ctx, err)
 	}
 	result, err := h.svc.CreateProductImportSourceDownload(ctx, storageapp.DownloadProductImportSourceQuery{OrganizationID: organizationID, BatchID: batchID, Actor: principal(ctx)})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return downloadResponse(result), nil
+}
+
+func (h *Handler) DownloadProductVideo(ctx context.Context, input *dto.DownloadProductVideoInput) (*dto.DownloadObjectResponse, error) {
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	productID, err := httpbind.ParseUUID(input.ProductID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	videoID, err := httpbind.ParseUUID(input.VideoID, fault.Validation("Invalid identifier"))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	result, err := h.svc.CreateProductVideoDownload(ctx, storageapp.DownloadProductVideoQuery{OrganizationID: organizationID, ProductID: productID, VideoID: videoID, Actor: principal(ctx)})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}

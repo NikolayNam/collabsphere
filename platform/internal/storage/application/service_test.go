@@ -25,15 +25,19 @@ func (s storageStub) PresignGetObject(ctx context.Context, bucket, objectKey str
 type repoStub struct {
 	object                    *StoredObject
 	avatarObjectID            *uuid.UUID
+	accountVideoObjectID      *uuid.UUID
 	organizationLogoObjectID  *uuid.UUID
+	organizationVideoObjectID *uuid.UUID
 	priceListObjectID         *uuid.UUID
 	legalDocumentObjectID     *uuid.UUID
 	productImportSourceObject *uuid.UUID
+	productVideoObject        *uuid.UUID
 	conferenceChannelID       *uuid.UUID
 	conferenceRecordingObject *uuid.UUID
 	conferenceRecordings      []ConferenceRecordingFile
 	channelHasAttachment      bool
 	avatarOwned               bool
+	accountVideoOwned         bool
 	orgIDs                    []uuid.UUID
 	channelIDs                []uuid.UUID
 	accountFiles              []ListedFile
@@ -46,8 +50,14 @@ func (r repoStub) GetObjectByID(ctx context.Context, objectID uuid.UUID) (*Store
 func (r repoStub) GetAccountAvatarObjectID(ctx context.Context, accountID uuid.UUID) (*uuid.UUID, error) {
 	return r.avatarObjectID, nil
 }
+func (r repoStub) GetAccountVideoObjectID(ctx context.Context, accountID, videoID uuid.UUID) (*uuid.UUID, error) {
+	return r.accountVideoObjectID, nil
+}
 func (r repoStub) GetOrganizationLogoObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
 	return r.organizationLogoObjectID, nil
+}
+func (r repoStub) GetOrganizationVideoObjectID(ctx context.Context, organizationID, videoID uuid.UUID) (*uuid.UUID, error) {
+	return r.organizationVideoObjectID, nil
 }
 func (r repoStub) GetCooperationPriceListObjectID(ctx context.Context, organizationID uuid.UUID) (*uuid.UUID, error) {
 	return r.priceListObjectID, nil
@@ -57,6 +67,9 @@ func (r repoStub) GetOrganizationLegalDocumentObjectID(ctx context.Context, orga
 }
 func (r repoStub) GetProductImportSourceObjectID(ctx context.Context, organizationID, batchID uuid.UUID) (*uuid.UUID, error) {
 	return r.productImportSourceObject, nil
+}
+func (r repoStub) GetProductVideoObjectID(ctx context.Context, organizationID, productID, videoID uuid.UUID) (*uuid.UUID, error) {
+	return r.productVideoObject, nil
 }
 func (r repoStub) GetConferenceChannelID(ctx context.Context, conferenceID uuid.UUID) (*uuid.UUID, error) {
 	return r.conferenceChannelID, nil
@@ -72,6 +85,9 @@ func (r repoStub) ChannelHasAttachmentObject(ctx context.Context, channelID, obj
 }
 func (r repoStub) AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.UUID) (bool, error) {
 	return r.avatarOwned, nil
+}
+func (r repoStub) AccountOwnsVideo(ctx context.Context, accountID, objectID uuid.UUID) (bool, error) {
+	return r.accountVideoOwned, nil
 }
 func (r repoStub) ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error) {
 	return r.orgIDs, nil
@@ -137,6 +153,25 @@ func TestCreateDownloadAllowsOwnAvatar(t *testing.T) {
 	}
 	if result.DownloadURL != "http://example.com/download" {
 		t.Fatalf("unexpected download URL %q", result.DownloadURL)
+	}
+}
+
+func TestCreateDownloadAllowsOwnAccountVideo(t *testing.T) {
+	objectID := uuid.New()
+	now := time.Now().UTC()
+	svc := New(
+		repoStub{object: &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "accounts/videos/me.mp4", FileName: "me.mp4", SizeBytes: 42, CreatedAt: now}, accountVideoOwned: true},
+		membershipsStub{},
+		channelAccessStub{},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateDownload(context.Background(), DownloadObjectQuery{ObjectID: objectID, Actor: authdomain.NewAccountPrincipal(uuid.New(), uuid.New())})
+	if err != nil {
+		t.Fatalf("CreateDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
 	}
 }
 
@@ -224,7 +259,7 @@ func TestListMyFilesReturnsAccountFiles(t *testing.T) {
 		FileName:   "avatar.png",
 		SizeBytes:  42,
 		CreatedAt:  now,
-		SourceType: "account_avatar",
+		SourceType: "account_video",
 	}}
 	svc := New(repoStub{accountFiles: expected}, nil, nil, nil)
 
@@ -232,7 +267,7 @@ func TestListMyFilesReturnsAccountFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListMyFiles() error = %v", err)
 	}
-	if len(result) != 1 || result[0].SourceType != "account_avatar" {
+	if len(result) != 1 || result[0].SourceType != "account_video" {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 }
@@ -264,14 +299,15 @@ func TestListOrganizationFilesReturnsOrganizationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewMembership() error = %v", err)
 	}
+	productID := uuid.New()
 	expected := []ListedFile{{
 		ObjectID:       uuid.New(),
 		OrganizationID: &orgUUID,
-		FileName:       "logo.png",
-		SizeBytes:      128,
+		FileName:       "presentation.mp4",
+		SizeBytes:      1024,
 		CreatedAt:      now,
-		SourceType:     "organization_logo",
-		SourceID:       &orgUUID,
+		SourceType:     "product_video",
+		SourceID:       &productID,
 	}}
 	svc := New(repoStub{orgFiles: expected}, membershipsStub{member: member}, nil, nil)
 
@@ -282,7 +318,7 @@ func TestListOrganizationFilesReturnsOrganizationFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListOrganizationFiles() error = %v", err)
 	}
-	if len(result) != 1 || result[0].SourceType != "organization_logo" {
+	if len(result) != 1 || result[0].SourceType != "product_video" {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 }
@@ -305,6 +341,31 @@ func TestCreateMyAvatarDownloadResolvesAvatarObject(t *testing.T) {
 	result, err := svc.CreateMyAvatarDownload(context.Background(), DownloadMyAvatarQuery{Actor: authdomain.NewAccountPrincipal(accountID, uuid.New())})
 	if err != nil {
 		t.Fatalf("CreateMyAvatarDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
+	}
+}
+
+func TestCreateMyAccountVideoDownloadResolvesVideoObject(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	videoID := uuid.New()
+	accountID := uuid.New()
+	svc := New(
+		repoStub{
+			accountVideoObjectID: &objectID,
+			object:               &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "accounts/videos/me.mp4", FileName: "me.mp4", SizeBytes: 42, CreatedAt: now},
+			accountVideoOwned:    true,
+		},
+		membershipsStub{},
+		channelAccessStub{},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateMyAccountVideoDownload(context.Background(), DownloadMyAccountVideoQuery{VideoID: videoID, Actor: authdomain.NewAccountPrincipal(accountID, uuid.New())})
+	if err != nil {
+		t.Fatalf("CreateMyAccountVideoDownload() error = %v", err)
 	}
 	if result.ObjectID != objectID {
 		t.Fatalf("unexpected object id %s", result.ObjectID)
@@ -340,6 +401,42 @@ func TestCreateOrganizationLogoDownloadResolvesLogoObject(t *testing.T) {
 	result, err := svc.CreateOrganizationLogoDownload(context.Background(), DownloadOrganizationLogoQuery{OrganizationID: organizationUUID, Actor: authdomain.NewAccountPrincipal(accountID.UUID(), uuid.New())})
 	if err != nil {
 		t.Fatalf("CreateOrganizationLogoDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
+	}
+}
+
+func TestCreateOrganizationVideoDownloadResolvesVideoObject(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	videoID := uuid.New()
+	organizationUUID := uuid.New()
+	organizationID, _ := orgdomain.OrganizationIDFromUUID(organizationUUID)
+	accountID, _ := accdomain.AccountIDFromUUID(uuid.New())
+	membership, err := memberdomain.NewMembership(memberdomain.NewMembershipParams{
+		OrganizationID: organizationID,
+		AccountID:      accountID,
+		Role:           memberdomain.MembershipRoleMember,
+		Now:            now,
+	})
+	if err != nil {
+		t.Fatalf("NewMembership() error = %v", err)
+	}
+	svc := New(
+		repoStub{
+			organizationVideoObjectID: &objectID,
+			object:                    &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "org/videos/brand.mp4", FileName: "brand.mp4", SizeBytes: 64, CreatedAt: now},
+			orgIDs:                    []uuid.UUID{organizationUUID},
+		},
+		membershipsStub{member: membership},
+		channelAccessStub{},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateOrganizationVideoDownload(context.Background(), DownloadOrganizationVideoQuery{OrganizationID: organizationUUID, VideoID: videoID, Actor: authdomain.NewAccountPrincipal(accountID.UUID(), uuid.New())})
+	if err != nil {
+		t.Fatalf("CreateOrganizationVideoDownload() error = %v", err)
 	}
 	if result.ObjectID != objectID {
 		t.Fatalf("unexpected object id %s", result.ObjectID)
@@ -430,5 +527,47 @@ func TestListConferenceRecordingsReturnsItems(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].ConferenceID != conferenceID {
 		t.Fatalf("unexpected result: %#v", items)
+	}
+}
+
+func TestCreateProductVideoDownloadResolvesObject(t *testing.T) {
+	now := time.Now().UTC()
+	objectID := uuid.New()
+	organizationUUID := uuid.New()
+	productID := uuid.New()
+	videoID := uuid.New()
+	organizationID, _ := orgdomain.OrganizationIDFromUUID(organizationUUID)
+	accountID, _ := accdomain.AccountIDFromUUID(uuid.New())
+	membership, err := memberdomain.NewMembership(memberdomain.NewMembershipParams{
+		OrganizationID: organizationID,
+		AccountID:      accountID,
+		Role:           memberdomain.MembershipRoleMember,
+		Now:            now,
+	})
+	if err != nil {
+		t.Fatalf("NewMembership() error = %v", err)
+	}
+	svc := New(
+		repoStub{
+			productVideoObject: &objectID,
+			object:             &StoredObject{ID: objectID, Bucket: "collabsphere", ObjectKey: "catalog/products/video.mp4", FileName: "video.mp4", SizeBytes: 128, CreatedAt: now},
+			orgIDs:             []uuid.UUID{organizationUUID},
+		},
+		membershipsStub{member: membership},
+		channelAccessStub{},
+		storageStub{url: "http://example.com/download", exp: now.Add(5 * time.Minute)},
+	)
+
+	result, err := svc.CreateProductVideoDownload(context.Background(), DownloadProductVideoQuery{
+		OrganizationID: organizationUUID,
+		ProductID:      productID,
+		VideoID:        videoID,
+		Actor:          authdomain.NewAccountPrincipal(accountID.UUID(), uuid.New()),
+	})
+	if err != nil {
+		t.Fatalf("CreateProductVideoDownload() error = %v", err)
+	}
+	if result.ObjectID != objectID {
+		t.Fatalf("unexpected object id %s", result.ObjectID)
 	}
 }

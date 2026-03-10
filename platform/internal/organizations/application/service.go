@@ -727,3 +727,112 @@ func normalizeOptional(value *string) *string {
 	}
 	return &trimmed
 }
+
+type OrganizationVideoView struct {
+	ID          uuid.UUID
+	ObjectID    uuid.UUID
+	FileName    string
+	ContentType *string
+	SizeBytes   int64
+	CreatedAt   time.Time
+	UploadedBy  *uuid.UUID
+	SortOrder   int64
+}
+
+type UploadOrganizationVideoCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
+}
+
+func (s *Service) UploadOrganizationVideo(ctx context.Context, cmd UploadOrganizationVideoCmd) (*ports.OrganizationVideoRecord, error) {
+	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+		return nil, err
+	}
+	if cmd.Body == nil {
+		return nil, apperrors.InvalidInput("file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, apperrors.InvalidInput("file size must be non-negative")
+	}
+	contentType, err := normalizeOrganizationVideoContentType(cmd.FileName, cmd.ContentType)
+	if err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	orgUUID := cmd.OrganizationID.UUID()
+	objectID := uuid.New()
+	fileName := sanitizeFileName(cmd.FileName, "organization-video.mp4")
+	object := ports.StorageObject{
+		ID:             objectID,
+		OrganizationID: &orgUUID,
+		Bucket:         s.bucket,
+		ObjectKey:      strings.Join([]string{"organizations", "videos", orgUUID.String(), now.UTC().Format("2006"), now.UTC().Format("01"), now.UTC().Format("02"), objectID.String(), fileName}, "/"),
+		FileName:       fileName,
+		ContentType:    &contentType,
+		SizeBytes:      cmd.SizeBytes,
+		CreatedAt:      now,
+	}
+	if err := s.repo.CreateStorageObject(ctx, object); err != nil {
+		return nil, fault.Internal("Create organization video object failed", fault.WithCause(err))
+	}
+	if err := s.storage.PutObject(ctx, object.Bucket, object.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, fault.Internal("Upload organization video failed", fault.WithCause(err))
+	}
+	return s.repo.CreateOrganizationVideo(ctx, orgUUID, objectID, &cmd.ActorAccountID, now)
+}
+
+func (s *Service) ListOrganizationVideos(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID) ([]OrganizationVideoView, error) {
+	if err := s.requireOrganizationAccess(ctx, organizationID, actorAccountID, false); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListOrganizationVideos(ctx, organizationID.UUID())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]OrganizationVideoView, 0, len(items))
+	for _, item := range items {
+		out = append(out, OrganizationVideoView{
+			ID:          item.ID,
+			ObjectID:    item.ObjectID,
+			FileName:    item.FileName,
+			ContentType: item.ContentType,
+			SizeBytes:   item.SizeBytes,
+			CreatedAt:   item.CreatedAt,
+			UploadedBy:  item.UploadedBy,
+			SortOrder:   item.SortOrder,
+		})
+	}
+	return out, nil
+}
+
+func (s *Service) ListOrganizationVideoObjectIDs(ctx context.Context, organizationID domain.OrganizationID) ([]uuid.UUID, error) {
+	if organizationID.IsZero() {
+		return nil, apperrors.InvalidInput("Organization is required")
+	}
+	return s.repo.ListOrganizationVideoObjectIDs(ctx, organizationID.UUID())
+}
+
+func normalizeOrganizationVideoContentType(fileName, contentType string) (string, error) {
+	trimmedType := strings.TrimSpace(contentType)
+	if strings.HasPrefix(strings.ToLower(trimmedType), "video/") {
+		return trimmedType, nil
+	}
+	switch strings.ToLower(filepath.Ext(strings.TrimSpace(fileName))) {
+	case ".mp4":
+		return "video/mp4", nil
+	case ".webm":
+		return "video/webm", nil
+	case ".mov":
+		return "video/quicktime", nil
+	case ".m4v":
+		return "video/x-m4v", nil
+	case ".ogv":
+		return "video/ogg", nil
+	default:
+		return "", apperrors.InvalidInput("Only video files are supported")
+	}
+}

@@ -50,7 +50,7 @@ func (h *Handler) CreateProductCategory(ctx context.Context, input *dto.CreatePr
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductCategoryResponse(category, 201), nil
+	return mapper.ToProductCategoryResponse(category, http.StatusCreated), nil
 }
 
 func (h *Handler) UpdateProductCategory(ctx context.Context, input *dto.UpdateProductCategoryInput) (*dto.ProductCategoryResponse, error) {
@@ -83,7 +83,7 @@ func (h *Handler) UpdateProductCategory(ctx context.Context, input *dto.UpdatePr
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductCategoryResponse(category, 200), nil
+	return mapper.ToProductCategoryResponse(category, http.StatusOK), nil
 }
 
 func (h *Handler) DeleteProductCategory(ctx context.Context, input *dto.DeleteProductCategoryInput) (*dto.EmptyResponse, error) {
@@ -107,7 +107,7 @@ func (h *Handler) DeleteProductCategory(ctx context.Context, input *dto.DeletePr
 	}); err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return &dto.EmptyResponse{Status: 204}, nil
+	return &dto.EmptyResponse{Status: http.StatusNoContent}, nil
 }
 
 func (h *Handler) ListProductCategories(ctx context.Context, input *dto.ListProductCategoriesInput) (*dto.ProductCategoriesResponse, error) {
@@ -158,7 +158,7 @@ func (h *Handler) CreateProduct(ctx context.Context, input *dto.CreateProductInp
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductResponse(product, 201), nil
+	return h.productResponse(ctx, product, http.StatusCreated)
 }
 
 func (h *Handler) UpdateProduct(ctx context.Context, input *dto.UpdateProductInput) (*dto.ProductResponse, error) {
@@ -194,7 +194,7 @@ func (h *Handler) UpdateProduct(ctx context.Context, input *dto.UpdateProductInp
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductResponse(product, 200), nil
+	return h.productResponse(ctx, product, http.StatusOK)
 }
 
 func (h *Handler) DeleteProduct(ctx context.Context, input *dto.DeleteProductInput) (*dto.EmptyResponse, error) {
@@ -218,7 +218,7 @@ func (h *Handler) DeleteProduct(ctx context.Context, input *dto.DeleteProductInp
 	}); err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return &dto.EmptyResponse{Status: 204}, nil
+	return &dto.EmptyResponse{Status: http.StatusNoContent}, nil
 }
 
 func (h *Handler) ListProducts(ctx context.Context, input *dto.ListProductsInput) (*dto.ProductsResponse, error) {
@@ -238,7 +238,7 @@ func (h *Handler) ListProducts(ctx context.Context, input *dto.ListProductsInput
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductsResponse(products), nil
+	return h.productsResponse(ctx, organizationID, products)
 }
 
 func (h *Handler) GetProductByID(ctx context.Context, input *dto.GetProductByIDInput) (*dto.ProductResponse, error) {
@@ -263,7 +263,87 @@ func (h *Handler) GetProductByID(ctx context.Context, input *dto.GetProductByIDI
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductResponse(product, 200), nil
+	return h.productResponse(ctx, product, http.StatusOK)
+}
+
+func (h *Handler) UploadProductVideo(ctx context.Context, input *dto.UploadProductVideoInput) (*dto.ProductResponse, error) {
+	actorID, err := currentActorAccountID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, catalogapp.ErrValidation)
+	}
+	productID, err := parseProductID(input.ProductID)
+	if err != nil {
+		return nil, humaerr.From(ctx, catalogapp.ErrValidation)
+	}
+
+	form := input.RawBody.Data()
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Product video file is required"))
+	}
+	defer form.File.Close()
+
+	fileName := strings.TrimSpace(form.File.Filename)
+	if fileName == "" {
+		fileName = "product-video.mp4"
+	}
+	if _, err := h.svc.UploadProductVideo(ctx, catalogapp.UploadProductVideoCmd{
+		OrganizationID: organizationID,
+		ActorAccountID: actorID,
+		ProductID:      productID,
+		FileName:       fileName,
+		ContentType:    form.File.ContentType,
+		SizeBytes:      form.File.Size,
+		Body:           form.File,
+	}); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	product, err := h.svc.GetProductByID(ctx, catalogapp.GetProductByIDQuery{
+		OrganizationID: organizationID,
+		ActorAccountID: actorID,
+		ProductID:      productID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return h.productResponse(ctx, product, http.StatusOK)
+}
+
+func (h *Handler) ListProductVideos(ctx context.Context, input *dto.ListProductVideosInput) (*dto.ProductVideosResponse, error) {
+	actorID, err := currentActorAccountID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, catalogapp.ErrValidation)
+	}
+	productID, err := parseProductID(input.ProductID)
+	if err != nil {
+		return nil, humaerr.From(ctx, catalogapp.ErrValidation)
+	}
+	items, err := h.svc.ListProductVideos(ctx, organizationID, productID, actorID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	resp := &dto.ProductVideosResponse{Status: http.StatusOK}
+	resp.Body.Items = make([]dto.ProductVideoItem, 0, len(items))
+	for _, item := range items {
+		resp.Body.Items = append(resp.Body.Items, dto.ProductVideoItem{
+			ID:          item.ID,
+			ObjectID:    item.ObjectID,
+			FileName:    item.FileName,
+			ContentType: item.ContentType,
+			SizeBytes:   item.SizeBytes,
+			CreatedAt:   item.CreatedAt,
+			UploadedBy:  item.UploadedBy,
+			SortOrder:   item.SortOrder,
+		})
+	}
+	return resp, nil
 }
 
 func (h *Handler) UploadProductImport(ctx context.Context, input *dto.UploadProductImportInput) (*dto.ProductImportResponse, error) {
@@ -300,6 +380,7 @@ func (h *Handler) UploadProductImport(ctx context.Context, input *dto.UploadProd
 	}
 	return mapper.ToProductImportResponse(view, http.StatusOK), nil
 }
+
 func (h *Handler) RunProductImport(ctx context.Context, input *dto.RunProductImportInput) (*dto.ProductImportResponse, error) {
 	actorID, err := currentActorAccountID(ctx)
 	if err != nil {
@@ -323,7 +404,7 @@ func (h *Handler) RunProductImport(ctx context.Context, input *dto.RunProductImp
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductImportResponse(view, 200), nil
+	return mapper.ToProductImportResponse(view, http.StatusOK), nil
 }
 
 func (h *Handler) GetProductImport(ctx context.Context, input *dto.GetProductImportInput) (*dto.ProductImportResponse, error) {
@@ -348,7 +429,39 @@ func (h *Handler) GetProductImport(ctx context.Context, input *dto.GetProductImp
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	return mapper.ToProductImportResponse(view, 200), nil
+	return mapper.ToProductImportResponse(view, http.StatusOK), nil
+}
+
+func (h *Handler) productResponse(ctx context.Context, product *catalogdomain.Product, status int) (*dto.ProductResponse, error) {
+	resp := mapper.ToProductResponse(product, status)
+	if resp == nil || product == nil {
+		return resp, nil
+	}
+	ids, err := h.svc.ListProductVideoObjectIDs(ctx, product.OrganizationID(), product.ID())
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	resp.Body.VideoObjectIDs = ids
+	return resp, nil
+}
+
+func (h *Handler) productsResponse(ctx context.Context, organizationID orgdomain.OrganizationID, products []catalogdomain.Product) (*dto.ProductsResponse, error) {
+	resp := mapper.ToProductsResponse(products)
+	if resp == nil || len(products) == 0 {
+		return resp, nil
+	}
+	productIDs := make([]catalogdomain.ProductID, 0, len(products))
+	for _, product := range products {
+		productIDs = append(productIDs, product.ID())
+	}
+	idsByProduct, err := h.svc.ListProductVideoObjectIDsByProduct(ctx, organizationID, productIDs)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	for i := range resp.Body.Items {
+		resp.Body.Items[i].VideoObjectIDs = idsByProduct[resp.Body.Items[i].ID]
+	}
+	return resp, nil
 }
 
 func currentActorAccountID(ctx context.Context) (accdomain.AccountID, error) {

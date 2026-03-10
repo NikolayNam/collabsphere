@@ -32,6 +32,14 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	updateProduct.Middlewares = secured
 	huma.Register(api, updateProduct, h.UpdateProduct)
 
+	uploadVideo := uploadProductVideoOp
+	uploadVideo.Middlewares = secured
+	huma.Register(api, uploadVideo, h.UploadProductVideo)
+
+	listProductVideos := listProductVideosOp
+	listProductVideos.Middlewares = secured
+	huma.Register(api, listProductVideos, h.ListProductVideos)
+
 	deleteProduct := deleteProductOp
 	deleteProduct.Middlewares = secured
 	huma.Register(api, deleteProduct, h.DeleteProduct)
@@ -56,3 +64,4 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	getImport.Middlewares = secured
 	huma.Register(api, getImport, h.GetProductImport)
 }
+

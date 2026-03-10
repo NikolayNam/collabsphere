@@ -17,16 +17,18 @@ func ToAccountResponse(a *domain.Account, status int) *dto.AccountResponse {
 	return &dto.AccountResponse{
 		Status: status,
 		Body: struct {
-			ID             uuid.UUID  `json:"id"`
-			Email          string     `json:"email"`
-			DisplayName    *string    `json:"displayName,omitempty"`
-			AvatarObjectID *uuid.UUID `json:"avatarObjectId,omitempty"`
-			IsActive       bool       `json:"isActive"`
+			ID             uuid.UUID   `json:"id"`
+			Email          string      `json:"email"`
+			DisplayName    *string     `json:"displayName,omitempty"`
+			AvatarObjectID *uuid.UUID  `json:"avatarObjectId,omitempty"`
+			VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
+			IsActive       bool        `json:"isActive"`
 		}{
 			ID:             a.ID().UUID(),
 			Email:          a.Email().String(),
 			DisplayName:    a.DisplayName(),
 			AvatarObjectID: a.AvatarObjectID(),
+			VideoObjectIDs: nil,
 			IsActive:       a.IsActive(),
 		},
 	}
@@ -40,23 +42,25 @@ func ToAccountProfileResponse(a *domain.Account, status int) *dto.AccountProfile
 	return &dto.AccountProfileResponse{
 		Status: status,
 		Body: struct {
-			ID             uuid.UUID  `json:"id"`
-			Email          string     `json:"email"`
-			DisplayName    *string    `json:"displayName,omitempty"`
-			AvatarObjectID *uuid.UUID `json:"avatarObjectId,omitempty"`
-			Bio            *string    `json:"bio,omitempty"`
-			Phone          *string    `json:"phone,omitempty"`
-			Locale         *string    `json:"locale,omitempty"`
-			Timezone       *string    `json:"timezone,omitempty"`
-			Website        *string    `json:"website,omitempty"`
-			IsActive       bool       `json:"isActive"`
-			CreatedAt      time.Time  `json:"createdAt"`
-			UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
+			ID             uuid.UUID   `json:"id"`
+			Email          string      `json:"email"`
+			DisplayName    *string     `json:"displayName,omitempty"`
+			AvatarObjectID *uuid.UUID  `json:"avatarObjectId,omitempty"`
+			VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
+			Bio            *string     `json:"bio,omitempty"`
+			Phone          *string     `json:"phone,omitempty"`
+			Locale         *string     `json:"locale,omitempty"`
+			Timezone       *string     `json:"timezone,omitempty"`
+			Website        *string     `json:"website,omitempty"`
+			IsActive       bool        `json:"isActive"`
+			CreatedAt      time.Time   `json:"createdAt"`
+			UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
 		}{
 			ID:             a.ID().UUID(),
 			Email:          a.Email().String(),
 			DisplayName:    a.DisplayName(),
 			AvatarObjectID: a.AvatarObjectID(),
+			VideoObjectIDs: nil,
 			Bio:            a.Bio(),
 			Phone:          a.Phone(),
 			Locale:         a.Locale(),

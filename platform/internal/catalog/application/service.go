@@ -3,8 +3,12 @@ package application
 import (
 	"context"
 	"io"
+	"path/filepath"
+	"strings"
+	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
+	catalogaccess "github.com/NikolayNam/collabsphere/internal/catalog/application/access"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product_category"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/create_product_import_upload"
@@ -22,6 +26,7 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product_category"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
+	"github.com/google/uuid"
 )
 
 var (
@@ -52,6 +57,27 @@ type UploadProductImportCmd struct {
 	Body           io.Reader
 }
 
+type ProductVideoView struct {
+	ID          uuid.UUID
+	ObjectID    uuid.UUID
+	FileName    string
+	ContentType *string
+	SizeBytes   int64
+	CreatedAt   time.Time
+	UploadedBy  *uuid.UUID
+	SortOrder   int64
+}
+
+type UploadProductVideoCmd struct {
+	OrganizationID orgdomain.OrganizationID
+	ActorAccountID accdomain.AccountID
+	ProductID      catalogdomain.ProductID
+	FileName       string
+	ContentType    string
+	SizeBytes      int64
+	Body           io.Reader
+}
+
 type Service struct {
 	createCategory     *create_product_category.Handler
 	updateCategory     *update_product_category.Handler
@@ -65,7 +91,12 @@ type Service struct {
 	createImportUpload *create_product_import_upload.Handler
 	runImport          *run_product_import.Handler
 	getImport          *get_product_import.Handler
+	repo               ports.CatalogRepository
+	organizations      ports.OrganizationReader
+	memberships        ports.MembershipReader
+	clock              ports.Clock
 	storage            ports.ObjectStorage
+	storageBucket      string
 }
 
 func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock, storage ports.ObjectStorage, storageBucket string) *Service {
@@ -82,7 +113,12 @@ func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, m
 		createImportUpload: create_product_import_upload.NewHandler(repo, organizations, memberships, clock, storage, storageBucket),
 		runImport:          run_product_import.NewHandler(repo, organizations, memberships, clock, storage),
 		getImport:          get_product_import.NewHandler(repo, organizations, memberships),
+		repo:               repo,
+		organizations:      organizations,
+		memberships:        memberships,
+		clock:              clock,
 		storage:            storage,
+		storageBucket:      strings.TrimSpace(storageBucket),
 	}
 }
 
@@ -168,4 +204,187 @@ func (s *Service) UploadProductImport(ctx context.Context, cmd UploadProductImpo
 		SourceObjectID: upload.ObjectID,
 		Mode:           nil,
 	})
+}
+
+func (s *Service) UploadProductVideo(ctx context.Context, cmd UploadProductVideoCmd) (*ProductVideoView, error) {
+	if cmd.Body == nil {
+		return nil, catalogerrors.InvalidInput("Product video file is required")
+	}
+	if cmd.SizeBytes < 0 {
+		return nil, catalogerrors.InvalidInput("Product video size must be non-negative")
+	}
+	if s.storage == nil || s.storageBucket == "" || s.repo == nil || s.organizations == nil || s.memberships == nil || s.clock == nil {
+		return nil, catalogerrors.Internal("product video upload is unavailable", io.ErrClosedPipe)
+	}
+	if err := catalogaccess.RequireOrganizationEmployeeAccess(ctx, s.organizations, s.memberships, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+		return nil, err
+	}
+
+	product, err := s.repo.GetProductByID(ctx, cmd.OrganizationID, cmd.ProductID)
+	if err != nil {
+		return nil, err
+	}
+	if product == nil {
+		return nil, catalogerrors.ProductNotFound()
+	}
+
+	fileName := strings.TrimSpace(cmd.FileName)
+	if fileName == "" {
+		return nil, catalogerrors.InvalidInput("Product video fileName is required")
+	}
+	contentType, err := normalizeProductVideoContentType(fileName, cmd.ContentType)
+	if err != nil {
+		return nil, err
+	}
+
+	now := s.clock.Now()
+	objectID := uuid.New()
+	objectKey := buildProductVideoObjectKey(cmd.OrganizationID.UUID(), cmd.ProductID.UUID(), objectID, fileName, now)
+	object := &ports.StorageObject{
+		ID:             objectID,
+		OrganizationID: cmd.OrganizationID,
+		Bucket:         s.storageBucket,
+		ObjectKey:      objectKey,
+		FileName:       fileName,
+		ContentType:    &contentType,
+		SizeBytes:      cmd.SizeBytes,
+		CreatedAt:      now,
+	}
+	if err := s.repo.CreateStorageObject(ctx, object); err != nil {
+		return nil, err
+	}
+	if err := s.storage.PutObject(ctx, object.Bucket, object.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
+		return nil, catalogerrors.Internal("upload product video", err)
+	}
+	actorUUID := cmd.ActorAccountID.UUID()
+	record, err := s.repo.CreateProductVideo(ctx, cmd.OrganizationID.UUID(), cmd.ProductID.UUID(), objectID, &actorUUID, now)
+	if err != nil {
+		return nil, err
+	}
+	if record == nil {
+		return nil, catalogerrors.Internal("load product video after create", io.ErrUnexpectedEOF)
+	}
+	return &ProductVideoView{
+		ID:          record.ID,
+		ObjectID:    record.ObjectID,
+		FileName:    record.FileName,
+		ContentType: record.ContentType,
+		SizeBytes:   record.SizeBytes,
+		CreatedAt:   record.CreatedAt,
+		UploadedBy:  record.UploadedBy,
+		SortOrder:   record.SortOrder,
+	}, nil
+}
+
+func (s *Service) ListProductVideos(ctx context.Context, organizationID orgdomain.OrganizationID, productID catalogdomain.ProductID, actorAccountID accdomain.AccountID) ([]ProductVideoView, error) {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, s.organizations, s.memberships, organizationID, actorAccountID, false); err != nil {
+		return nil, err
+	}
+	items, err := s.repo.ListProductVideos(ctx, organizationID.UUID(), productID.UUID())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ProductVideoView, 0, len(items))
+	for _, item := range items {
+		out = append(out, ProductVideoView{
+			ID:          item.ID,
+			ObjectID:    item.ObjectID,
+			FileName:    item.FileName,
+			ContentType: item.ContentType,
+			SizeBytes:   item.SizeBytes,
+			CreatedAt:   item.CreatedAt,
+			UploadedBy:  item.UploadedBy,
+			SortOrder:   item.SortOrder,
+		})
+	}
+	return out, nil
+}
+
+func (s *Service) ListProductVideoObjectIDs(ctx context.Context, organizationID orgdomain.OrganizationID, productID catalogdomain.ProductID) ([]uuid.UUID, error) {
+	if s.repo == nil {
+		return nil, nil
+	}
+	return s.repo.ListProductVideoObjectIDs(ctx, organizationID.UUID(), productID.UUID())
+}
+
+func (s *Service) ListProductVideoObjectIDsByProduct(ctx context.Context, organizationID orgdomain.OrganizationID, productIDs []catalogdomain.ProductID) (map[uuid.UUID][]uuid.UUID, error) {
+	if s.repo == nil {
+		return map[uuid.UUID][]uuid.UUID{}, nil
+	}
+	ids := make([]uuid.UUID, 0, len(productIDs))
+	for _, productID := range productIDs {
+		if productID.IsZero() {
+			continue
+		}
+		ids = append(ids, productID.UUID())
+	}
+	return s.repo.ListProductVideoObjectIDsByProduct(ctx, organizationID.UUID(), ids)
+}
+
+func buildProductVideoObjectKey(organizationID, productID, objectID uuid.UUID, fileName string, now time.Time) string {
+	safeName := sanitizeCatalogFileName(fileName, "product-video.mp4")
+	return strings.Join([]string{
+		"catalog",
+		"products",
+		organizationID.String(),
+		productID.String(),
+		"videos",
+		now.UTC().Format("2006"),
+		now.UTC().Format("01"),
+		now.UTC().Format("02"),
+		objectID.String(),
+		safeName,
+	}, "/")
+}
+
+func sanitizeCatalogFileName(fileName, fallback string) string {
+	base := filepath.Base(strings.TrimSpace(fileName))
+	if base == "." || base == string(filepath.Separator) || base == "" {
+		return fallback
+	}
+
+	var b strings.Builder
+	b.Grow(len(base))
+	for _, r := range base {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '.', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+	}
+
+	out := strings.Trim(strings.TrimSpace(b.String()), "-")
+	if out == "" {
+		return fallback
+	}
+	return out
+}
+
+func normalizeProductVideoContentType(fileName, contentType string) (string, error) {
+	trimmedType := strings.TrimSpace(contentType)
+	if strings.HasPrefix(strings.ToLower(trimmedType), "video/") {
+		return trimmedType, nil
+	}
+
+	switch strings.ToLower(filepath.Ext(strings.TrimSpace(fileName))) {
+	case ".mp4":
+		return "video/mp4", nil
+	case ".webm":
+		return "video/webm", nil
+	case ".mov":
+		return "video/quicktime", nil
+	case ".m4v":
+		return "video/x-m4v", nil
+	case ".ogv":
+		return "video/ogg", nil
+	default:
+		return "", catalogerrors.InvalidInput("Only product video files are supported")
+	}
 }

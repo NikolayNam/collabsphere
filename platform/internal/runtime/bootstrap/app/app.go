@@ -10,6 +10,7 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/bootstrap"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/logger"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/docsportal"
 	"github.com/NikolayNam/collabsphere/internal/system"
 )
 
@@ -37,7 +38,8 @@ func New(conf *config.Config) *App {
 	router.Mount("/api/v1", apiV1)
 
 	api := bootstrap.NewAPI(apiV1, conf)
-
+	bootstrap.RegisterScalarDocs(apiV1, conf.APP.Title, "/api/v1/openapi.json")
+	docsportal.Register(router, conf.APP.Title)
 	router.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/api/v1/openapi.yaml", http.StatusTemporaryRedirect)
 	})
