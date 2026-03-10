@@ -69,3 +69,4 @@ func New(conf *config.Config) *App {
 func registerPlatform(api huma.API) {
 	system.Register(api)
 }
+

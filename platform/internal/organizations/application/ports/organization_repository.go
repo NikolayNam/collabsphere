@@ -48,6 +48,9 @@ type LegalDocumentAnalysisLease struct {
 type OrganizationRepository interface {
 	Create(ctx context.Context, t *domain.Organization) error
 	GetByID(ctx context.Context, id domain.OrganizationID) (*domain.Organization, error)
+	GetByHostname(ctx context.Context, hostname string) (*domain.Organization, error)
+	ListDomains(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationDomain, error)
+	ReplaceDomains(ctx context.Context, organizationID domain.OrganizationID, domains []domain.OrganizationDomain, now time.Time) ([]domain.OrganizationDomain, error)
 	UpdateProfile(ctx context.Context, id domain.OrganizationID, patch domain.OrganizationProfilePatch) (*domain.Organization, error)
 	CreateStorageObject(ctx context.Context, object StorageObject) error
 	CreateOrganizationVideo(ctx context.Context, organizationID uuid.UUID, objectID uuid.UUID, uploadedBy *uuid.UUID, createdAt time.Time) (*OrganizationVideoRecord, error)
@@ -57,6 +60,7 @@ type OrganizationRepository interface {
 	SaveCooperationApplication(ctx context.Context, application *domain.CooperationApplication) (*domain.CooperationApplication, error)
 	CreateOrganizationLegalDocument(ctx context.Context, document *domain.OrganizationLegalDocument) (*domain.OrganizationLegalDocument, error)
 	GetOrganizationLegalDocumentByID(ctx context.Context, organizationID domain.OrganizationID, documentID uuid.UUID) (*domain.OrganizationLegalDocument, error)
+	GetOrganizationLegalDocumentByObjectID(ctx context.Context, organizationID domain.OrganizationID, objectID uuid.UUID) (*domain.OrganizationLegalDocument, error)
 	ListOrganizationLegalDocuments(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationLegalDocument, error)
 	GetOrganizationLegalDocumentAnalysis(ctx context.Context, organizationID domain.OrganizationID, documentID uuid.UUID) (*domain.OrganizationLegalDocumentAnalysis, error)
 	EnsureOrganizationLegalDocumentAnalysis(ctx context.Context, document *domain.OrganizationLegalDocument, provider string, now time.Time) error

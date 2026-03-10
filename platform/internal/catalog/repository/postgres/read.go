@@ -29,17 +29,17 @@ type catalogProductCategoryRow struct {
 }
 
 type catalogProductRow struct {
-	ID                        uuid.UUID  `gorm:"column:id"`
-	OrganizationID            uuid.UUID  `gorm:"column:organization_id"`
-	CategoryID                *uuid.UUID `gorm:"column:product_type_id"`
-	Name                      string     `gorm:"column:name"`
-	Description               *string    `gorm:"column:description"`
-	SKU                       *string    `gorm:"column:sku"`
-	PriceAmount               *string    `gorm:"column:price_amount"`
-	CurrencyCode              *string    `gorm:"column:currency_code"`
-	IsActive                  bool       `gorm:"column:is_active"`
-	CreatedAt                 time.Time  `gorm:"column:created_at"`
-	UpdatedAt                 time.Time  `gorm:"column:updated_at"`
+	ID             uuid.UUID  `gorm:"column:id"`
+	OrganizationID uuid.UUID  `gorm:"column:organization_id"`
+	CategoryID     *uuid.UUID `gorm:"column:product_type_id"`
+	Name           string     `gorm:"column:name"`
+	Description    *string    `gorm:"column:description"`
+	SKU            *string    `gorm:"column:sku"`
+	PriceAmount    *string    `gorm:"column:price_amount"`
+	CurrencyCode   *string    `gorm:"column:currency_code"`
+	IsActive       bool       `gorm:"column:is_active"`
+	CreatedAt      time.Time  `gorm:"column:created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at"`
 }
 
 type storageObjectRow struct {
@@ -232,6 +232,22 @@ func (r *CatalogRepo) GetProductImportBatchByID(ctx context.Context, organizatio
 	return toProductImportBatch(row)
 }
 
+func (r *CatalogRepo) GetProductImportBatchBySourceObjectID(ctx context.Context, organizationID orgdomain.OrganizationID, sourceObjectID uuid.UUID) (*ports.ProductImportBatch, error) {
+	var row productImportBatchRow
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("catalog.product_import_batches").
+		Select("id", "organization_id", "source_object_id", "created_by_account_id", "status", "total_rows", "processed_rows", "success_rows", "error_rows", "started_by", "started_at", "finished_at", "created_at", "updated_at", "mode", "result_summary::text AS result_summary").
+		Where("organization_id = ? AND source_object_id = ?", organizationID.UUID(), sourceObjectID).
+		Order("created_at DESC, id DESC").
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return toProductImportBatch(row)
+}
+
 func (r *CatalogRepo) ListProductImportErrors(ctx context.Context, batchID uuid.UUID) ([]ports.ProductImportErrorRecord, error) {
 	var rows []productImportErrorRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
@@ -302,17 +318,17 @@ func rehydrateProductRow(row catalogProductRow) (*catalogdomain.Product, error) 
 		categoryID = &category
 	}
 	return catalogdomain.RehydrateProduct(catalogdomain.RehydrateProductParams{
-		ID:                        productID,
-		OrganizationID:            organizationID,
-		CategoryID:                categoryID,
-		Name:                      row.Name,
-		Description:               row.Description,
-		SKU:                       row.SKU,
-		PriceAmount:               row.PriceAmount,
-		CurrencyCode:              row.CurrencyCode,
-		IsActive:                  row.IsActive,
-		CreatedAt:                 row.CreatedAt,
-		UpdatedAt:                 row.UpdatedAt,
+		ID:             productID,
+		OrganizationID: organizationID,
+		CategoryID:     categoryID,
+		Name:           row.Name,
+		Description:    row.Description,
+		SKU:            row.SKU,
+		PriceAmount:    row.PriceAmount,
+		CurrencyCode:   row.CurrencyCode,
+		IsActive:       row.IsActive,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
 	})
 }
 
@@ -387,4 +403,3 @@ func decodeJSONMap(value *string) map[string]any {
 	}
 	return out
 }
-

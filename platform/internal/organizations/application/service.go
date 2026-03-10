@@ -16,6 +16,8 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/organizations/application/ports"
 	"github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	uploadports "github.com/NikolayNam/collabsphere/internal/uploads/application/ports"
+	uploaddomain "github.com/NikolayNam/collabsphere/internal/uploads/domain"
 	sharedtx "github.com/NikolayNam/collabsphere/shared/tx"
 	"github.com/google/uuid"
 )
@@ -40,6 +42,7 @@ type UpdateOrganizationProfileCmd struct {
 	Phone          *string
 	Address        *string
 	Industry       *string
+	Domains        *[]domain.OrganizationDomainDraft
 }
 
 type CreateOrganizationLogoUploadCmd struct {
@@ -132,6 +135,7 @@ type CreateLegalDocumentUploadCmd struct {
 	OrganizationID domain.OrganizationID
 	ActorAccountID uuid.UUID
 	DocumentType   string
+	Title          string
 	FileName       string
 	ContentType    *string
 	SizeBytes      *int64
@@ -150,6 +154,7 @@ type UploadOrganizationLegalDocumentCmd struct {
 }
 
 type CreateLegalDocumentUploadResult struct {
+	UploadID     uuid.UUID
 	ObjectID     uuid.UUID
 	Bucket       string
 	ObjectKey    string
@@ -159,6 +164,13 @@ type CreateLegalDocumentUploadResult struct {
 	SizeBytes    int64
 	DocumentType string
 }
+
+type CompleteLegalDocumentUploadCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	UploadID       uuid.UUID
+}
+
 type AddOrganizationLegalDocumentCmd struct {
 	OrganizationID domain.OrganizationID
 	ActorAccountID uuid.UUID
@@ -184,14 +196,16 @@ type Service struct {
 	getById                 *get_organization_by_id.Handler
 	repo                    ports.OrganizationRepository
 	memberships             memberPorts.MembershipRepository
+	tx                      sharedtx.Manager
 	clock                   ports.Clock
 	storage                 ports.ObjectStorage
 	bucket                  string
+	uploads                 uploadports.Repository
 	legalDocumentAnalyzer   ports.LegalDocumentAnalyzer
 	legalDocumentAIProvider string
 }
 
-func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, categoryProvisioner ports.ProductCategoryProvisioner, txm sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, bucket string, analyzer ports.LegalDocumentAnalyzer, legalDocumentAIProvider string) *Service {
+func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, categoryProvisioner ports.ProductCategoryProvisioner, txm sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, bucket string, analyzer ports.LegalDocumentAnalyzer, legalDocumentAIProvider string, uploads uploadports.Repository) *Service {
 	creator := create_with_owner.New(txm, repo, membershipRepo, categoryProvisioner)
 
 	return &Service{
@@ -199,9 +213,11 @@ func New(repo ports.OrganizationRepository, membershipRepo memberPorts.Membershi
 		getById:                 get_organization_by_id.NewHandler(repo),
 		repo:                    repo,
 		memberships:             membershipRepo,
+		tx:                      txm,
 		clock:                   clock,
 		storage:                 storage,
 		bucket:                  strings.TrimSpace(bucket),
+		uploads:                 uploads,
 		legalDocumentAnalyzer:   analyzer,
 		legalDocumentAIProvider: strings.TrimSpace(legalDocumentAIProvider),
 	}
@@ -215,6 +231,18 @@ func (s *Service) GetOrganizationById(ctx context.Context, q GetOrganizationById
 	return s.getById.Handle(ctx, q)
 }
 
+func (s *Service) GetOrganizationByHost(ctx context.Context, rawHost string) (*domain.Organization, error) {
+	host, err := domain.NormalizeOrganizationHostname(rawHost)
+	if err != nil {
+		return nil, apperrors.InvalidInput(err.Error())
+	}
+	return s.repo.GetByHostname(ctx, host)
+}
+
+func (s *Service) ListOrganizationDomains(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationDomain, error) {
+	return s.repo.ListDomains(ctx, organizationID)
+}
+
 func (s *Service) UpdateOrganizationProfile(ctx context.Context, cmd UpdateOrganizationProfileCmd) (*domain.Organization, error) {
 	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
@@ -222,18 +250,44 @@ func (s *Service) UpdateOrganizationProfile(ctx context.Context, cmd UpdateOrgan
 	if cmd.ClearLogo && cmd.LogoObjectID != nil {
 		return nil, apperrors.InvalidInput("clearLogo and logoObjectId cannot be used together")
 	}
-	updated, err := s.repo.UpdateProfile(ctx, cmd.OrganizationID, domain.OrganizationProfilePatch{
-		Name:         cmd.Name,
-		Slug:         cmd.Slug,
-		LogoObjectID: cmd.LogoObjectID,
-		ClearLogo:    cmd.ClearLogo,
-		Description:  cmd.Description,
-		Website:      cmd.Website,
-		PrimaryEmail: cmd.PrimaryEmail,
-		Phone:        cmd.Phone,
-		Address:      cmd.Address,
-		Industry:     cmd.Industry,
-		UpdatedAt:    s.clock.Now(),
+
+	now := s.clock.Now()
+	var updated *domain.Organization
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		current, err := s.repo.UpdateProfile(ctx, cmd.OrganizationID, domain.OrganizationProfilePatch{
+			Name:         cmd.Name,
+			Slug:         cmd.Slug,
+			LogoObjectID: cmd.LogoObjectID,
+			ClearLogo:    cmd.ClearLogo,
+			Description:  cmd.Description,
+			Website:      cmd.Website,
+			PrimaryEmail: cmd.PrimaryEmail,
+			Phone:        cmd.Phone,
+			Address:      cmd.Address,
+			Industry:     cmd.Industry,
+			UpdatedAt:    now,
+		})
+		if err != nil {
+			return err
+		}
+		if current == nil {
+			return nil
+		}
+		if cmd.Domains != nil {
+			existingDomains, err := s.repo.ListDomains(ctx, cmd.OrganizationID)
+			if err != nil {
+				return err
+			}
+			domainsToStore, err := domain.BuildOrganizationDomains(cmd.OrganizationID, *cmd.Domains, existingDomains, now)
+			if err != nil {
+				return apperrors.InvalidInput(err.Error())
+			}
+			if _, err := s.repo.ReplaceDomains(ctx, cmd.OrganizationID, domainsToStore, now); err != nil {
+				return err
+			}
+		}
+		updated = current
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -243,7 +297,6 @@ func (s *Service) UpdateOrganizationProfile(ctx context.Context, cmd UpdateOrgan
 	}
 	return updated, nil
 }
-
 func (s *Service) CreateOrganizationLogoUpload(ctx context.Context, cmd CreateOrganizationLogoUploadCmd) (*CreateOrganizationLogoUploadResult, error) {
 	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
@@ -431,24 +484,62 @@ func (s *Service) CreateLegalDocumentUpload(ctx context.Context, cmd CreateLegal
 	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
+	if s.uploads == nil {
+		return nil, fault.Unavailable("Upload tracking is unavailable")
+	}
 	documentType := strings.TrimSpace(cmd.DocumentType)
 	if documentType == "" {
 		return nil, apperrors.InvalidInput("documentType is required")
 	}
-	object, uploadURL, expiresAt, err := s.createOrganizationScopedUpload(ctx, cmd.OrganizationID, "organizations", []string{"legal-documents", sanitizePathSegment(documentType, "other")}, cmd.FileName, cmd.ContentType, cmd.SizeBytes, cmd.ChecksumSHA256, "document.pdf")
+	title := normalizeLegalDocumentTitle(cmd.Title, cmd.FileName)
+	createdAt := s.clock.Now()
+	var result *CreateLegalDocumentUploadResult
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		object, uploadURL, expiresAt, err := s.createOrganizationScopedUpload(ctx, cmd.OrganizationID, "organizations", []string{"legal-documents", sanitizePathSegment(documentType, "other")}, cmd.FileName, cmd.ContentType, cmd.SizeBytes, cmd.ChecksumSHA256, "document.pdf")
+		if err != nil {
+			return err
+		}
+		organizationID := cmd.OrganizationID.UUID()
+		upload := &uploaddomain.Upload{
+			ID:                 uuid.New(),
+			OrganizationID:     &organizationID,
+			ObjectID:           object.ID,
+			CreatedByAccountID: cmd.ActorAccountID,
+			Purpose:            uploaddomain.PurposeOrganizationLegalDocument,
+			Status:             uploaddomain.StatusPending,
+			Bucket:             object.Bucket,
+			ObjectKey:          object.ObjectKey,
+			FileName:           object.FileName,
+			ContentType:        object.ContentType,
+			DeclaredSizeBytes:  object.SizeBytes,
+			ChecksumSHA256:     object.ChecksumSHA256,
+			Metadata: map[string]any{
+				"documentType": documentType,
+				"title":        title,
+			},
+			ExpiresAt: &expiresAt,
+			CreatedAt: createdAt,
+		}
+		if err := s.uploads.Create(ctx, upload); err != nil {
+			return err
+		}
+		result = &CreateLegalDocumentUploadResult{
+			UploadID:     upload.ID,
+			ObjectID:     object.ID,
+			Bucket:       object.Bucket,
+			ObjectKey:    object.ObjectKey,
+			UploadURL:    uploadURL,
+			ExpiresAt:    expiresAt,
+			FileName:     object.FileName,
+			SizeBytes:    object.SizeBytes,
+			DocumentType: documentType,
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return &CreateLegalDocumentUploadResult{
-		ObjectID:     object.ID,
-		Bucket:       object.Bucket,
-		ObjectKey:    object.ObjectKey,
-		UploadURL:    uploadURL,
-		ExpiresAt:    expiresAt,
-		FileName:     object.FileName,
-		SizeBytes:    object.SizeBytes,
-		DocumentType: documentType,
-	}, nil
+	return result, nil
 }
 
 func (s *Service) UploadOrganizationLegalDocument(ctx context.Context, cmd UploadOrganizationLegalDocumentCmd) (*domain.OrganizationLegalDocument, error) {
@@ -464,6 +555,7 @@ func (s *Service) UploadOrganizationLegalDocument(ctx context.Context, cmd Uploa
 		OrganizationID: cmd.OrganizationID,
 		ActorAccountID: cmd.ActorAccountID,
 		DocumentType:   cmd.DocumentType,
+		Title:          cmd.Title,
 		FileName:       cmd.FileName,
 		ContentType:    &contentType,
 		SizeBytes:      &sizeBytes,
@@ -477,19 +569,10 @@ func (s *Service) UploadOrganizationLegalDocument(ctx context.Context, cmd Uploa
 	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
 		return nil, fault.Internal("Upload organization legal document failed", fault.WithCause(err))
 	}
-	title := strings.TrimSpace(cmd.Title)
-	if title == "" {
-		title = strings.TrimSpace(filepath.Base(cmd.FileName))
-	}
-	if title == "" || title == "." || title == string(filepath.Separator) {
-		title = "Document"
-	}
-	return s.AddOrganizationLegalDocument(ctx, AddOrganizationLegalDocumentCmd{
+	return s.CompleteLegalDocumentUpload(ctx, CompleteLegalDocumentUploadCmd{
 		OrganizationID: cmd.OrganizationID,
 		ActorAccountID: cmd.ActorAccountID,
-		DocumentType:   cmd.DocumentType,
-		ObjectID:       upload.ObjectID,
-		Title:          title,
+		UploadID:       upload.UploadID,
 	})
 }
 func (s *Service) AddOrganizationLegalDocument(ctx context.Context, cmd AddOrganizationLegalDocumentCmd) (*domain.OrganizationLegalDocument, error) {

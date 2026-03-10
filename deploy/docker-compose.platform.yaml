@@ -16,6 +16,7 @@ services:
       - jwt_secret_key
       - s3_access_key
       - s3_secret_key
+      - zitadel_client_secret
     networks:
       - internal.network
       - external.network
@@ -54,4 +55,5 @@ secrets:
     file: secrets/s3/s3_access_key
   s3_secret_key:
     file: secrets/s3/s3_secret_key
-
+  zitadel_client_secret:
+    file: secrets/identity/zitadel_client_secret

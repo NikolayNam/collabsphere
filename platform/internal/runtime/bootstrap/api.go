@@ -34,7 +34,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 		"",
 		"- Все маршруты живут под базовым префиксом `/api/v1`.",
 		"- Защищенные ручки используют `Authorization: Bearer <token>`.",
-		"- Загрузки файлов выполняются прямым `multipart/form-data` запросом в предметные upload endpoint'ы.",
+		"- Загрузки файлов доступны в двух режимах: маленькие файлы можно отправлять прямым `multipart/form-data`, а тяжёлые сценарии используют tracked upload sessions с presigned `uploadUrl` и последующим `complete` шагом.",
 		"- Скачивание файлов работает через предметные download endpoint'ы и возвращает short-lived `downloadUrl`.",
 		"",
 		"## Основные области",

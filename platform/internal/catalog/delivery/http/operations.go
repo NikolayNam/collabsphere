@@ -142,3 +142,5 @@ var getProductImportOp = huma.Operation{
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
+var createProductImportUploadOp = huma.Operation{OperationID: "create-product-import-upload", Method: "POST", Path: "/organizations/{organization_id}/product-imports/uploads", Tags: []string{"Organizations / Catalog"}, Summary: "Create a product import upload session", Description: "Creates a tracked product import upload session and returns a presigned upload URL for direct CSV upload.", Security: []map[string][]string{{"bearerAuth": {}}}}
+var completeProductImportUploadOp = huma.Operation{OperationID: "complete-product-import-upload", Method: "POST", Path: "/organizations/{organization_id}/product-imports/uploads/{upload_id}/complete", Tags: []string{"Organizations / Catalog"}, Summary: "Finalize a product import upload", Description: "Finalizes a previously created product import upload session after the CSV file has been uploaded to object storage and starts import processing.", Security: []map[string][]string{{"bearerAuth": {}}}}

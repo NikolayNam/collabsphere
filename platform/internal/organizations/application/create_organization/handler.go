@@ -2,7 +2,6 @@ package create_organization
 
 import (
 	"context"
-	stdErrors "errors"
 
 	"github.com/NikolayNam/collabsphere/internal/organizations/application/create_organization_with_owner"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application/errors"
@@ -34,10 +33,7 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*domain.Organization
 		return nil, errors.InvalidInput("Invalid organization data")
 	}
 
-	if err := h.creator.Handle(ctx, organization, cmd.OwnerAccountID); err != nil {
-		if stdErrors.Is(err, errors.ErrConflict) {
-			return nil, errors.OrganizationAlreadyExists()
-		}
+	if err := h.creator.Handle(ctx, organization, cmd.OwnerAccountID, cmd.Domains); err != nil {
 		return nil, err
 	}
 

@@ -18,6 +18,7 @@ type Command struct {
 }
 
 type Result struct {
+	UploadID  uuid.UUID
 	ObjectID  uuid.UUID
 	Bucket    string
 	ObjectKey string

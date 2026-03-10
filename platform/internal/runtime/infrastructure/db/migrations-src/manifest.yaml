@@ -76,3 +76,7 @@ migrations:
   - auth/oauth_states.sql
   - auth/oidc_nonces.sql
 
+
+  - org/organization_domains.sql
+  - storage/uploads.sql
+

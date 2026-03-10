@@ -7,7 +7,12 @@ var (
 	ErrTimestampsMissing = errors.New("timestamps are required")
 	ErrTimestampsInvalid = errors.New("timestamps are invalid")
 
-	ErrOrganizationIDEmpty = errors.New("organization id is empty")
+	ErrOrganizationIDEmpty               = errors.New("organization id is empty")
+	ErrOrganizationDomainIDEmpty         = errors.New("organization domain id is empty")
+	ErrOrganizationDomainHostnameInvalid = errors.New("organization domain hostname is invalid")
+	ErrOrganizationDomainKindInvalid     = errors.New("organization domain kind is invalid")
+	ErrOrganizationDomainDuplicate       = errors.New("organization domain hostname is duplicated")
+	ErrOrganizationDomainPrimaryInvalid  = errors.New("organization domain primary selection is invalid")
 
 	ErrEmailEmpty   = errors.New("email is empty")
 	ErrEmailInvalid = errors.New("email is invalid")

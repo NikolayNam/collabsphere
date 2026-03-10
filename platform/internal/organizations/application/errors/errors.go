@@ -12,6 +12,7 @@ var (
 const (
 	CodeInvalidInput                   = "ORGANIZATIONS_INVALID_INPUT"
 	CodeOrganizationExists             = "ORGANIZATIONS_ALREADY_EXISTS"
+	CodeOrganizationDomainExists       = "ORGANIZATION_DOMAIN_ALREADY_EXISTS"
 	CodeOrganizationNotFound           = "ORGANIZATION_NOT_FOUND"
 	CodeCooperationApplicationNotFound = "COOPERATION_APPLICATION_NOT_FOUND"
 	CodeInternal                       = "INTERNAL"
@@ -26,6 +27,9 @@ func OrganizationAlreadyExists() error {
 	return fault.Conflict("Organization already exists", fault.Code(CodeOrganizationExists))
 }
 
+func OrganizationDomainAlreadyExists() error {
+	return fault.Conflict("Organization domain already exists", fault.Code(CodeOrganizationDomainExists))
+}
 func OrganizationNotFound() error {
 	return fault.NotFound("Organization not found", fault.Code(CodeOrganizationNotFound))
 }

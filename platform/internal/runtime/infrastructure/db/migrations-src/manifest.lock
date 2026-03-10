@@ -54,3 +54,5 @@
 0052 | auth/external_identities.sql                        | 0052_external_identities.sql
 0053 | auth/oauth_states.sql                               | 0053_oauth_states.sql
 0054 | auth/oidc_nonces.sql                                | 0054_oidc_nonces.sql
+0055 | org/organization_domains.sql                        | 0055_organization_domains.sql
+0056 | storage/uploads.sql                                 | 0056_uploads.sql

@@ -47,6 +47,7 @@ type CatalogRepository interface {
 	CreateProductImportBatch(ctx context.Context, batch *ProductImportBatch) error
 	UpdateProductImportBatch(ctx context.Context, batch *ProductImportBatch) error
 	GetProductImportBatchByID(ctx context.Context, organizationID orgdomain.OrganizationID, batchID uuid.UUID) (*ProductImportBatch, error)
+	GetProductImportBatchBySourceObjectID(ctx context.Context, organizationID orgdomain.OrganizationID, sourceObjectID uuid.UUID) (*ProductImportBatch, error)
 	AddProductImportErrors(ctx context.Context, batchID uuid.UUID, items []ProductImportErrorRecord) error
 	ListProductImportErrors(ctx context.Context, batchID uuid.UUID) ([]ProductImportErrorRecord, error)
 }

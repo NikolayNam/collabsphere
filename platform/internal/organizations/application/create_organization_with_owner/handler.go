@@ -23,7 +23,7 @@ func New(txm tx.Manager, orgRepo orgPorts.OrganizationRepository, memRepo member
 	return &Handler{tx: txm, orgRepo: orgRepo, memRepo: memRepo, categories: categories}
 }
 
-func (h *Handler) Handle(ctx context.Context, org *orgDomain.Organization, ownerAccountID accdomain.AccountID) error {
+func (h *Handler) Handle(ctx context.Context, org *orgDomain.Organization, ownerAccountID accdomain.AccountID, domains []orgDomain.OrganizationDomainDraft) error {
 	if org == nil {
 		return orgErrors.InvalidInput("Organization is required")
 	}
@@ -34,6 +34,16 @@ func (h *Handler) Handle(ctx context.Context, org *orgDomain.Organization, owner
 	return h.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		if err := h.orgRepo.Create(ctx, org); err != nil {
 			return err
+		}
+
+		if len(domains) > 0 {
+			records, err := orgDomain.BuildOrganizationDomains(org.ID(), domains, nil, org.CreatedAt())
+			if err != nil {
+				return orgErrors.InvalidInput(err.Error())
+			}
+			if _, err := h.orgRepo.ReplaceDomains(ctx, org.ID(), records, org.CreatedAt()); err != nil {
+				return err
+			}
 		}
 
 		membership, err := memberDomain.NewMembership(memberDomain.NewMembershipParams{

@@ -26,6 +26,9 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product_category"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
+	uploadports "github.com/NikolayNam/collabsphere/internal/uploads/application/ports"
+	uploaddomain "github.com/NikolayNam/collabsphere/internal/uploads/domain"
+	sharedtx "github.com/NikolayNam/collabsphere/shared/tx"
 	"github.com/google/uuid"
 )
 
@@ -55,6 +58,13 @@ type UploadProductImportCmd struct {
 	ContentType    string
 	SizeBytes      int64
 	Body           io.Reader
+}
+
+type CompleteProductImportUploadCmd struct {
+	OrganizationID orgdomain.OrganizationID
+	ActorAccountID accdomain.AccountID
+	UploadID       uuid.UUID
+	Mode           *string
 }
 
 type ProductVideoView struct {
@@ -94,12 +104,14 @@ type Service struct {
 	repo               ports.CatalogRepository
 	organizations      ports.OrganizationReader
 	memberships        ports.MembershipReader
+	tx                 sharedtx.Manager
 	clock              ports.Clock
 	storage            ports.ObjectStorage
 	storageBucket      string
+	uploads            uploadports.Repository
 }
 
-func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock, storage ports.ObjectStorage, storageBucket string) *Service {
+func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, tx sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, storageBucket string, uploads uploadports.Repository) *Service {
 	return &Service{
 		createCategory:     create_product_category.NewHandler(repo, organizations, memberships, clock),
 		updateCategory:     update_product_category.NewHandler(repo, organizations, memberships, clock),
@@ -116,9 +128,11 @@ func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, m
 		repo:               repo,
 		organizations:      organizations,
 		memberships:        memberships,
+		tx:                 tx,
 		clock:              clock,
 		storage:            storage,
 		storageBucket:      strings.TrimSpace(storageBucket),
+		uploads:            uploads,
 	}
 }
 
@@ -159,9 +173,46 @@ func (s *Service) GetProductByID(ctx context.Context, q GetProductByIDQuery) (*c
 }
 
 func (s *Service) CreateProductImportUpload(ctx context.Context, cmd CreateProductImportUploadCmd) (*CreateProductImportUploadResult, error) {
-	return s.createImportUpload.Handle(ctx, cmd)
+	if s.createImportUpload == nil || s.uploads == nil || s.tx == nil {
+		return nil, catalogerrors.ProductImportUnavailable()
+	}
+	createdAt := s.clock.Now()
+	var result *CreateProductImportUploadResult
+	err := s.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		uploadResult, err := s.createImportUpload.Handle(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		organizationID := cmd.OrganizationID.UUID()
+		upload := &uploaddomain.Upload{
+			ID:                 uuid.New(),
+			OrganizationID:     &organizationID,
+			ObjectID:           uploadResult.ObjectID,
+			CreatedByAccountID: cmd.ActorAccountID.UUID(),
+			Purpose:            uploaddomain.PurposeProductImport,
+			Status:             uploaddomain.StatusPending,
+			Bucket:             uploadResult.Bucket,
+			ObjectKey:          uploadResult.ObjectKey,
+			FileName:           uploadResult.FileName,
+			ContentType:        cloneOptionalString(cmd.ContentType),
+			DeclaredSizeBytes:  uploadResult.SizeBytes,
+			ChecksumSHA256:     cloneOptionalString(cmd.ChecksumSHA256),
+			Metadata:           map[string]any{},
+			ExpiresAt:          &uploadResult.ExpiresAt,
+			CreatedAt:          createdAt,
+		}
+		if err := s.uploads.Create(ctx, upload); err != nil {
+			return err
+		}
+		uploadResult.UploadID = upload.ID
+		result = uploadResult
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
-
 func (s *Service) RunProductImport(ctx context.Context, cmd RunProductImportCmd) (*ProductImportView, error) {
 	return s.runImport.Handle(ctx, cmd)
 }
@@ -183,7 +234,7 @@ func (s *Service) UploadProductImport(ctx context.Context, cmd UploadProductImpo
 
 	contentType := cmd.ContentType
 	sizeBytes := cmd.SizeBytes
-	upload, err := s.createImportUpload.Handle(ctx, create_product_import_upload.Command{
+	upload, err := s.CreateProductImportUpload(ctx, create_product_import_upload.Command{
 		OrganizationID: cmd.OrganizationID,
 		ActorAccountID: cmd.ActorAccountID,
 		FileName:       cmd.FileName,
@@ -198,14 +249,13 @@ func (s *Service) UploadProductImport(ctx context.Context, cmd UploadProductImpo
 		return nil, catalogerrors.Internal("upload product import file", err)
 	}
 
-	return s.runImport.Handle(ctx, run_product_import.Command{
+	return s.CompleteProductImportUpload(ctx, CompleteProductImportUploadCmd{
 		OrganizationID: cmd.OrganizationID,
 		ActorAccountID: cmd.ActorAccountID,
-		SourceObjectID: upload.ObjectID,
+		UploadID:       upload.UploadID,
 		Mode:           nil,
 	})
 }
-
 func (s *Service) UploadProductVideo(ctx context.Context, cmd UploadProductVideoCmd) (*ProductVideoView, error) {
 	if cmd.Body == nil {
 		return nil, catalogerrors.InvalidInput("Product video file is required")

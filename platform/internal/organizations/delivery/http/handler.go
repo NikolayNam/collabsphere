@@ -33,6 +33,7 @@ func (h *Handler) CreateOrganization(ctx context.Context, input *dto.CreateOrgan
 		Name:           input.Body.Name,
 		Slug:           input.Body.Slug,
 		OwnerAccountID: ownerAccountID,
+		Domains:        mapOrganizationDomainDrafts(input.Body.Domains),
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -48,6 +49,16 @@ func (h *Handler) GetOrganizationById(ctx context.Context, input *dto.GetOrganiz
 	return h.organizationResponse(ctx, organization, http.StatusOK)
 }
 
+func (h *Handler) ResolveOrganizationByHost(ctx context.Context, input *dto.ResolveOrganizationByHostInput) (*dto.OrganizationResponse, error) {
+	organization, err := h.svc.GetOrganizationByHost(ctx, input.Host)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	if organization == nil {
+		return nil, humaerr.From(ctx, fault.NotFound("Organization not found", fault.Code("ORGANIZATION_NOT_FOUND")))
+	}
+	return h.organizationResponse(ctx, organization, http.StatusOK)
+}
 func (h *Handler) UpdateOrganization(ctx context.Context, input *dto.UpdateOrganizationInput) (*dto.OrganizationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
@@ -64,6 +75,7 @@ func (h *Handler) UpdateOrganization(ctx context.Context, input *dto.UpdateOrgan
 		Slug:           input.Body.Slug,
 		LogoObjectID:   input.Body.LogoObjectID,
 		ClearLogo:      input.Body.ClearLogo,
+		Domains:        mapOrganizationDomainDraftsPtr(input.Body.Domains),
 		Description:    input.Body.Description,
 		Website:        input.Body.Website,
 		PrimaryEmail:   input.Body.PrimaryEmail,
@@ -176,95 +188,155 @@ func (h *Handler) ListOrganizationVideos(ctx context.Context, input *dto.ListOrg
 
 func (h *Handler) GetCooperationApplication(ctx context.Context, input *dto.GetCooperationApplicationInput) (*dto.CooperationApplicationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	applicationView, err := h.svc.GetCooperationApplication(ctx, application.GetCooperationApplicationQuery{OrganizationID: organizationID, ActorAccountID: actorID})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
 }
 
 func (h *Handler) UpdateCooperationApplication(ctx context.Context, input *dto.UpdateCooperationApplicationInput) (*dto.CooperationApplicationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	applicationView, err := h.svc.UpdateCooperationApplication(ctx, application.UpdateCooperationApplicationCmd{OrganizationID: organizationID, ActorAccountID: actorID, ConfirmationEmail: input.Body.ConfirmationEmail, CompanyName: input.Body.CompanyName, RepresentedCategories: input.Body.RepresentedCategories, MinimumOrderAmount: input.Body.MinimumOrderAmount, DeliveryGeography: input.Body.DeliveryGeography, SalesChannels: input.Body.SalesChannels, StorefrontURL: input.Body.StorefrontURL, ContactFirstName: input.Body.ContactFirstName, ContactLastName: input.Body.ContactLastName, ContactJobTitle: input.Body.ContactJobTitle, PriceListObjectID: input.Body.PriceListObjectID, ClearPriceList: input.Body.ClearPriceList, ContactEmail: input.Body.ContactEmail, ContactPhone: input.Body.ContactPhone, PartnerCode: input.Body.PartnerCode})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
 }
 
 func (h *Handler) SubmitCooperationApplication(ctx context.Context, input *dto.SubmitCooperationApplicationInput) (*dto.CooperationApplicationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	applicationView, err := h.svc.SubmitCooperationApplication(ctx, application.SubmitCooperationApplicationCmd{OrganizationID: organizationID, ActorAccountID: actorID})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
 }
 
 func (h *Handler) UploadCooperationPriceList(ctx context.Context, input *dto.UploadCooperationPriceListInput) (*dto.CooperationApplicationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	form := input.RawBody.Data()
-	if form == nil || !form.File.IsSet { return nil, humaerr.From(ctx, fault.Validation("Price list file is required")) }
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Price list file is required"))
+	}
 	defer form.File.Close()
 	fileName := form.File.Filename
-	if fileName == "" { fileName = "price-list.xlsx" }
+	if fileName == "" {
+		fileName = "price-list.xlsx"
+	}
 	applicationView, err := h.svc.UploadCooperationPriceList(ctx, application.UploadCooperationPriceListCmd{OrganizationID: organizationID, ActorAccountID: actorID, FileName: fileName, ContentType: form.File.ContentType, SizeBytes: form.File.Size, Body: form.File})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
 }
 
 func (h *Handler) UploadOrganizationLegalDocument(ctx context.Context, input *dto.UploadOrganizationLegalDocumentInput) (*dto.OrganizationLegalDocumentResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	form := input.RawBody.Data()
-	if form == nil || !form.File.IsSet { return nil, humaerr.From(ctx, fault.Validation("Legal document file is required")) }
+	if form == nil || !form.File.IsSet {
+		return nil, humaerr.From(ctx, fault.Validation("Legal document file is required"))
+	}
 	defer form.File.Close()
 	fileName := form.File.Filename
-	if fileName == "" { fileName = "document.pdf" }
+	if fileName == "" {
+		fileName = "document.pdf"
+	}
 	document, err := h.svc.UploadOrganizationLegalDocument(ctx, application.UploadOrganizationLegalDocumentCmd{OrganizationID: organizationID, ActorAccountID: actorID, DocumentType: form.DocumentType, Title: form.Title, FileName: fileName, ContentType: form.File.ContentType, SizeBytes: form.File.Size, Body: form.File})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToOrganizationLegalDocumentResponse(document, http.StatusCreated), nil
 }
 
 func (h *Handler) ListOrganizationLegalDocuments(ctx context.Context, input *dto.ListOrganizationLegalDocumentsInput) (*dto.OrganizationLegalDocumentsResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	documents, err := h.svc.ListOrganizationLegalDocuments(ctx, organizationID, actorID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToOrganizationLegalDocumentsResponse(documents, http.StatusOK), nil
 }
 
 func (h *Handler) GetOrganizationLegalDocumentAnalysis(ctx context.Context, input *dto.GetOrganizationLegalDocumentAnalysisInput) (*dto.OrganizationLegalDocumentAnalysisResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	documentID, err := parseUUID(input.DocumentID, "Invalid legal document ID")
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	analysis, err := h.svc.GetOrganizationLegalDocumentAnalysis(ctx, application.GetOrganizationLegalDocumentAnalysisQuery{OrganizationID: organizationID, ActorAccountID: actorID, DocumentID: documentID})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToOrganizationLegalDocumentAnalysisResponse(analysis, http.StatusOK), nil
 }
 
 func (h *Handler) ReprocessOrganizationLegalDocumentAnalysis(ctx context.Context, input *dto.ReprocessOrganizationLegalDocumentAnalysisInput) (*dto.OrganizationLegalDocumentAnalysisResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	organizationID, err := parseOrganizationID(input.ID)
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	documentID, err := parseUUID(input.DocumentID, "Invalid legal document ID")
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	analysis, err := h.svc.ReprocessOrganizationLegalDocumentAnalysis(ctx, application.ReprocessOrganizationLegalDocumentAnalysisCmd{OrganizationID: organizationID, ActorAccountID: actorID, DocumentID: documentID})
-	if err != nil { return nil, humaerr.From(ctx, err) }
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	return mapper.ToOrganizationLegalDocumentAnalysisResponse(analysis, http.StatusOK), nil
 }
 
@@ -277,11 +349,47 @@ func (h *Handler) organizationResponse(ctx context.Context, t *orgdomain.Organiz
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
+	domains, err := h.svc.ListOrganizationDomains(ctx, t.ID())
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	resp.Body.VideoObjectIDs = ids
+	resp.Body.Domains = mapper.ToOrganizationDomainBodies(domains)
 	return resp, nil
 }
 
-func principalOrganizationActor(ctx context.Context) (accdomain.AccountID, error) { return httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required")) }
-func principalOrganizationActorUUID(ctx context.Context) (uuid.UUID, error) { return httpbind.RequireAccountUUID(ctx, fault.Unauthorized("Authentication required")) }
-func parseOrganizationID(raw string) (orgdomain.OrganizationID, error) { return httpbind.ParseOrganizationID(raw, fault.Validation("Invalid organization ID")) }
-func parseUUID(raw, message string) (uuid.UUID, error) { return httpbind.ParseUUID(raw, fault.Validation(message)) }
+func mapOrganizationDomainDrafts(items []dto.OrganizationDomainInput) []orgdomain.OrganizationDomainDraft {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]orgdomain.OrganizationDomainDraft, 0, len(items))
+	for _, item := range items {
+		out = append(out, orgdomain.OrganizationDomainDraft{
+			Hostname:  item.Hostname,
+			Kind:      item.Kind,
+			IsPrimary: item.IsPrimary,
+		})
+	}
+	return out
+}
+
+func mapOrganizationDomainDraftsPtr(items *[]dto.OrganizationDomainInput) *[]orgdomain.OrganizationDomainDraft {
+	if items == nil {
+		return nil
+	}
+	mapped := mapOrganizationDomainDrafts(*items)
+	return &mapped
+}
+
+func principalOrganizationActor(ctx context.Context) (accdomain.AccountID, error) {
+	return httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required"))
+}
+func principalOrganizationActorUUID(ctx context.Context) (uuid.UUID, error) {
+	return httpbind.RequireAccountUUID(ctx, fault.Unauthorized("Authentication required"))
+}
+func parseOrganizationID(raw string) (orgdomain.OrganizationID, error) {
+	return httpbind.ParseOrganizationID(raw, fault.Validation("Invalid organization ID"))
+}
+func parseUUID(raw, message string) (uuid.UUID, error) {
+	return httpbind.ParseUUID(raw, fault.Validation(message))
+}

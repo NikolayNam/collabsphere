@@ -12,7 +12,9 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/clock"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jwt"
+	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
 	s3storage "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/storage/s3"
+	uploadpg "github.com/NikolayNam/collabsphere/internal/uploads/repository/postgres"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"
 )
@@ -21,6 +23,8 @@ func registerCatalogModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	repo := catalogpg.NewCatalogRepo(db)
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)
+	txManager := dbtx.New(db)
+	uploadRepo := uploadpg.NewRepo(db)
 	clk := clock.NewSystemClock()
 
 	var objectStorage catalogports.ObjectStorage
@@ -32,7 +36,7 @@ func registerCatalogModule(api huma.API, db *gorm.DB, conf *config.Config) {
 		objectStorage = client
 	}
 
-	service := catalogapp.New(repo, organizationRepo, membershipRepo, clk, objectStorage, conf.Storage.S3.Bucket)
+	service := catalogapp.New(repo, organizationRepo, membershipRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, uploadRepo)
 	handler := cataloghttp.NewHandler(service)
 
 	secret, err := conf.Auth.JWTSecretValue()

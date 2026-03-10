@@ -11,6 +11,7 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	huma.Register(api, create, h.CreateOrganization)
 
 	huma.Register(api, getOrganizationByIdOp, h.GetOrganizationById)
+	huma.Register(api, resolveOrganizationByHostOp, h.ResolveOrganizationByHost)
 
 	update := updateOrganizationOp
 	update.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
@@ -43,6 +44,14 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	uploadPriceList := uploadCooperationPriceListOp
 	uploadPriceList.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, uploadPriceList, h.UploadCooperationPriceList)
+
+	createLegalDocumentUpload := createOrganizationLegalDocumentUploadOp
+	createLegalDocumentUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, createLegalDocumentUpload, h.CreateOrganizationLegalDocumentUpload)
+
+	completeLegalDocumentUpload := completeOrganizationLegalDocumentUploadOp
+	completeLegalDocumentUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, completeLegalDocumentUpload, h.CompleteOrganizationLegalDocumentUpload)
 
 	uploadLegalDocument := uploadOrganizationLegalDocumentOp
 	uploadLegalDocument.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}

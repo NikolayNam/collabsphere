@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	apperrors "github.com/NikolayNam/collabsphere/internal/organizations/application/errors"
 	appports "github.com/NikolayNam/collabsphere/internal/organizations/application/ports"
@@ -26,7 +25,7 @@ func (r *OrganizationRepo) Create(ctx context.Context, organization *domain.Orga
 	err := r.dbFrom(ctx).WithContext(ctx).Create(m).Error
 	if err != nil {
 		if isUniqueViolation(err) {
-			return fmt.Errorf("%w: %w", apperrors.ErrConflict, err)
+			return apperrors.OrganizationAlreadyExists()
 		}
 		return err
 	}
@@ -46,7 +45,7 @@ func (r *OrganizationRepo) UpdateProfile(ctx context.Context, id domain.Organiza
 		return nil, nil
 	}
 	if err := current.ApplyProfilePatch(patch); err != nil {
-		return nil, fmt.Errorf("%w: %w", apperrors.ErrValidation, err)
+		return nil, apperrors.InvalidInput(err.Error())
 	}
 
 	db := r.dbFrom(ctx).WithContext(ctx)
@@ -76,7 +75,7 @@ func (r *OrganizationRepo) UpdateProfile(ctx context.Context, id domain.Organiza
 	result := db.Table("org.organizations").Where("id = ?", id.UUID()).Updates(updates)
 	if result.Error != nil {
 		if isUniqueViolation(result.Error) {
-			return nil, fmt.Errorf("%w: %w", apperrors.ErrConflict, result.Error)
+			return nil, apperrors.OrganizationAlreadyExists()
 		}
 		return nil, result.Error
 	}

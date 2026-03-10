@@ -48,6 +48,26 @@ func (r *OrganizationRepo) GetOrganizationLegalDocumentByID(ctx context.Context,
 	return mapper.ToDomainOrganizationLegalDocument(&model)
 }
 
+func (r *OrganizationRepo) GetOrganizationLegalDocumentByObjectID(ctx context.Context, organizationID domain.OrganizationID, objectID uuid.UUID) (*domain.OrganizationLegalDocument, error) {
+	if organizationID.IsZero() {
+		return nil, apperrors.InvalidInput("Organization ID is required")
+	}
+	if objectID == uuid.Nil {
+		return nil, apperrors.InvalidInput("Object ID is required")
+	}
+	var model dbmodel.OrganizationLegalDocument
+	err := r.dbFrom(ctx).WithContext(ctx).
+		Where("organization_id = ? AND object_id = ? AND deleted_at IS NULL", organizationID.UUID(), objectID).
+		Take(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return mapper.ToDomainOrganizationLegalDocument(&model)
+}
+
 func (r *OrganizationRepo) GetOrganizationLegalDocumentAnalysis(ctx context.Context, organizationID domain.OrganizationID, documentID uuid.UUID) (*domain.OrganizationLegalDocumentAnalysis, error) {
 	if organizationID.IsZero() {
 		return nil, apperrors.InvalidInput("Organization ID is required")

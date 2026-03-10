@@ -23,6 +23,7 @@ import (
 	generichttp "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/documentanalysis/generichttp"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/storage/s3"
 	whisper "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/transcription/whisper"
+	uploadpg "github.com/NikolayNam/collabsphere/internal/uploads/repository/postgres"
 )
 
 func main() {
@@ -64,11 +65,12 @@ func main() {
 	membershipRepo := memberspg.NewMembershipRepo(db)
 	categoryRepo := catalogpg.NewProductCategoryRepo(db)
 	txManager := dbtx.New(db)
+	uploadRepo := uploadpg.NewRepo(db)
 	documentAnalyzer, err := generichttp.NewClient(conf.DocumentAnalysis)
 	if err != nil {
 		log.Fatalf("init document analysis client: %v", err)
 	}
-	organizationService := orgapp.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, storageClient, conf.Storage.S3.Bucket, documentAnalyzer, conf.DocumentAnalysis.Provider)
+	organizationService := orgapp.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, storageClient, conf.Storage.S3.Bucket, documentAnalyzer, conf.DocumentAnalysis.Provider, uploadRepo)
 
 	pollEvery := smallestPositiveDuration(conf.Transcription.WorkerPollEvery, conf.DocumentAnalysis.WorkerPollEvery)
 	if pollEvery <= 0 {

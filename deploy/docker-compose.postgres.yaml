@@ -3,7 +3,7 @@ name: collabsphere
 services:
   postgres:
     profiles: [ "local" ]
-    image: postgres:18.2-bookworm
+    image: postgres:18.3-trixie
     restart: unless-stopped
     hostname: "${POSTGRES_HOST}"
     networks:

@@ -70,21 +70,21 @@ services:
       - volume
       - filer
 
-  s3-init:
-    image: minio/mc:${STORAGE_S3_INIT_IMAGE_VERSION:-RELEASE.2025-07-21T05-28-08Z}
+  bucket-init:
+    image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
       - .env.dev
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
-    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-init.sh" ]
-    secrets:
-      - s3_access_key
-      - s3_secret_key
+    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-bucket-init.sh" ]
     networks:
       - internal.network
     depends_on:
+      - master
+      - filer
       - s3
     restart: "no"
+
 
 volumes:
   storage.volume.data:

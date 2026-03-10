@@ -159,26 +159,27 @@ docker compose `
 
 Минимальная схема локального запуска такая:
 
-1. Заполнить блок `AUTH_ZITADEL_*` и `ZITADEL_*` в `deploy/.env.dev` (`ZITADEL_MASTERKEY` должен быть ровно 32 ASCII-символа)
-2. Поднять стек вместе с `deploy/docker-compose.zitadel.yaml`
-3. При необходимости заранее переопределить bootstrap-поля первого администратора: `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME`, `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS`, `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED`, `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD`
-4. Если ZITADEL уже запускался с неверным hostname или старыми настройками Login V2, удалить локальные тома `zitadel.postgres.data` и `zitadel.shared`, затем повторить первый старт
-5. Создать в ZITADEL OIDC application для backend callback `http://localhost:8080/api/v1/auth/zitadel/callback`
-6. Перенести выданные `client_id` и `client_secret` в `AUTH_ZITADEL_CLIENT_ID` и `AUTH_ZITADEL_CLIENT_SECRET`, затем установить `AUTH_ZITADEL_ENABLED=true`
-7. Перезапустить `api`
+1. Заполнить публичные `AUTH_ZITADEL_*` и `ZITADEL_*` в `deploy/.env.dev`
+2. Заполнить локальные secret-файлы в `deploy/secrets/identity/`: `zitadel_master_key`, `zitadel_runtime_secrets.yaml`, `zitadel_init_steps.yaml`
+3. Поднять стек вместе с `deploy/docker-compose.zitadel.yaml`
+4. При необходимости заранее переопределить bootstrap-поля первого администратора в `deploy/secrets/identity/zitadel_init_steps.yaml`
+5. Если ZITADEL уже запускался с неверным hostname или старыми настройками Login V2, удалить локальные тома `zitadel.postgres.data` и `zitadel.shared`, затем повторить первый старт
+6. Создать в ZITADEL OIDC application для backend callback `http://localhost:8080/api/v1/auth/zitadel/callback`
+7. Перенести выданные `client_id` в `AUTH_ZITADEL_CLIENT_ID`, а `client_secret` в `deploy/secrets/identity/zitadel_client_secret`, затем установить `AUTH_ZITADEL_ENABLED=true`
+8. Перезапустить `api`
 
-Для `ZITADEL_MASTERKEY` используйте случайный ASCII-ключ ровно на 32 символа. В PowerShell его можно сгенерировать так:
-
+Для `deploy/secrets/identity/zitadel_master_key` используйте случайный ASCII-ключ ровно на 32 символа. В PowerShell его можно сгенерировать так:
 ```powershell
 -join ((48..57 + 65..90 + 97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
 ```
 
-`AUTH_ZITADEL_CLIENT_ID` и `AUTH_ZITADEL_CLIENT_SECRET` не генерируются заранее в `.env.dev`. Они появляются только после первого запуска ZITADEL, когда вы создаёте OIDC application в админ-панели и копируете оттуда выданные значения.
+`AUTH_ZITADEL_CLIENT_ID` и `deploy/secrets/identity/zitadel_client_secret` не генерируются заранее. Они появляются только после первого запуска ZITADEL, когда вы создаёте OIDC application в админ-панели и копируете оттуда выданные значения.
 
 
 По умолчанию используется hostname `auth.localhost`.
 Это сделано намеренно: браузер на хосте должен открывать `http://auth.localhost:8090` и `http://auth.localhost:3000`, а контейнер `api` получает тот же hostname через `extra_hosts` в `deploy/docker-compose.platform.yaml`. Использование `localhost:3000` для Login V2 приводит к `Instance not found`, потому что инстанс ZITADEL зарегистрирован на `auth.localhost`.
-`ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS` и `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED` применяются только на первом bootstrap инстанса. Если ZITADEL уже инициализирован, изменение `.env.dev` само по себе не обновит существующего администратора.
+`deploy/secrets/identity/zitadel_init_steps.yaml` применяется только на первом bootstrap инстанса. Если ZITADEL уже инициализирован, изменение этого файла само по себе не обновит существующего администратора.
+
 ### Остановка окружения
 
 ```bash
@@ -225,10 +226,20 @@ Compose-файлы ожидают локальные файлы в `deploy/secre
 
 - `deploy/secrets/postgres/dev/db_password`
 - `deploy/secrets/postgres/prod/db_password`
-- `deploy/secrets/jwt/auth_jwt_secret`
+- `deploy/secrets/jwt/jwt_secret_key`
+- `deploy/secrets/identity/zitadel_client_secret`
+- `deploy/secrets/identity/zitadel_master_key`
+- `deploy/secrets/identity/zitadel_runtime_secrets.yaml`
+- `deploy/secrets/identity/zitadel_init_steps.yaml`
 
-Даже для локального профиля часть секретов объявлена на уровне сервиса, поэтому отсутствие placeholder-файлов может ломать запуск Compose.
+Для локального ZITADEL используется схема с файловыми секретами:
 
+- `zitadel_master_key` монтируется в контейнер и передаётся через `--masterkeyFile`
+- `zitadel_runtime_secrets.yaml` подключается как приватный `--config` с паролями PostgreSQL
+- `zitadel_init_steps.yaml` подключается как приватный `--steps` с bootstrap-настройками первого администратора и login client
+- `zitadel_client_secret` монтируется в `api`, а Go runtime читает его через `AUTH_ZITADEL_CLIENT_SECRET_FILE`
+
+Даже для локального профиля часть секретов объявлена на уровне сервиса, поэтому отсутствие этих файлов ломает запуск Compose.
 ## Миграции
 
 ### Где лежат миграции
@@ -333,14 +344,4 @@ Auth:
 - ADR по архитектурным границам: [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
 - Compose-файлы: `deploy/docker-compose.postgres.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
 - Исходники API: `platform/cmd/api`, `platform/internal/`
-
-
-
-
-
-
-
-
-
-
 

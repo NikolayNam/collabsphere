@@ -6,21 +6,33 @@ import (
 	"github.com/google/uuid"
 )
 
+type OrganizationDomainBody struct {
+	ID         uuid.UUID  `json:"id"`
+	Hostname   string     `json:"hostname"`
+	Kind       string     `json:"kind"`
+	IsPrimary  bool       `json:"isPrimary"`
+	IsVerified bool       `json:"isVerified"`
+	VerifiedAt *time.Time `json:"verifiedAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
+}
+
 type OrganizationBody struct {
-	ID             uuid.UUID   `json:"id"`
-	Name           string      `json:"name"`
-	Slug           string      `json:"slug"`
-	LogoObjectID   *uuid.UUID  `json:"logoObjectId,omitempty"`
-	VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
-	Description    *string     `json:"description,omitempty"`
-	Website        *string     `json:"website,omitempty"`
-	PrimaryEmail   *string     `json:"primaryEmail,omitempty"`
-	Phone          *string     `json:"phone,omitempty"`
-	Address        *string     `json:"address,omitempty"`
-	Industry       *string     `json:"industry,omitempty"`
-	IsActive       bool        `json:"isActive"`
-	CreatedAt      time.Time   `json:"createdAt"`
-	UpdatedAt      *time.Time  `json:"updatedAt,omitempty"`
+	ID             uuid.UUID                `json:"id"`
+	Name           string                   `json:"name"`
+	Slug           string                   `json:"slug"`
+	LogoObjectID   *uuid.UUID               `json:"logoObjectId,omitempty"`
+	VideoObjectIDs []uuid.UUID              `json:"videoObjectIds,omitempty"`
+	Domains        []OrganizationDomainBody `json:"domains,omitempty"`
+	Description    *string                  `json:"description,omitempty"`
+	Website        *string                  `json:"website,omitempty"`
+	PrimaryEmail   *string                  `json:"primaryEmail,omitempty"`
+	Phone          *string                  `json:"phone,omitempty"`
+	Address        *string                  `json:"address,omitempty"`
+	Industry       *string                  `json:"industry,omitempty"`
+	IsActive       bool                     `json:"isActive"`
+	CreatedAt      time.Time                `json:"createdAt"`
+	UpdatedAt      *time.Time               `json:"updatedAt,omitempty"`
 }
 
 type OrganizationResponse struct {

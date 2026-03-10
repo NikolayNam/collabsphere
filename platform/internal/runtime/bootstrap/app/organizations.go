@@ -15,6 +15,7 @@ import (
 	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
 	generichttp "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/documentanalysis/generichttp"
 	s3storage "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/storage/s3"
+	uploadpg "github.com/NikolayNam/collabsphere/internal/uploads/repository/postgres"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"
 )
@@ -24,6 +25,7 @@ func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) 
 	membershipRepo := memberspg.NewMembershipRepo(db)
 	categoryRepo := catalogpg.NewProductCategoryRepo(db)
 	txManager := dbtx.New(db)
+	uploadRepo := uploadpg.NewRepo(db)
 	clk := clock.NewSystemClock()
 
 	var objectStorage orgports.ObjectStorage
@@ -46,7 +48,7 @@ func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) 
 		provider = conf.DocumentAnalysis.Provider
 	}
 
-	organizationService := application.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, analyzer, provider)
+	organizationService := application.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, analyzer, provider, uploadRepo)
 	organizationHandler := orghttp.NewHandler(organizationService)
 
 	secret, err := conf.Auth.JWTSecretValue()
