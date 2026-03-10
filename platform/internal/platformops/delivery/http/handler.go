@@ -96,21 +96,13 @@ func (h *Handler) ListUploads(ctx context.Context, input *platformdto.ListUpload
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	limit := 0
-	offset := 0
-	if input.Limit != nil {
-		limit = *input.Limit
-	}
-	if input.Offset != nil {
-		offset = *input.Offset
-	}
 	items, total, err := h.svc.ListUploadQueue(ctx, platformapp.ListUploadQueueCmd{
-		Status:             input.Status,
-		Purpose:            input.Purpose,
+		Status:             optionalString(input.Status),
+		Purpose:            optionalString(input.Purpose),
 		OrganizationID:     organizationID,
 		CreatedByAccountID: createdByAccountID,
-		Limit:              limit,
-		Offset:             offset,
+		Limit:              input.Limit,
+		Offset:             input.Offset,
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -170,13 +162,22 @@ func accessResponse(status int, access *platformdomain.Access) *platformdto.Plat
 	return out
 }
 
-func parseOptionalUUID(raw *string, field string) (*uuid.UUID, error) {
-	if raw == nil || strings.TrimSpace(*raw) == "" {
+func parseOptionalUUID(raw string, field string) (*uuid.UUID, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
 		return nil, nil
 	}
-	parsed, err := httpbind.ParseUUID(*raw, fault.Validation(fmt.Sprintf("%s is invalid", field), fault.Code("PLATFORM_INVALID_INPUT"), fault.Field(field, "must be a UUID")))
+	parsed, err := httpbind.ParseUUID(raw, fault.Validation(fmt.Sprintf("%s is invalid", field), fault.Code("PLATFORM_INVALID_INPUT"), fault.Field(field, "must be a UUID")))
 	if err != nil {
 		return nil, err
 	}
 	return &parsed, nil
+}
+
+func optionalString(raw string) *string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	return &raw
 }

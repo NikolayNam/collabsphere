@@ -7,12 +7,12 @@ import (
 )
 
 type ListUploadsInput struct {
-	Status             *string `query:"status" doc:"Optional status filter: pending, ready, failed."`
-	Purpose            *string `query:"purpose" doc:"Optional purpose filter: organization_legal_document, product_import."`
-	OrganizationID     *string `query:"organizationId" doc:"Optional organization filter."`
-	CreatedByAccountID *string `query:"createdByAccountId" doc:"Optional creator account filter."`
-	Limit              *int    `query:"limit" doc:"Max items to return. Defaults to 50, capped at 200."`
-	Offset             *int    `query:"offset" doc:"Pagination offset. Defaults to 0."`
+	Status             string `query:"status" doc:"Optional status filter: pending, ready, failed."`
+	Purpose            string `query:"purpose" doc:"Optional purpose filter: organization_legal_document, product_import."`
+	OrganizationID     string `query:"organizationId" doc:"Optional organization filter."`
+	CreatedByAccountID string `query:"createdByAccountId" doc:"Optional creator account filter."`
+	Limit              int    `query:"limit" doc:"Max items to return. Defaults to 50, capped at 200."`
+	Offset             int    `query:"offset" doc:"Pagination offset. Defaults to 0."`
 }
 
 type UploadQueueResponse struct {
