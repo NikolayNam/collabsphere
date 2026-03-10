@@ -51,3 +51,6 @@
 0049 | catalog/product_presentation_videos.sql             | 0049_product_presentation_videos.sql
 0050 | iam/account_videos.sql                              | 0050_account_videos.sql
 0051 | org/organization_videos.sql                         | 0051_organization_videos.sql
+0052 | auth/external_identities.sql                        | 0052_external_identities.sql
+0053 | auth/oauth_states.sql                               | 0053_oauth_states.sql
+0054 | auth/oidc_nonces.sql                                | 0054_oidc_nonces.sql

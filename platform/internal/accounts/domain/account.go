@@ -33,7 +33,7 @@ type NewAccountParams struct {
 }
 
 func NewAccount(p NewAccountParams) (*Account, error) {
-	if err := validateAccountCore(p.ID, p.Email, p.PasswordHash); err != nil {
+	if err := validateAccountCore(p.ID, p.Email); err != nil {
 		return nil, err
 	}
 	if p.Now.IsZero() {
@@ -75,7 +75,7 @@ type RehydrateAccountParams struct {
 }
 
 func RehydrateAccount(p RehydrateAccountParams) (*Account, error) {
-	if err := validateAccountCore(p.ID, p.Email, p.PasswordHash); err != nil {
+	if err := validateAccountCore(p.ID, p.Email); err != nil {
 		return nil, err
 	}
 	if p.CreatedAt.IsZero() || p.UpdatedAt.IsZero() {
@@ -222,14 +222,12 @@ func (a *Account) Status() AccountStatus {
 func (a *Account) CreatedAt() time.Time  { return a.createdAt }
 func (a *Account) UpdatedAt() *time.Time { return cloneTimePtr(a.updatedAt) }
 
-func validateAccountCore(id AccountID, email Email, hash PasswordHash) error {
+func validateAccountCore(id AccountID, email Email) error {
 	switch {
 	case id.IsZero():
 		return ErrUserIDEmpty
 	case email.IsZero():
 		return ErrEmailEmpty
-	case hash.IsZero():
-		return ErrPasswordHashEmpty
 	default:
 		return nil
 	}

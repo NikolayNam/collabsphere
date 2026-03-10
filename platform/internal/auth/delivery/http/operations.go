@@ -11,6 +11,24 @@ var loginOp = huma.Operation{
 	Description: "Authenticates an account using email and password credentials and returns access and refresh tokens.",
 }
 
+var zitadelLoginOp = huma.Operation{
+	OperationID: "auth-zitadel-login",
+	Method:      "GET",
+	Path:        "/auth/zitadel/login",
+	Tags:        []string{"Auth"},
+	Summary:     "Start ZITADEL login",
+	Description: "Creates a short-lived OIDC state/nonce pair and returns the authorization URL for ZITADEL.",
+}
+
+var zitadelCallbackOp = huma.Operation{
+	OperationID: "auth-zitadel-callback",
+	Method:      "GET",
+	Path:        "/auth/zitadel/callback",
+	Tags:        []string{"Auth"},
+	Summary:     "Complete ZITADEL login",
+	Description: "Exchanges the OIDC authorization code, verifies the external identity, links or provisions a local account, and returns local access and refresh tokens.",
+}
+
 var refreshOp = huma.Operation{
 	OperationID: "auth-refresh",
 	Method:      "POST",

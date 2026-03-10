@@ -87,7 +87,7 @@ collabsphere/
 Рекомендуемый путь для локальной разработки:
 
 ```bash
-docker network create web.network >/dev/null 2>&1 || true
+docker network create external.network >/dev/null 2>&1 || true
 make up-dev
 make migrate-up
 ```
@@ -112,15 +112,28 @@ make migrate-down
 `Makefile` ориентирован на `bash`, поэтому в Windows проще работать через прямые `docker compose` команды.
 
 ```powershell
-docker network create web.network 2>$null
+docker network create external.network 2>$null
 
 docker compose `
+  --env-file deploy/.env.dev `
   -f deploy/docker-compose.postgres.yaml `
   -f deploy/docker-compose.platform.yaml `
   --profile local up -d --build --force-recreate
 
+# если нужен локальный ZITADEL для OIDC-login
+# сначала заполните AUTH_ZITADEL_* и ZITADEL_* в deploy/.env.dev
+# затем поднимите дополнительный compose-файл
+
+docker compose `
+  --env-file deploy/.env.dev `
+  -f deploy/docker-compose.postgres.yaml `
+  -f deploy/docker-compose.platform.yaml `
+  -f deploy/docker-compose.zitadel.yaml `
+  --profile local up -d --build --force-recreate
+
 $env:MIGRATE_CMD = "up"
 docker compose `
+  --env-file deploy/.env.dev `
   -p collabsphere-migrate `
   -f deploy/docker-compose.migrate.yaml `
   --profile migrate run --rm --build migrate
@@ -132,6 +145,40 @@ docker compose `
 - [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
 - [http://localhost:8080/health](http://localhost:8080/health)
 
+## Локальный ZITADEL
+
+Для dev-окружения добавлен отдельный compose-файл:
+
+- `deploy/docker-compose.zitadel.yaml`
+
+Он поднимает:
+
+- `zitadel-db` - отдельный PostgreSQL только для ZITADEL
+- `zitadel` - сам IAM server
+- `zitadel-login` - login UI
+
+Минимальная схема локального запуска такая:
+
+1. Заполнить блок `AUTH_ZITADEL_*` и `ZITADEL_*` в `deploy/.env.dev` (`ZITADEL_MASTERKEY` должен быть ровно 32 ASCII-символа)
+2. Поднять стек вместе с `deploy/docker-compose.zitadel.yaml`
+3. При необходимости заранее переопределить bootstrap-поля первого администратора: `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME`, `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS`, `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED`, `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD`
+4. Если ZITADEL уже запускался с неверным hostname или старыми настройками Login V2, удалить локальные тома `zitadel.postgres.data` и `zitadel.shared`, затем повторить первый старт
+5. Создать в ZITADEL OIDC application для backend callback `http://localhost:8080/api/v1/auth/zitadel/callback`
+6. Перенести выданные `client_id` и `client_secret` в `AUTH_ZITADEL_CLIENT_ID` и `AUTH_ZITADEL_CLIENT_SECRET`, затем установить `AUTH_ZITADEL_ENABLED=true`
+7. Перезапустить `api`
+
+Для `ZITADEL_MASTERKEY` используйте случайный ASCII-ключ ровно на 32 символа. В PowerShell его можно сгенерировать так:
+
+```powershell
+-join ((48..57 + 65..90 + 97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+```
+
+`AUTH_ZITADEL_CLIENT_ID` и `AUTH_ZITADEL_CLIENT_SECRET` не генерируются заранее в `.env.dev`. Они появляются только после первого запуска ZITADEL, когда вы создаёте OIDC application в админ-панели и копируете оттуда выданные значения.
+
+
+По умолчанию используется hostname `auth.localhost`.
+Это сделано намеренно: браузер на хосте должен открывать `http://auth.localhost:8090` и `http://auth.localhost:3000`, а контейнер `api` получает тот же hostname через `extra_hosts` в `deploy/docker-compose.platform.yaml`. Использование `localhost:3000` для Login V2 приводит к `Instance not found`, потому что инстанс ZITADEL зарегистрирован на `auth.localhost`.
+`ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS` и `ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED` применяются только на первом bootstrap инстанса. Если ZITADEL уже инициализирован, изменение `.env.dev` само по себе не обновит существующего администратора.
 ### Остановка окружения
 
 ```bash
@@ -286,6 +333,13 @@ Auth:
 - ADR по архитектурным границам: [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
 - Compose-файлы: `deploy/docker-compose.postgres.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
 - Исходники API: `platform/cmd/api`, `platform/internal/`
+
+
+
+
+
+
+
 
 
 

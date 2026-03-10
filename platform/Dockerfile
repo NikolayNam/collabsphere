@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /out/seed
 # Stage 2: Final image
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 # Копируем только бинарник из предыдущего этапа
 COPY --from=builder /out/api /api
@@ -28,3 +28,4 @@ COPY --from=builder /out/migrate /migrate
 COPY --from=builder /out/seed /seed
 
 USER 65532:65532
+

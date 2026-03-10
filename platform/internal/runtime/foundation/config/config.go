@@ -32,6 +32,20 @@ type Auth struct {
 	AccessTTL         time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
 	RefreshSessionTTL time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
 	GuestAccessTTL    time.Duration `env:"AUTH_GUEST_ACCESS_TTL" envDefault:"24h"`
+	Zitadel           Zitadel
+}
+
+type Zitadel struct {
+	Enabled          bool          `env:"AUTH_ZITADEL_ENABLED" envDefault:"false"`
+	IssuerURL        string        `env:"AUTH_ZITADEL_ISSUER_URL"`
+	ClientID         string        `env:"AUTH_ZITADEL_CLIENT_ID"`
+	ClientSecret     string        `env:"AUTH_ZITADEL_CLIENT_SECRET"`
+	ClientSecretFile string        `env:"AUTH_ZITADEL_CLIENT_SECRET_FILE"`
+	RedirectURL      string        `env:"AUTH_ZITADEL_REDIRECT_URL"`
+	Scopes           string        `env:"AUTH_ZITADEL_SCOPES" envDefault:"openid profile email"`
+	StateTTL         time.Duration `env:"AUTH_ZITADEL_STATE_TTL" envDefault:"15m"`
+	NonceTTL         time.Duration `env:"AUTH_ZITADEL_NONCE_TTL" envDefault:"15m"`
+	HTTPTimeout      time.Duration `env:"AUTH_ZITADEL_HTTP_TIMEOUT" envDefault:"10s"`
 }
 
 type Storage struct {
@@ -151,6 +165,64 @@ func (d DB) PasswordValue() (string, error) {
 
 func (a Auth) JWTSecretValue() (string, error) {
 	return readRequiredSecret("auth jwt secret", a.JWTSecret, a.JWTSecretFile)
+}
+
+func (z Zitadel) ClientSecretValue() (string, error) {
+	if !z.Enabled {
+		return "", nil
+	}
+	return readRequiredSecret("auth zitadel client secret", z.ClientSecret, z.ClientSecretFile)
+}
+
+func (z Zitadel) ScopeList() []string {
+	parts := strings.FieldsFunc(z.Scopes, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	})
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		out = append(out, part)
+	}
+	return out
+}
+
+func (z Zitadel) Validate() error {
+	if !z.Enabled {
+		return nil
+	}
+	if _, err := z.ClientSecretValue(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(z.IssuerURL) == "" {
+		return errors.New("auth zitadel issuer url is empty")
+	}
+	if strings.TrimSpace(z.ClientID) == "" {
+		return errors.New("auth zitadel client id is empty")
+	}
+	if strings.TrimSpace(z.RedirectURL) == "" {
+		return errors.New("auth zitadel redirect url is empty")
+	}
+	if len(z.ScopeList()) == 0 {
+		return errors.New("auth zitadel scopes are empty")
+	}
+	if z.StateTTL <= 0 {
+		return errors.New("auth zitadel state ttl must be positive")
+	}
+	if z.NonceTTL <= 0 {
+		return errors.New("auth zitadel nonce ttl must be positive")
+	}
+	if z.HTTPTimeout <= 0 {
+		return errors.New("auth zitadel http timeout must be positive")
+	}
+	return nil
 }
 
 func (s S3) AccessKeyValue() (string, error) {

@@ -20,7 +20,7 @@ func (r *AccountRepo) Create(ctx context.Context, account *domain.Account) error
 
 	accountModel := mapper.ToDBAccountForCreate(account)
 	credentialModel := mapper.ToDBPasswordCredentialForCreate(account)
-	if accountModel == nil || credentialModel == nil {
+	if accountModel == nil {
 		return errors.New("db account model is nil")
 	}
 
@@ -34,11 +34,13 @@ func (r *AccountRepo) Create(ctx context.Context, account *domain.Account) error
 			return err
 		}
 
-		if err := tx.Create(credentialModel).Error; err != nil {
-			if isUniqueViolation(err) {
-				return fmt.Errorf("%w: %w", apperrors.ErrConflict, err)
+		if credentialModel != nil {
+			if err := tx.Create(credentialModel).Error; err != nil {
+				if isUniqueViolation(err) {
+					return fmt.Errorf("%w: %w", apperrors.ErrConflict, err)
+				}
+				return err
 			}
-			return err
 		}
 
 		return nil

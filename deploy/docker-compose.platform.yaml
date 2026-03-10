@@ -19,6 +19,8 @@ services:
     networks:
       - internal.network
       - external.network
+    extra_hosts:
+      - "${AUTH_ZITADEL_DOCKER_HOST_ALIAS:-auth.localhost}:host-gateway"
     ports:
       - "${APPLICATION_PORT}:${APPLICATION_PORT}"
     healthcheck:
@@ -52,3 +54,4 @@ secrets:
     file: secrets/s3/s3_access_key
   s3_secret_key:
     file: secrets/s3/s3_secret_key
+

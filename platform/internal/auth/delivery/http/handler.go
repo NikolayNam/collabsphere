@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	authapp "github.com/NikolayNam/collabsphere/internal/auth/application"
+	autherrors "github.com/NikolayNam/collabsphere/internal/auth/application/errors"
 	authdto "github.com/NikolayNam/collabsphere/internal/auth/delivery/http/dto"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
 	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
@@ -30,6 +31,41 @@ func (h *Handler) Login(ctx context.Context, input *authdto.LoginInput) (*authdt
 		return nil, humaerr.From(ctx, err)
 	}
 
+	out := &authdto.TokenResponse{Status: http.StatusOK}
+	out.Body.AccessToken = res.AccessToken
+	out.Body.RefreshToken = res.RefreshToken
+	out.Body.TokenType = res.TokenType
+	out.Body.ExpiresIn = res.ExpiresIn
+	return out, nil
+}
+
+func (h *Handler) BeginOIDCLogin(ctx context.Context, input *struct{}) (*authdto.OIDCLoginResponse, error) {
+	res, err := h.svc.BeginOIDCLogin(ctx, authapp.BeginOIDCLoginCmd{})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &authdto.OIDCLoginResponse{Status: http.StatusOK}
+	out.Body.AuthorizationURL = res.AuthorizationURL
+	return out, nil
+}
+
+func (h *Handler) CompleteOIDCCallback(ctx context.Context, input *authdto.OIDCCallbackInput) (*authdto.TokenResponse, error) {
+	if strings.TrimSpace(input.Error) != "" {
+		message := "OIDC provider returned an error"
+		if desc := strings.TrimSpace(input.ErrorDescription); desc != "" {
+			message = message + ": " + desc
+		}
+		return nil, humaerr.From(ctx, autherrors.Unauthorized(message))
+	}
+	res, err := h.svc.CompleteOIDCCallback(ctx, authapp.CompleteOIDCCallbackCmd{
+		State:     input.State,
+		Code:      input.Code,
+		UserAgent: optionalString(input.UserAgent),
+		IP:        extractClientIP(input.XForwardedFor, input.XRealIP),
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
 	out := &authdto.TokenResponse{Status: http.StatusOK}
 	out.Body.AccessToken = res.AccessToken
 	out.Body.RefreshToken = res.RefreshToken

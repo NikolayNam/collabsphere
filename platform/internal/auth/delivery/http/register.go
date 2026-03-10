@@ -7,6 +7,8 @@ import (
 
 func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	huma.Register(api, loginOp, h.Login)
+	huma.Register(api, zitadelLoginOp, h.BeginOIDCLogin)
+	huma.Register(api, zitadelCallbackOp, h.CompleteOIDCCallback)
 	huma.Register(api, refreshOp, h.Refresh)
 	huma.Register(api, logoutOp, h.Logout)
 

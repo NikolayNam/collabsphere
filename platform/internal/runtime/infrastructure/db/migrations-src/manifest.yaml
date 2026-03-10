@@ -71,3 +71,8 @@ migrations:
   - catalog/product_presentation_videos.sql
   - iam/account_videos.sql
   - org/organization_videos.sql
+
+  - auth/external_identities.sql
+  - auth/oauth_states.sql
+  - auth/oidc_nonces.sql
+

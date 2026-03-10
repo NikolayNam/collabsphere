@@ -9,6 +9,7 @@ var (
 	ErrNotFound     = fault.ErrNotFound
 	ErrUnauthorized = fault.ErrUnauthorized
 	ErrForbidden    = fault.ErrForbidden
+	ErrUnavailable  = fault.ErrUnavailable
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	CodeForbidden       = "AUTH_FORBIDDEN"
 	CodeRefreshInvalid  = "AUTH_REFRESH_INVALID"
 	CodeSessionNotFound = "AUTH_SESSION_NOT_FOUND"
+	CodeOIDCUnavailable = "AUTH_OIDC_UNAVAILABLE"
 	CodeInternal        = "INTERNAL"
 )
 
@@ -41,6 +43,11 @@ func RefreshTokenInvalid() error {
 
 func SessionNotFound() error {
 	return fault.NotFound("Session not found", fault.Code(CodeSessionNotFound))
+}
+
+func Unavailable(message string, opts ...fault.Opt) error {
+	opts = append([]fault.Opt{fault.Code(CodeOIDCUnavailable)}, opts...)
+	return fault.Unavailable(message, opts...)
 }
 
 func Internal(detail string, cause error) error {

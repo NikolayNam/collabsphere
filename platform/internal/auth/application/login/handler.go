@@ -61,6 +61,9 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*Result, error) {
 	if acc.Status() != accdomain.AccountStatusActive {
 		return nil, autherrors.Forbidden("Account is not active")
 	}
+	if acc.PasswordHash().IsZero() {
+		return nil, autherrors.Unauthorized("Invalid credentials")
+	}
 
 	if err := h.verifier.Verify(acc.PasswordHash(), cmd.Password); err != nil {
 		return nil, autherrors.Unauthorized("Invalid credentials")

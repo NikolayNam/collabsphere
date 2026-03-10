@@ -1,0 +1,118 @@
+name: collabsphere
+
+services:
+  zitadel-db:
+    profiles: [ "local" ]
+    image: postgres:${ZITADEL_POSTGRES_IMAGE_VERSION}
+    restart: unless-stopped
+    environment:
+      PGUSER: postgres
+      POSTGRES_PASSWORD: ${ZITADEL_POSTGRES_ADMIN_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d zitadel -U postgres" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    ports:
+      - "${ZITADEL_POSTGRES_HOST_PORT}:5432"
+    volumes:
+      - zitadel.postgres.data:/var/lib/postgresql/data
+    networks:
+      - zitadel.network
+
+  zitadel:
+    profiles: [ "local" ]
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION}
+    restart: unless-stopped
+    user: "0"
+    command: [ "start-from-init", "--masterkeyFromEnv", "--tlsMode", "disabled" ]
+    environment:
+      ZITADEL_MASTERKEY: ${ZITADEL_MASTERKEY}
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_DOMAIN}
+      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNALPORT}
+      ZITADEL_EXTERNALSECURE: ${ZITADEL_EXTERNALSECURE}
+      ZITADEL_TLS_ENABLED: "false"
+      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
+      ZITADEL_DATABASE_POSTGRES_PORT: 5432
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${ZITADEL_POSTGRES_ADMIN_PASSWORD}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${ZITADEL_POSTGRES_ZITADEL_PASSWORD}
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /zitadel/login-client.pat
+      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: ${ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME}
+      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: ${ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME}
+      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: ${ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE}
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: ${ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED}
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: ${ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI}
+      ZITADEL_OIDC_DEFAULTLOGINURLV2: ${ZITADEL_OIDC_DEFAULTLOGINURLV2}
+      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: ${ZITADEL_OIDC_DEFAULTLOGOUTURLV2}
+      ZITADEL_SAML_DEFAULTLOGINURLV2: ${ZITADEL_SAML_DEFAULTLOGINURLV2}
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_FIRSTINSTANCE_ORG_NAME}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS: ${ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_ADDRESS}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED: ${ZITADEL_FIRSTINSTANCE_ORG_HUMAN_EMAIL_VERIFIED}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+    healthcheck:
+      test: [ "CMD", "/app/zitadel", "ready" ]
+      interval: 10s
+      timeout: 60s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "${ZITADEL_HOST_PORT}:8080"
+      - "${ZITADEL_LOGIN_HOST_PORT}:3000"
+    volumes:
+      - zitadel.shared:/zitadel
+    networks:
+      zitadel.network:
+        aliases:
+          - ${ZITADEL_DOMAIN}
+      external.network:
+        aliases:
+          - ${ZITADEL_DOMAIN}
+    depends_on:
+      zitadel-db:
+        condition: service_healthy
+
+  zitadel-login:
+    profiles: [ "local" ]
+    image: ghcr.io/zitadel/zitadel-login:${ZITADEL_LOGIN_VERSION}
+    restart: unless-stopped
+    user: "0"
+    environment:
+      ZITADEL_API_URL: http://${ZITADEL_DOMAIN}:8080
+      NEXT_PUBLIC_BASE_PATH: /ui/v2/login
+      ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/login-client.pat
+    network_mode: service:zitadel
+    volumes:
+      - zitadel.shared:/zitadel
+    depends_on:
+      zitadel:
+        condition: service_healthy
+
+volumes:
+  zitadel.postgres.data:
+    name: zitadel.postgres.data
+  zitadel.shared:
+    name: zitadel.shared
+
+networks:
+  zitadel.network:
+    name: zitadel.network
+    driver: bridge
+    external: false
+  external.network:
+    name: ${EXTERNAL_NETWORK_NAME}
+    external: true
+
+
+
+
+
+
+

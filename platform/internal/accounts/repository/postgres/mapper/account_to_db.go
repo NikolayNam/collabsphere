@@ -36,7 +36,7 @@ func ToDBAccountForCreate(a *domain.Account) *dbmodel.Account {
 }
 
 func ToDBPasswordCredentialForCreate(a *domain.Account) *dbmodel.PasswordCredential {
-	if a == nil {
+	if a == nil || a.PasswordHash().IsZero() {
 		return nil
 	}
 
@@ -84,9 +84,13 @@ func ToDomainAccount(row *AccountRow) (*domain.Account, error) {
 		return nil, err
 	}
 
-	hash, err := domain.NewPasswordHash(row.PasswordHash)
-	if err != nil {
-		return nil, err
+	var hash domain.PasswordHash
+	if row.PasswordHash != "" {
+		parsedHash, err := domain.NewPasswordHash(row.PasswordHash)
+		if err != nil {
+			return nil, err
+		}
+		hash = parsedHash
 	}
 
 	return domain.RehydrateAccount(domain.RehydrateAccountParams{
