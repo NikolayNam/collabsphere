@@ -58,3 +58,5 @@
 0056 | storage/uploads.sql                                 | 0056_uploads.sql
 0057 | auth/oauth_states_browser_flow.sql                  | 0057_oauth_states_browser_flow.sql
 0058 | auth/one_time_codes.sql                             | 0058_one_time_codes.sql
+0059 | iam/platform_role_bindings.sql                      | 0059_platform_role_bindings.sql
+0060 | iam/platform_audit_events.sql                       | 0060_platform_audit_events.sql
