@@ -15,10 +15,24 @@ import (
 	"github.com/google/uuid"
 )
 
-type BeginOIDCLoginCmd struct{}
+const oidcBrowserExchangePurpose = "oidc_browser_exchange"
+
+type BeginOIDCLoginCmd struct {
+	ReturnTo string
+	Intent   string
+}
 
 type BeginOIDCLoginResult struct {
 	AuthorizationURL string
+}
+
+type ResolveOIDCCallbackStateCmd struct {
+	State string
+}
+
+type ResolveOIDCCallbackStateResult struct {
+	ReturnTo string
+	Intent   string
 }
 
 type CompleteOIDCCallbackCmd struct {
@@ -28,11 +42,33 @@ type CompleteOIDCCallbackCmd struct {
 	IP        *string
 }
 
+type CompleteOIDCCallbackResult struct {
+	ReturnTo       string
+	ExchangeTicket string
+}
+
+type ExchangeAuthTicketCmd struct {
+	Ticket    string
+	UserAgent *string
+	IP        *string
+}
+
+type ExchangeAuthTicketResult struct {
+	AccessToken  string
+	RefreshToken string
+	TokenType    string
+	ExpiresIn    int64
+	Provider     string
+	Intent       string
+	IsNewAccount bool
+}
+
 type oidcFlow struct {
 	tx                 tx.Manager
 	accounts           ports.AccountReader
 	externalIdentities ports.ExternalIdentityRepository
 	states             ports.OIDCStateRepository
+	oneTimeCodes       ports.OneTimeCodeRepository
 	provider           ports.OIDCProvider
 	tokens             ports.TokenManager
 	random             ports.RandomTokenGenerator
@@ -40,6 +76,7 @@ type oidcFlow struct {
 	clock              ports.Clock
 	stateTTL           time.Duration
 	nonceTTL           time.Duration
+	browserTicketTTL   time.Duration
 }
 
 func newOIDCFlow(
@@ -47,6 +84,7 @@ func newOIDCFlow(
 	accounts ports.AccountReader,
 	externalIdentities ports.ExternalIdentityRepository,
 	states ports.OIDCStateRepository,
+	oneTimeCodes ports.OneTimeCodeRepository,
 	provider ports.OIDCProvider,
 	tokens ports.TokenManager,
 	random ports.RandomTokenGenerator,
@@ -54,12 +92,14 @@ func newOIDCFlow(
 	clock ports.Clock,
 	stateTTL time.Duration,
 	nonceTTL time.Duration,
+	browserTicketTTL time.Duration,
 ) *oidcFlow {
 	return &oidcFlow{
 		tx:                 txm,
 		accounts:           accounts,
 		externalIdentities: externalIdentities,
 		states:             states,
+		oneTimeCodes:       oneTimeCodes,
 		provider:           provider,
 		tokens:             tokens,
 		random:             random,
@@ -67,12 +107,21 @@ func newOIDCFlow(
 		clock:              clock,
 		stateTTL:           stateTTL,
 		nonceTTL:           nonceTTL,
+		browserTicketTTL:   browserTicketTTL,
 	}
 }
 
-func (f *oidcFlow) BeginLogin(ctx context.Context, _ BeginOIDCLoginCmd) (*BeginOIDCLoginResult, error) {
+func (f *oidcFlow) BeginLogin(ctx context.Context, cmd BeginOIDCLoginCmd) (*BeginOIDCLoginResult, error) {
 	if f == nil || !hasOIDCProvider(f.provider) || f.states == nil || f.random == nil || f.clock == nil || f.tx == nil {
 		return nil, autherrors.Unavailable("OIDC login is unavailable")
+	}
+	returnTo := strings.TrimSpace(cmd.ReturnTo)
+	if returnTo == "" {
+		return nil, autherrors.InvalidInput("OIDC return URL is required")
+	}
+	intent := normalizeOIDCIntent(cmd.Intent)
+	if intent == "" {
+		return nil, autherrors.InvalidInput("OIDC intent is invalid")
 	}
 
 	stateRaw, err := f.random.Generate()
@@ -89,6 +138,8 @@ func (f *oidcFlow) BeginLogin(ctx context.Context, _ BeginOIDCLoginCmd) (*BeginO
 		ID:        uuid.New(),
 		Provider:  f.provider.Name(),
 		StateHash: f.random.Hash(stateRaw),
+		ReturnTo:  returnTo,
+		Intent:    intent,
 		ExpiresAt: now.Add(f.stateTTL),
 		CreatedAt: now,
 	}
@@ -110,23 +161,37 @@ func (f *oidcFlow) BeginLogin(ctx context.Context, _ BeginOIDCLoginCmd) (*BeginO
 		return nil, err
 	}
 
-	authorizationURL, err := f.provider.BuildAuthorizationURL(ctx, stateRaw, nonceRaw)
+	authorizationURL, err := f.provider.BuildAuthorizationURL(ctx, ports.OIDCAuthorizationRequest{
+		State:  stateRaw,
+		Nonce:  nonceRaw,
+		Prompt: oidcPromptForIntent(intent),
+	})
 	if err != nil {
 		return nil, autherrors.Internal("build oidc authorization url failed", err)
 	}
 	return &BeginOIDCLoginResult{AuthorizationURL: authorizationURL}, nil
 }
 
-func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbackCmd) (*login.Result, error) {
-	if f == nil || !hasOIDCProvider(f.provider) || f.states == nil || f.externalIdentities == nil || f.accounts == nil || f.sessions == nil || f.tokens == nil || f.random == nil || f.clock == nil || f.tx == nil {
+func (f *oidcFlow) ResolveCallbackState(ctx context.Context, cmd ResolveOIDCCallbackStateCmd) (*ResolveOIDCCallbackStateResult, error) {
+	state, err := f.getStateByRaw(ctx, cmd.State)
+	if err != nil {
+		return nil, err
+	}
+	if state == nil {
+		return nil, nil
+	}
+	return &ResolveOIDCCallbackStateResult{ReturnTo: state.ReturnTo, Intent: state.Intent}, nil
+}
+
+func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbackCmd) (*CompleteOIDCCallbackResult, error) {
+	if f == nil || !hasOIDCProvider(f.provider) || f.states == nil || f.externalIdentities == nil || f.accounts == nil || f.oneTimeCodes == nil || f.random == nil || f.clock == nil || f.tx == nil {
 		return nil, autherrors.Unavailable("OIDC login is unavailable")
 	}
 	if strings.TrimSpace(cmd.State) == "" || strings.TrimSpace(cmd.Code) == "" {
 		return nil, autherrors.InvalidInput("OIDC callback state and code are required")
 	}
 
-	stateHash := f.random.Hash(strings.TrimSpace(cmd.State))
-	state, err := f.states.GetStateByHash(ctx, f.provider.Name(), stateHash)
+	state, err := f.getStateByRaw(ctx, cmd.State)
 	if err != nil {
 		return nil, err
 	}
@@ -153,10 +218,10 @@ func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbac
 		return nil, autherrors.Unauthorized("OIDC nonce is invalid")
 	}
 
-	var result *login.Result
+	var result *CompleteOIDCCallbackResult
 	err = f.tx.WithinTransaction(ctx, func(ctx context.Context) error {
 		now := f.clock.Now()
-		account, externalIdentity, resolveErr := f.resolveAccount(ctx, identity, now)
+		account, externalIdentity, isNewAccount, resolveErr := f.resolveAccount(ctx, identity, now)
 		if resolveErr != nil {
 			return resolveErr
 		}
@@ -169,30 +234,23 @@ func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbac
 			}
 		}
 
-		sessionID := uuid.New()
-		refreshRaw, err := f.random.Generate()
+		ticketRaw, err := f.random.Generate()
 		if err != nil {
-			return autherrors.Internal("generate refresh token failed", err)
+			return autherrors.Internal("generate exchange ticket failed", err)
 		}
-		session, err := authdomain.NewRefreshSession(authdomain.NewRefreshSessionParams{
-			ID:        sessionID,
-			AccountID: account.ID().UUID(),
-			TokenHash: f.random.Hash(refreshRaw),
-			UserAgent: cmd.UserAgent,
-			IP:        cmd.IP,
-			ExpiresAt: now.Add(f.tokens.SessionTTL()),
-			Now:       now,
-		})
-		if err != nil {
-			return autherrors.Internal("build refresh session failed", err)
+		code := &ports.OneTimeCodeRecord{
+			ID:           uuid.New(),
+			Purpose:      oidcBrowserExchangePurpose,
+			CodeHash:     f.random.Hash(ticketRaw),
+			AccountID:    account.ID().UUID(),
+			Provider:     f.provider.Name(),
+			Intent:       state.Intent,
+			IsNewAccount: isNewAccount,
+			ExpiresAt:    now.Add(f.browserTicketTTL),
+			CreatedAt:    now,
 		}
-		if err := f.sessions.Create(ctx, session); err != nil {
+		if err := f.oneTimeCodes.Create(ctx, code); err != nil {
 			return err
-		}
-
-		accessToken, err := f.tokens.GenerateAccessToken(ctx, authdomain.NewPrincipal(account.ID().UUID(), sessionID), now.Add(f.tokens.AccessTTL()))
-		if err != nil {
-			return autherrors.Internal("generate access token failed", err)
 		}
 		if err := f.states.MarkStateUsed(ctx, state.ID, now); err != nil {
 			return err
@@ -200,11 +258,9 @@ func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbac
 		if err := f.states.MarkNonceUsed(ctx, nonce.ID, now); err != nil {
 			return err
 		}
-		result = &login.Result{
-			AccessToken:  accessToken,
-			RefreshToken: refreshRaw,
-			TokenType:    "Bearer",
-			ExpiresIn:    int64(f.tokens.AccessTTL().Seconds()),
+		result = &CompleteOIDCCallbackResult{
+			ReturnTo:       state.ReturnTo,
+			ExchangeTicket: ticketRaw,
 		}
 		return nil
 	})
@@ -214,42 +270,111 @@ func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbac
 	return result, nil
 }
 
-func (f *oidcFlow) resolveAccount(ctx context.Context, identity *ports.OIDCIdentity, now time.Time) (*accdomain.Account, *ports.ExternalIdentityRecord, error) {
+func (f *oidcFlow) ExchangeTicket(ctx context.Context, cmd ExchangeAuthTicketCmd) (*ExchangeAuthTicketResult, error) {
+	if f == nil || f.oneTimeCodes == nil || f.accounts == nil || f.sessions == nil || f.tokens == nil || f.random == nil || f.clock == nil || f.tx == nil {
+		return nil, autherrors.Unavailable("OIDC login is unavailable")
+	}
+	if strings.TrimSpace(cmd.Ticket) == "" {
+		return nil, autherrors.InvalidInput("Exchange ticket is required")
+	}
+
+	ticketHash := f.random.Hash(strings.TrimSpace(cmd.Ticket))
+	record, err := f.oneTimeCodes.GetByCodeHash(ctx, oidcBrowserExchangePurpose, ticketHash)
+	if err != nil {
+		return nil, err
+	}
+	if record == nil {
+		return nil, autherrors.Unauthorized("Exchange ticket is invalid")
+	}
+
+	var result *ExchangeAuthTicketResult
+	err = f.tx.WithinTransaction(ctx, func(ctx context.Context) error {
+		now := f.clock.Now()
+		lockedRecord, err := f.oneTimeCodes.GetByCodeHash(ctx, oidcBrowserExchangePurpose, ticketHash)
+		if err != nil {
+			return err
+		}
+		if lockedRecord == nil || lockedRecord.UsedAt != nil || !lockedRecord.ExpiresAt.After(now) {
+			return autherrors.Unauthorized("Exchange ticket is invalid or expired")
+		}
+		marked, err := f.oneTimeCodes.MarkUsed(ctx, lockedRecord.ID, now)
+		if err != nil {
+			return err
+		}
+		if !marked {
+			return autherrors.Unauthorized("Exchange ticket is invalid or already used")
+		}
+
+		accountID, err := accdomain.AccountIDFromUUID(lockedRecord.AccountID)
+		if err != nil {
+			return autherrors.Unauthorized("Exchange ticket is invalid")
+		}
+		account, err := f.accounts.GetByID(ctx, accountID)
+		if err != nil {
+			return err
+		}
+		if account == nil || account.Status() != accdomain.AccountStatusActive {
+			return autherrors.Forbidden("Account is not active")
+		}
+
+		loginResult, err := f.issueTokens(ctx, account.ID().UUID(), cmd.UserAgent, cmd.IP, now)
+		if err != nil {
+			return err
+		}
+		result = &ExchangeAuthTicketResult{
+			AccessToken:  loginResult.AccessToken,
+			RefreshToken: loginResult.RefreshToken,
+			TokenType:    loginResult.TokenType,
+			ExpiresIn:    loginResult.ExpiresIn,
+			Provider:     lockedRecord.Provider,
+			Intent:       lockedRecord.Intent,
+			IsNewAccount: lockedRecord.IsNewAccount,
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (f *oidcFlow) resolveAccount(ctx context.Context, identity *ports.OIDCIdentity, now time.Time) (*accdomain.Account, *ports.ExternalIdentityRecord, bool, error) {
 	externalIdentity, err := f.externalIdentities.GetByProviderSubject(ctx, f.provider.Name(), identity.Subject)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	if externalIdentity != nil {
 		accountID, err := accdomain.AccountIDFromUUID(externalIdentity.AccountID)
 		if err != nil {
-			return nil, nil, autherrors.Internal("invalid external identity account id", err)
+			return nil, nil, false, autherrors.Internal("invalid external identity account id", err)
 		}
 		account, err := f.accounts.GetByID(ctx, accountID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 		if account == nil {
-			return nil, nil, autherrors.Unauthorized("External identity is not linked to an account")
+			return nil, nil, false, autherrors.Unauthorized("External identity is not linked to an account")
 		}
 		externalIdentity.Email = normalizeOptional(identity.Email)
 		externalIdentity.EmailVerified = identity.EmailVerified
 		externalIdentity.DisplayName = identity.DisplayName
 		externalIdentity.ClaimsJSON = identity.ClaimsJSON
-		return account, externalIdentity, nil
+		return account, externalIdentity, false, nil
 	}
 
 	if strings.TrimSpace(identity.Email) == "" || !identity.EmailVerified {
-		return nil, nil, autherrors.Forbidden("Verified email is required for first external login")
+		return nil, nil, false, autherrors.Forbidden("Verified email is required for first external login")
 	}
 	email, err := accdomain.NewEmail(identity.Email)
 	if err != nil {
-		return nil, nil, autherrors.Internal("external identity email is invalid", err)
+		return nil, nil, false, autherrors.Internal("external identity email is invalid", err)
 	}
 
 	account, err := f.accounts.GetByEmail(ctx, email)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
+	isNewAccount := false
 	if account == nil {
 		account, err = accdomain.NewAccount(accdomain.NewAccountParams{
 			ID:           accdomain.NewAccountID(),
@@ -259,11 +384,12 @@ func (f *oidcFlow) resolveAccount(ctx context.Context, identity *ports.OIDCIdent
 			Now:          now,
 		})
 		if err != nil {
-			return nil, nil, autherrors.Internal("build external account failed", err)
+			return nil, nil, false, autherrors.Internal("build external account failed", err)
 		}
 		if err := f.accounts.Create(ctx, account); err != nil {
-			return nil, nil, err
+			return nil, nil, false, err
 		}
+		isNewAccount = true
 	}
 
 	externalIdentity = &ports.ExternalIdentityRecord{
@@ -280,9 +406,51 @@ func (f *oidcFlow) resolveAccount(ctx context.Context, identity *ports.OIDCIdent
 		UpdatedAt:       &now,
 	}
 	if err := f.externalIdentities.Create(ctx, externalIdentity); err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	return account, externalIdentity, nil
+	return account, externalIdentity, isNewAccount, nil
+}
+
+func (f *oidcFlow) issueTokens(ctx context.Context, accountID uuid.UUID, userAgent, ip *string, now time.Time) (*login.Result, error) {
+	sessionID := uuid.New()
+	refreshRaw, err := f.random.Generate()
+	if err != nil {
+		return nil, autherrors.Internal("generate refresh token failed", err)
+	}
+	session, err := authdomain.NewRefreshSession(authdomain.NewRefreshSessionParams{
+		ID:        sessionID,
+		AccountID: accountID,
+		TokenHash: f.random.Hash(refreshRaw),
+		UserAgent: userAgent,
+		IP:        ip,
+		ExpiresAt: now.Add(f.tokens.SessionTTL()),
+		Now:       now,
+	})
+	if err != nil {
+		return nil, autherrors.Internal("build refresh session failed", err)
+	}
+	if err := f.sessions.Create(ctx, session); err != nil {
+		return nil, err
+	}
+
+	accessToken, err := f.tokens.GenerateAccessToken(ctx, authdomain.NewPrincipal(accountID, sessionID), now.Add(f.tokens.AccessTTL()))
+	if err != nil {
+		return nil, autherrors.Internal("generate access token failed", err)
+	}
+	return &login.Result{
+		AccessToken:  accessToken,
+		RefreshToken: refreshRaw,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(f.tokens.AccessTTL().Seconds()),
+	}, nil
+}
+
+func (f *oidcFlow) getStateByRaw(ctx context.Context, rawState string) (*ports.OAuthStateRecord, error) {
+	if f == nil || f.states == nil || f.random == nil || !hasOIDCProvider(f.provider) {
+		return nil, autherrors.Unavailable("OIDC login is unavailable")
+	}
+	stateHash := f.random.Hash(strings.TrimSpace(rawState))
+	return f.states.GetStateByHash(ctx, f.provider.Name(), stateHash)
 }
 
 func hasOIDCProvider(provider ports.OIDCProvider) bool {
@@ -304,4 +472,22 @@ func normalizeOptional(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+func normalizeOIDCIntent(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "login":
+		return "login"
+	case "signup":
+		return "signup"
+	default:
+		return ""
+	}
+}
+
+func oidcPromptForIntent(intent string) string {
+	if intent == "signup" {
+		return "create"
+	}
+	return ""
 }

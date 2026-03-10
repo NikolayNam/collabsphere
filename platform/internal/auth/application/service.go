@@ -27,11 +27,12 @@ type LogoutCmd = logout.Command
 type MeQuery = me.Query
 
 type Service struct {
-	login   *login.Handler
-	refresh *refresh.Handler
-	logout  *logout.Handler
-	me      *me.Handler
-	oidc    *oidcFlow
+	login        *login.Handler
+	refresh      *refresh.Handler
+	logout       *logout.Handler
+	me           *me.Handler
+	oidc         *oidcFlow
+	zitadelAdmin *zitadelAdmin
 }
 
 func New(
@@ -44,16 +45,20 @@ func New(
 	txm sharedtx.Manager,
 	externalIdentities ports.ExternalIdentityRepository,
 	states ports.OIDCStateRepository,
+	oneTimeCodes ports.OneTimeCodeRepository,
 	oidcProvider ports.OIDCProvider,
+	zitadelAdminClient ports.ZitadelAdminClient,
 	oidcStateTTL time.Duration,
 	oidcNonceTTL time.Duration,
+	browserTicketTTL time.Duration,
 ) *Service {
 	return &Service{
-		login:   login.NewHandler(accounts, verifier, tokens, random, sessions, clock),
-		refresh: refresh.NewHandler(accounts, sessions, tokens, random, clock),
-		logout:  logout.NewHandler(sessions, random),
-		me:      me.NewHandler(accounts),
-		oidc:    newOIDCFlow(txm, accounts, externalIdentities, states, oidcProvider, tokens, random, sessions, clock, oidcStateTTL, oidcNonceTTL),
+		login:        login.NewHandler(accounts, verifier, tokens, random, sessions, clock),
+		refresh:      refresh.NewHandler(accounts, sessions, tokens, random, clock),
+		logout:       logout.NewHandler(sessions, random),
+		me:           me.NewHandler(accounts),
+		oidc:         newOIDCFlow(txm, accounts, externalIdentities, states, oneTimeCodes, oidcProvider, tokens, random, sessions, clock, oidcStateTTL, oidcNonceTTL, browserTicketTTL),
+		zitadelAdmin: newZitadelAdmin(zitadelAdminClient),
 	}
 }
 
@@ -77,6 +82,18 @@ func (s *Service) BeginOIDCLogin(ctx context.Context, cmd BeginOIDCLoginCmd) (*B
 	return s.oidc.BeginLogin(ctx, cmd)
 }
 
-func (s *Service) CompleteOIDCCallback(ctx context.Context, cmd CompleteOIDCCallbackCmd) (*login.Result, error) {
+func (s *Service) ResolveOIDCCallbackState(ctx context.Context, cmd ResolveOIDCCallbackStateCmd) (*ResolveOIDCCallbackStateResult, error) {
+	return s.oidc.ResolveCallbackState(ctx, cmd)
+}
+
+func (s *Service) CompleteOIDCCallback(ctx context.Context, cmd CompleteOIDCCallbackCmd) (*CompleteOIDCCallbackResult, error) {
 	return s.oidc.CompleteCallback(ctx, cmd)
+}
+
+func (s *Service) ExchangeAuthTicket(ctx context.Context, cmd ExchangeAuthTicketCmd) (*ExchangeAuthTicketResult, error) {
+	return s.oidc.ExchangeTicket(ctx, cmd)
+}
+
+func (s *Service) ForceVerifyZitadelUserEmail(ctx context.Context, cmd ForceVerifyZitadelUserEmailCmd) (*ForceVerifyZitadelUserEmailResult, error) {
+	return s.zitadelAdmin.ForceVerifyUserEmail(ctx, cmd)
 }

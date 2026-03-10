@@ -6,7 +6,11 @@ import (
 )
 
 func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
-	huma.Register(api, createAccountOp, h.CreateAccount)
+	createAccount := createAccountOp
+	if !h.localSignupEnabled {
+		createAccount.Description += "\n\n> [!CAUTION]\n> This legacy local-signup endpoint is disabled in this environment. Use `GET /auth/zitadel/signup` instead."
+	}
+	huma.Register(api, createAccount, h.CreateAccount)
 	huma.Register(api, getAccountByIdOp, h.GetAccountById)
 	huma.Register(api, getAccountByEmailOp, h.GetAccountByEmail)
 

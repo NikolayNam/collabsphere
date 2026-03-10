@@ -9,6 +9,7 @@ services:
       - zitadel_postgres_admin_password
     environment:
       PGUSER: postgres
+      POSTGRES_DB: zitadel
       POSTGRES_PASSWORD_FILE: /run/secrets/zitadel_postgres_admin_password
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -d zitadel -U postgres" ]
@@ -19,7 +20,7 @@ services:
     ports:
       - "${ZITADEL_POSTGRES_HOST_PORT}:5432"
     volumes:
-      - zitadel.postgres.data:/var/lib/postgresql/data
+      - zitadel.postgres.data:/var/lib/postgresql
     networks:
       - zitadel.network
 

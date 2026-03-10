@@ -11,7 +11,7 @@ type typedNilOIDCProvider struct{}
 
 func (p *typedNilOIDCProvider) Name() string { return "zitadel" }
 
-func (p *typedNilOIDCProvider) BuildAuthorizationURL(ctx context.Context, state, nonce string) (string, error) {
+func (p *typedNilOIDCProvider) BuildAuthorizationURL(ctx context.Context, req ports.OIDCAuthorizationRequest) (string, error) {
 	panic("should not be called")
 }
 

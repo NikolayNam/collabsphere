@@ -6,21 +6,34 @@ import (
 	"strings"
 
 	authapp "github.com/NikolayNam/collabsphere/internal/auth/application"
-	autherrors "github.com/NikolayNam/collabsphere/internal/auth/application/errors"
 	authdto "github.com/NikolayNam/collabsphere/internal/auth/delivery/http/dto"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/httpbind"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
 	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 )
 
-type Handler struct {
-	svc *authapp.Service
+type BrowserFlowConfig struct {
+	DefaultReturnURL       string
+	AllowedRedirectOrigins []string
 }
 
-func NewHandler(svc *authapp.Service) *Handler {
-	return &Handler{svc: svc}
+type Handler struct {
+	svc                  *authapp.Service
+	passwordLoginEnabled bool
+	zitadelAdminEnabled  bool
+	browser              BrowserFlowConfig
+}
+
+func NewHandler(svc *authapp.Service, passwordLoginEnabled bool, zitadelAdminEnabled bool, browser BrowserFlowConfig) *Handler {
+	return &Handler{svc: svc, passwordLoginEnabled: passwordLoginEnabled, zitadelAdminEnabled: zitadelAdminEnabled, browser: browser}
 }
 
 func (h *Handler) Login(ctx context.Context, input *authdto.LoginInput) (*authdto.TokenResponse, error) {
+	if !h.passwordLoginEnabled {
+		return nil, humaerr.From(ctx, fault.Forbidden("Password login is disabled. Use ZITADEL login.", fault.Code("PASSWORD_LOGIN_DISABLED")))
+	}
+
 	res, err := h.svc.Login(ctx, authapp.LoginCmd{
 		Email:     input.Body.Email,
 		Password:  input.Body.Password,
@@ -39,38 +52,45 @@ func (h *Handler) Login(ctx context.Context, input *authdto.LoginInput) (*authdt
 	return out, nil
 }
 
-func (h *Handler) BeginOIDCLogin(ctx context.Context, input *struct{}) (*authdto.OIDCLoginResponse, error) {
-	res, err := h.svc.BeginOIDCLogin(ctx, authapp.BeginOIDCLoginCmd{})
+func (h *Handler) ForceVerifyZitadelUserEmail(ctx context.Context, input *authdto.ForceVerifyZitadelUserEmailInput) (*authdto.ForceVerifyZitadelUserEmailResponse, error) {
+	if err := requireAuthenticatedAccount(ctx); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	if !h.zitadelAdminEnabled {
+		return nil, humaerr.From(ctx, fault.Forbidden("ZITADEL admin email verification is disabled. Configure AUTH_ZITADEL_ADMIN_TOKEN to enable it.", fault.Code("AUTH_ZITADEL_ADMIN_DISABLED")))
+	}
+
+	res, err := h.svc.ForceVerifyZitadelUserEmail(ctx, authapp.ForceVerifyZitadelUserEmailCmd{UserID: input.UserID})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	out := &authdto.OIDCLoginResponse{Status: http.StatusOK}
-	out.Body.AuthorizationURL = res.AuthorizationURL
+
+	out := &authdto.ForceVerifyZitadelUserEmailResponse{Status: http.StatusOK}
+	out.Body.UserID = res.UserID
+	out.Body.Email = res.Email
+	out.Body.Verified = res.Verified
+	out.Body.AlreadyVerified = res.AlreadyVerified
 	return out, nil
 }
 
-func (h *Handler) CompleteOIDCCallback(ctx context.Context, input *authdto.OIDCCallbackInput) (*authdto.TokenResponse, error) {
-	if strings.TrimSpace(input.Error) != "" {
-		message := "OIDC provider returned an error"
-		if desc := strings.TrimSpace(input.ErrorDescription); desc != "" {
-			message = message + ": " + desc
-		}
-		return nil, humaerr.From(ctx, autherrors.Unauthorized(message))
-	}
-	res, err := h.svc.CompleteOIDCCallback(ctx, authapp.CompleteOIDCCallbackCmd{
-		State:     input.State,
-		Code:      input.Code,
+func (h *Handler) Exchange(ctx context.Context, input *authdto.ExchangeAuthTicketInput) (*authdto.TokenResponse, error) {
+	res, err := h.svc.ExchangeAuthTicket(ctx, authapp.ExchangeAuthTicketCmd{
+		Ticket:    input.Body.Ticket,
 		UserAgent: optionalString(input.UserAgent),
 		IP:        extractClientIP(input.XForwardedFor, input.XRealIP),
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
+
 	out := &authdto.TokenResponse{Status: http.StatusOK}
 	out.Body.AccessToken = res.AccessToken
 	out.Body.RefreshToken = res.RefreshToken
 	out.Body.TokenType = res.TokenType
 	out.Body.ExpiresIn = res.ExpiresIn
+	out.Body.Provider = res.Provider
+	out.Body.Intent = res.Intent
+	out.Body.IsNewAccount = res.IsNewAccount
 	return out, nil
 }
 
@@ -149,4 +169,9 @@ func firstHeaderValue(value string) string {
 		}
 	}
 	return ""
+}
+
+func requireAuthenticatedAccount(ctx context.Context) error {
+	_, err := httpbind.RequireAccountID(ctx, fault.Unauthorized("Authentication required"))
+	return err
 }

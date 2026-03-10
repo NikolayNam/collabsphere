@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 )
 
 type Config struct {
@@ -27,12 +28,18 @@ type Config struct {
 }
 
 type Auth struct {
-	JWTSecret         string        `env:"AUTH_JWT_SECRET"`
-	JWTSecretFile     string        `env:"AUTH_JWT_SECRET_FILE"`
-	AccessTTL         time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
-	RefreshSessionTTL time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
-	GuestAccessTTL    time.Duration `env:"AUTH_GUEST_ACCESS_TTL" envDefault:"24h"`
-	Zitadel           Zitadel
+	JWTSecret            string        `env:"AUTH_JWT_SECRET"`
+	JWTSecretFile        string        `env:"AUTH_JWT_SECRET_FILE"`
+	AccessTTL            time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
+	RefreshSessionTTL    time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
+	GuestAccessTTL       time.Duration `env:"AUTH_GUEST_ACCESS_TTL" envDefault:"24h"`
+	PasswordLoginEnabled bool          `env:"AUTH_PASSWORD_LOGIN_ENABLED" envDefault:"true"`
+	LocalSignupEnabled   bool          `env:"AUTH_LOCAL_SIGNUP_ENABLED" envDefault:"true"`
+	PlatformBootstrapIDs string        `env:"AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS"`
+	BrowserDefaultReturn string        `env:"AUTH_BROWSER_DEFAULT_RETURN_URL"`
+	BrowserRedirects     string        `env:"AUTH_BROWSER_REDIRECT_ORIGINS"`
+	BrowserTicketTTL     time.Duration `env:"AUTH_BROWSER_TICKET_TTL" envDefault:"1m"`
+	Zitadel              Zitadel
 }
 
 type Zitadel struct {
@@ -41,6 +48,8 @@ type Zitadel struct {
 	ClientID         string        `env:"AUTH_ZITADEL_CLIENT_ID"`
 	ClientSecret     string        `env:"AUTH_ZITADEL_CLIENT_SECRET"`
 	ClientSecretFile string        `env:"AUTH_ZITADEL_CLIENT_SECRET_FILE"`
+	AdminToken       string        `env:"AUTH_ZITADEL_ADMIN_TOKEN"`
+	AdminTokenFile   string        `env:"AUTH_ZITADEL_ADMIN_TOKEN_FILE"`
 	RedirectURL      string        `env:"AUTH_ZITADEL_REDIRECT_URL"`
 	Scopes           string        `env:"AUTH_ZITADEL_SCOPES" envDefault:"openid profile email"`
 	StateTTL         time.Duration `env:"AUTH_ZITADEL_STATE_TTL" envDefault:"15m"`
@@ -155,6 +164,9 @@ func New() *Config {
 	if err := applyTZ(c.TZ); err != nil {
 		log.Fatalf("invalid TZ: %s", err)
 	}
+	if _, err := c.Auth.PlatformBootstrapAccountUUIDs(); err != nil {
+		log.Fatalf("invalid AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS: %s", err)
+	}
 
 	return &c
 }
@@ -167,6 +179,28 @@ func (a Auth) JWTSecretValue() (string, error) {
 	return readRequiredSecret("auth jwt secret", a.JWTSecret, a.JWTSecretFile)
 }
 
+func (a Auth) BrowserRedirectOriginList() []string {
+	return splitList(a.BrowserRedirects)
+}
+
+func (a Auth) PlatformBootstrapAccountUUIDs() ([]uuid.UUID, error) {
+	parts := splitList(a.PlatformBootstrapIDs)
+	out := make([]uuid.UUID, 0, len(parts))
+	seen := make(map[uuid.UUID]struct{}, len(parts))
+	for _, part := range parts {
+		parsed, err := uuid.Parse(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid account id %q: %w", part, err)
+		}
+		if _, ok := seen[parsed]; ok {
+			continue
+		}
+		seen[parsed] = struct{}{}
+		out = append(out, parsed)
+	}
+	return out, nil
+}
+
 func (z Zitadel) ClientSecretValue() (string, error) {
 	if !z.Enabled {
 		return "", nil
@@ -174,24 +208,12 @@ func (z Zitadel) ClientSecretValue() (string, error) {
 	return readRequiredSecret("auth zitadel client secret", z.ClientSecret, z.ClientSecretFile)
 }
 
+func (z Zitadel) AdminTokenValue() (string, error) {
+	return readOptionalSecret("auth zitadel admin token", z.AdminToken, z.AdminTokenFile)
+}
+
 func (z Zitadel) ScopeList() []string {
-	parts := strings.FieldsFunc(z.Scopes, func(r rune) bool {
-		return r == ',' || r == ' ' || r == '\t' || r == '\n'
-	})
-	out := make([]string, 0, len(parts))
-	seen := make(map[string]struct{}, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		if _, ok := seen[part]; ok {
-			continue
-		}
-		seen[part] = struct{}{}
-		out = append(out, part)
-	}
-	return out
+	return splitList(z.Scopes)
 }
 
 func (z Zitadel) Validate() error {
@@ -430,6 +452,25 @@ func readOptionalSecret(label, value, file string) (string, error) {
 	return secret, nil
 }
 
+func splitList(value string) []string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t' || r == '\n'
+	})
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		out = append(out, part)
+	}
+	return out
+}
 func buildSearchPath(primary string) []string {
 	values := []string{primary, "auth", "iam", "org", "catalog", "sales", "storage", "integration", "collab", "public"}
 	out := make([]string, 0, len(values))

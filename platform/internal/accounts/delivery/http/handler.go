@@ -15,14 +15,19 @@ import (
 )
 
 type Handler struct {
-	svc *application.Service
+	svc                *application.Service
+	localSignupEnabled bool
 }
 
-func NewHandler(svc *application.Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *application.Service, localSignupEnabled bool) *Handler {
+	return &Handler{svc: svc, localSignupEnabled: localSignupEnabled}
 }
 
 func (h *Handler) CreateAccount(ctx context.Context, input *dto.CreateAccountInput) (*dto.AccountResponse, error) {
+	if !h.localSignupEnabled {
+		return nil, humaerr.From(ctx, fault.Forbidden("Local signup is disabled. Use ZITADEL login.", fault.Code("LOCAL_SIGNUP_DISABLED")))
+	}
+
 	u, err := h.svc.CreateAccount(ctx, application.CreateAccountCmd{
 		Email:       input.Body.Email,
 		Password:    input.Body.Password,

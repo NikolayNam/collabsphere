@@ -20,6 +20,8 @@ migrations:
 #  - auth/mfa_factors.sql
 
   - iam/memberships.sql
+  - iam/platform_role_bindings.sql
+  - iam/platform_audit_events.sql
 
   - catalog/product_categories.sql
   - catalog/products.sql
@@ -79,4 +81,6 @@ migrations:
 
   - org/organization_domains.sql
   - storage/uploads.sql
+  - auth/oauth_states_browser_flow.sql
+  - auth/one_time_codes.sql
 

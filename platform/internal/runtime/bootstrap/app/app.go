@@ -51,6 +51,7 @@ func New(conf *config.Config) *App {
 	bootstrap.RegisterDBHooks(db)
 
 	registerPlatform(api)
+	registerPlatformOpsModule(api, db, conf)
 	registerAccountsModule(api, db, conf)
 	registerOrganzationsModule(api, db, conf)
 	registerMembershipsModule(api, db, conf)
@@ -58,7 +59,7 @@ func New(conf *config.Config) *App {
 	registerGroupsModule(api, db, conf)
 	registerCollabModule(api, router, db, conf)
 	registerStorageModule(api, db, conf)
-	registerAuthModule(api, db, conf)
+	registerAuthModule(apiV1, api, db, conf)
 
 	appLog.Info("application bootstrapped",
 		"event", "app.bootstrap.completed",
@@ -69,4 +70,3 @@ func New(conf *config.Config) *App {
 func registerPlatform(api huma.API) {
 	system.Register(api)
 }
-

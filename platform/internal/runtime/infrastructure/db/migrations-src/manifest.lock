@@ -56,3 +56,5 @@
 0054 | auth/oidc_nonces.sql                                | 0054_oidc_nonces.sql
 0055 | org/organization_domains.sql                        | 0055_organization_domains.sql
 0056 | storage/uploads.sql                                 | 0056_uploads.sql
+0057 | auth/oauth_states_browser_flow.sql                  | 0057_oauth_states_browser_flow.sql
+0058 | auth/one_time_codes.sql                             | 0058_one_time_codes.sql

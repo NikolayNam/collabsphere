@@ -36,6 +36,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 		"- Защищенные ручки используют `Authorization: Bearer <token>`.",
 		"- Загрузки файлов доступны в двух режимах: маленькие файлы можно отправлять прямым `multipart/form-data`, а тяжёлые сценарии используют tracked upload sessions с presigned `uploadUrl` и последующим `complete` шагом.",
 		"- Скачивание файлов работает через предметные download endpoint'ы и возвращает short-lived `downloadUrl`.",
+		"- Internal control-plane маршруты живут под `/platform/*` и не являются tenant API для клиентских организаций.",
 		"",
 		"## Основные области",
 		"",
@@ -43,6 +44,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 		"- `Accounts`: профиль пользователя и связанные с ним файлы.",
 		"- `Organizations`: профиль, доступы, onboarding, каталог и файлы организации.",
 		"- `Groups` и `Collaboration`: каналы, сообщения, вложения, конференции и записи.",
+		"- `Platform`: внутренняя control-plane зона для операторов платформы.",
 		"",
 		"## Рекомендованный порядок для новых интеграций",
 		"",
@@ -66,6 +68,12 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 	}
 	cfg.Tags = []*huma.Tag{
 		makeTag("System", "Health", "Health and platform-level endpoints."),
+		makeTag("Platform / Users", "Users", "Internal control-plane user operations."),
+		makeTag("Platform / Organizations", "Organizations", "Internal control-plane organization operations."),
+		makeTag("Platform / Uploads", "Uploads", "Internal control-plane upload queue and remediation operations."),
+		makeTag("Platform / Reviews", "Reviews", "Internal control-plane review and verification operations."),
+		makeTag("Platform / Dashboards", "Dashboards", "Internal control-plane dashboard and reporting endpoints."),
+		makeTag("Platform / Access", "Access", "Internal control-plane role and access management."),
 		makeTag("Auth", "Sessions", "Authentication and session endpoints."),
 		makeTag("Accounts", "Profile", "Account profile and identity endpoints."),
 		makeTag("Accounts / Files", "Files", "Account-owned files such as avatars and account file listings."),
@@ -83,7 +91,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 		cfg.Extensions = map[string]any{}
 	}
 	cfg.Extensions["x-tagGroups"] = []map[string]any{
-		{"name": "Platform", "tags": []string{"System"}},
+		{"name": "Platform", "tags": []string{"System", "Platform / Users", "Platform / Organizations", "Platform / Uploads", "Platform / Reviews", "Platform / Dashboards", "Platform / Access"}},
 		{"name": "Authentication", "tags": []string{"Auth"}},
 		{"name": "Accounts", "tags": []string{"Accounts", "Accounts / Files"}},
 		{"name": "Organizations", "tags": []string{"Organizations", "Organizations / Members", "Organizations / Files", "Organizations / Onboarding", "Organizations / Catalog"}},
@@ -91,7 +99,6 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 		{"name": "Collaboration", "tags": []string{"Collab / Channels", "Collab / Conferences", "Collab / Files"}},
 	}
 
-	// важно: чтобы Swagger/SDK знали, что API живёт под /v1
 	cfg.Servers = []*huma.Server{
 		{URL: "/api/v1"},
 	}

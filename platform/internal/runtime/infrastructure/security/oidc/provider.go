@@ -120,7 +120,7 @@ func (p *Provider) Name() string {
 	return "zitadel"
 }
 
-func (p *Provider) BuildAuthorizationURL(ctx context.Context, state, nonce string) (string, error) {
+func (p *Provider) BuildAuthorizationURL(ctx context.Context, req ports.OIDCAuthorizationRequest) (string, error) {
 	if p == nil {
 		return "", errors.New("oidc provider is nil")
 	}
@@ -137,8 +137,11 @@ func (p *Provider) BuildAuthorizationURL(ctx context.Context, state, nonce strin
 	query.Set("redirect_uri", p.redirectURL)
 	query.Set("response_type", "code")
 	query.Set("scope", strings.Join(p.scopes, " "))
-	query.Set("state", state)
-	query.Set("nonce", nonce)
+	query.Set("state", req.State)
+	query.Set("nonce", req.Nonce)
+	if prompt := strings.TrimSpace(req.Prompt); prompt != "" {
+		query.Set("prompt", prompt)
+	}
 	authURL.RawQuery = query.Encode()
 	return authURL.String(), nil
 }

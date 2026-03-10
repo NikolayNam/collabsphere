@@ -34,7 +34,7 @@ func registerAccountsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	}
 
 	accountService := application.New(accountRepo, hasher, clk, objectStorage, conf.Storage.S3.Bucket)
-	accountHandler := acchttp.NewHandler(accountService)
+	accountHandler := acchttp.NewHandler(accountService, conf.Auth.LocalSignupEnabled)
 
 	secret, err := conf.Auth.JWTSecretValue()
 	if err != nil {

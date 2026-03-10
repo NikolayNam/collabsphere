@@ -13,6 +13,9 @@ type TokenResponse struct {
 		RefreshToken string `json:"refreshToken"`
 		TokenType    string `json:"tokenType"`
 		ExpiresIn    int64  `json:"expiresIn"`
+		Provider     string `json:"provider,omitempty"`
+		Intent       string `json:"intent,omitempty"`
+		IsNewAccount bool   `json:"isNewAccount,omitempty"`
 	}
 }
 

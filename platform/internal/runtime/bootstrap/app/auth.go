@@ -15,15 +15,18 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/tokens"
 	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
 	oidcprovider "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/security/oidc"
+	zitadeladmin "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/security/zitadeladmin"
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 )
 
-func registerAuthModule(api huma.API, db *gorm.DB, conf *config.Config) {
+func registerAuthModule(router chi.Router, api huma.API, db *gorm.DB, conf *config.Config) {
 	accountRepo := accpg.NewAccountRepo(db)
 	sessionRepo := authpg.NewSessionRepo(db)
 	externalIdentityRepo := authpg.NewExternalIdentityRepo(db)
 	oidcStateRepo := authpg.NewOIDCStateRepo(db)
+	oneTimeCodeRepo := authpg.NewOneTimeCodeRepo(db)
 	txManager := dbtx.New(db)
 
 	clk := clock.NewSystemClock()
@@ -44,6 +47,11 @@ func registerAuthModule(api huma.API, db *gorm.DB, conf *config.Config) {
 		}
 	}
 
+	zitadelAdminClient, err := zitadeladmin.NewClient(conf.Auth.Zitadel)
+	if err != nil {
+		panic(fmt.Errorf("build zitadel admin client: %w", err))
+	}
+
 	authService := authapp.New(
 		accountRepo,
 		hasher,
@@ -54,10 +62,16 @@ func registerAuthModule(api huma.API, db *gorm.DB, conf *config.Config) {
 		txManager,
 		externalIdentityRepo,
 		oidcStateRepo,
+		oneTimeCodeRepo,
 		oidcFlowProvider,
+		zitadelAdminClient,
 		conf.Auth.Zitadel.StateTTL,
 		conf.Auth.Zitadel.NonceTTL,
+		conf.Auth.BrowserTicketTTL,
 	)
-	authHandler := authhttp.NewHandler(authService)
-	authhttp.Register(api, authHandler, jwtManager)
+	authHandler := authhttp.NewHandler(authService, conf.Auth.PasswordLoginEnabled, zitadelAdminClient != nil, authhttp.BrowserFlowConfig{
+		DefaultReturnURL:       conf.Auth.BrowserDefaultReturn,
+		AllowedRedirectOrigins: conf.Auth.BrowserRedirectOriginList(),
+	})
+	authhttp.Register(router, api, authHandler, jwtManager)
 }

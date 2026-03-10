@@ -9,9 +9,10 @@ PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
 ENV_FILE := --env-file $(DEPLOY_DIR)/.env.dev
 
-INFRA_FILE := docker-compose.postgres.yaml
+POSTGRES_FILE := docker-compose.postgres.yaml
 PLATFORM_FILE := docker-compose.platform.yaml
 STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
+ZITADEL_FILE := docker-compose.zitadel.yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
 
 # посмотри в .env какой EXTERNAL_NETWORK_NAME
@@ -29,9 +30,10 @@ APPLICATION_PORT :=
 
 COMPOSE_ARGS = \
 	$(ENV_FILE) \
-	-f $(DEPLOY_DIR)/$(INFRA_FILE) \
+	-f $(DEPLOY_DIR)/$(POSTGRES_FILE) \
 	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
 	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
+	-f $(DEPLOY_DIR)/$(ZITADEL_FILE) \
 	--profile local
 
 SHELL := /bin/bash
@@ -67,14 +69,9 @@ clean-logs:
 up-dev: clean-logs
 	@mkdir -p $(dir $(APP_LOG))
 	@echo "Running application... (log: $(APP_LOG))"
-
-	@if command -v gum >/dev/null 2>&1; then \
-		gum spin --spinner dot --title "docker compose up (build+recreate)..." -- \
-			bash -lc '$(COMPOSE) $(COMPOSE_ARGS) up -d --build --force-recreate >"$(APP_LOG)" 2>&1'; \
-	else \
-		echo "gum not found: running without spinner (install: go install github.com/charmbracelet/gum@latest)"; \
-		$(COMPOSE) $(COMPOSE_ARGS) up -d --build --force-recreate >"$(APP_LOG)" 2>&1; \
-	fi
+	@echo "Deploy progress:"
+	@$(COMPOSE) $(COMPOSE_ARGS) up -d --build --force-recreate 2>&1 | tee "$(APP_LOG)" \
+	|| (echo "compose up failed. Current service states:"; $(COMPOSE) $(COMPOSE_ARGS) ps || true; exit 1)
 
 	@if [ -n "$(API_HEALTH_URL)" ]; then \
 		if command -v gum >/dev/null 2>&1; then \
@@ -94,7 +91,7 @@ up-dev: clean-logs
 			done; \
 		fi; \
 	fi \
-	|| (echo "API not ready. Last log lines:"; tail -n 160 "$(APP_LOG)" || true; exit 1)
+	|| (echo "API not ready. Current service states:"; $(COMPOSE) $(COMPOSE_ARGS) ps || true; echo "Last log lines:"; tail -n 160 "$(APP_LOG)" || true; exit 1)
 
 	@echo "✓ Started"
 	@$(COMPOSE) $(COMPOSE_ARGS) ps

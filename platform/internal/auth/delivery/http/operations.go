@@ -17,7 +17,16 @@ var zitadelLoginOp = huma.Operation{
 	Path:        "/auth/zitadel/login",
 	Tags:        []string{"Auth"},
 	Summary:     "Start ZITADEL login",
-	Description: "Creates a short-lived OIDC state/nonce pair and returns the authorization URL for ZITADEL.",
+	Description: "Starts the browser-based ZITADEL login flow and responds with `303 See Other` to the hosted login UI. Use the optional `return_to` query parameter to control where the callback should redirect after authentication.",
+}
+
+var zitadelSignupOp = huma.Operation{
+	OperationID: "auth-zitadel-signup",
+	Method:      "GET",
+	Path:        "/auth/zitadel/signup",
+	Tags:        []string{"Auth"},
+	Summary:     "Start ZITADEL signup",
+	Description: "Starts the browser-based ZITADEL registration flow and responds with `303 See Other` to the hosted signup UI. The hosted registration screen is requested with `prompt=create`.",
 }
 
 var zitadelCallbackOp = huma.Operation{
@@ -26,7 +35,26 @@ var zitadelCallbackOp = huma.Operation{
 	Path:        "/auth/zitadel/callback",
 	Tags:        []string{"Auth"},
 	Summary:     "Complete ZITADEL login",
-	Description: "Exchanges the OIDC authorization code, verifies the external identity, links or provisions a local account, and returns local access and refresh tokens.",
+	Description: "Completes the browser-based ZITADEL flow, links or provisions a local account, and responds with `303 See Other` back to the approved `return_to` URL. On success it appends `ticket=...`; on failure it appends `error` and `error_description`.",
+}
+
+var forceVerifyZitadelUserEmailOp = huma.Operation{
+	OperationID: "admin-force-verify-zitadel-user-email",
+	Method:      "POST",
+	Path:        "/admin/zitadel/users/{userId}/email/force-verify",
+	Tags:        []string{"Admin / ZITADEL"},
+	Summary:     "Force-verify a ZITADEL user email",
+	Description: "Administrative maintenance endpoint that uses a server-side ZITADEL admin token to verify an existing user's email. The backend first requests a verification code from ZITADEL and then immediately verifies the email with that code.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var exchangeOp = huma.Operation{
+	OperationID: "auth-exchange",
+	Method:      "POST",
+	Path:        "/auth/exchange",
+	Tags:        []string{"Auth"},
+	Summary:     "Exchange a browser auth ticket",
+	Description: "Consumes a short-lived one-time browser authentication ticket and returns local access and refresh tokens.",
 }
 
 var refreshOp = huma.Operation{
