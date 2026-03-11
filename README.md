@@ -198,7 +198,10 @@ AUTH_ZITADEL_ADMIN_TOKEN=<PASTE_PAT_HERE>
 
 ```env
 AUTH_ZITADEL_ADMIN_TOKEN_FILE=/run/secrets/zitadel_admin_token
+AUTH_ZITADEL_ADMIN_TOKEN_SOURCE_FILE=secrets/identity/zitadel_admin_token
 ```
+
+По умолчанию file-based режим выключен: `AUTH_ZITADEL_ADMIN_TOKEN_FILE` пустой, а Compose подставляет безопасный placeholder secret, чтобы `api` не падал на старте. Чтобы включить этот режим, создайте `deploy/secrets/identity/zitadel_admin_token`, запишите туда raw PAT и установите значения выше. Docker Compose прочитает этот host-файл и смонтирует его в контейнер `api` как `/run/secrets/zitadel_admin_token`. Содержимое файла должно быть только токеном, без JSON-обёртки.
 
 6. Пересоздать `api`
 7. Выполнить force-verify через backend route:

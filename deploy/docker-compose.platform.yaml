@@ -17,6 +17,7 @@ services:
       - s3_access_key
       - s3_secret_key
       - zitadel_client_secret
+      - zitadel_admin_token
       - platform_auto_grant_yaml
     networks:
       - internal.network
@@ -58,5 +59,7 @@ secrets:
     file: secrets/s3/s3_secret_key
   zitadel_client_secret:
     file: secrets/identity/zitadel_client_secret
+  zitadel_admin_token:
+    file: ${AUTH_ZITADEL_ADMIN_TOKEN_SOURCE_FILE:-fixtures/zitadel_admin_token.disabled}
   platform_auto_grant_yaml:
     file: secrets/identity/platform_auto_grant.yaml
