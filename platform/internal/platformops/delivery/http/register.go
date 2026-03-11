@@ -23,6 +23,18 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	replaceAccountRoles.Middlewares = adminOnly
 	huma.Register(api, replaceAccountRoles, h.ReplaceAccountRoles)
 
+	listAutoGrantRules := listAutoGrantRulesOp
+	listAutoGrantRules.Middlewares = adminOnly
+	huma.Register(api, listAutoGrantRules, h.ListAutoGrantRules)
+
+	createAutoGrantRule := createAutoGrantRuleOp
+	createAutoGrantRule.Middlewares = adminOnly
+	huma.Register(api, createAutoGrantRule, h.CreateAutoGrantRule)
+
+	deleteAutoGrantRule := deleteAutoGrantRuleOp
+	deleteAutoGrantRule.Middlewares = adminOnly
+	huma.Register(api, deleteAutoGrantRule, h.DeleteAutoGrantRule)
+
 	dashboardSummary := dashboardSummaryOp
 	dashboardSummary.Middlewares = anyPlatformRole
 	huma.Register(api, dashboardSummary, h.GetDashboardSummary)
@@ -37,11 +49,4 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 		forceVerify.Description += "\n\n> [!CAUTION]\n> This control-plane action is disabled until `AUTH_ZITADEL_ADMIN_TOKEN` or `AUTH_ZITADEL_ADMIN_TOKEN_FILE` is configured on the backend."
 	}
 	huma.Register(api, forceVerify, h.ForceVerifyUserEmail)
-
-	forceVerifyAlias := forceVerifyUserEmailAliasOp
-	forceVerifyAlias.Middlewares = adminOnly
-	if !h.svc.ZitadelAdminEnabled() {
-		forceVerifyAlias.Description += "\n\n> [!CAUTION]\n> This deprecated alias is disabled until `AUTH_ZITADEL_ADMIN_TOKEN` or `AUTH_ZITADEL_ADMIN_TOKEN_FILE` is configured on the backend."
-	}
-	huma.Register(api, forceVerifyAlias, h.ForceVerifyUserEmail)
 }

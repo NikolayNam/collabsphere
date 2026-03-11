@@ -60,3 +60,4 @@
 0058 | auth/one_time_codes.sql                             | 0058_one_time_codes.sql
 0059 | iam/platform_role_bindings.sql                      | 0059_platform_role_bindings.sql
 0060 | iam/platform_audit_events.sql                       | 0060_platform_audit_events.sql
+0061 | iam/platform_auto_grant_rules.sql                   | 0061_platform_auto_grant_rules.sql

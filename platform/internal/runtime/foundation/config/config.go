@@ -28,18 +28,19 @@ type Config struct {
 }
 
 type Auth struct {
-	JWTSecret            string        `env:"AUTH_JWT_SECRET"`
-	JWTSecretFile        string        `env:"AUTH_JWT_SECRET_FILE"`
-	AccessTTL            time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
-	RefreshSessionTTL    time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
-	GuestAccessTTL       time.Duration `env:"AUTH_GUEST_ACCESS_TTL" envDefault:"24h"`
-	PasswordLoginEnabled bool          `env:"AUTH_PASSWORD_LOGIN_ENABLED" envDefault:"true"`
-	LocalSignupEnabled   bool          `env:"AUTH_LOCAL_SIGNUP_ENABLED" envDefault:"true"`
-	PlatformBootstrapIDs string        `env:"AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS"`
-	BrowserDefaultReturn string        `env:"AUTH_BROWSER_DEFAULT_RETURN_URL"`
-	BrowserRedirects     string        `env:"AUTH_BROWSER_REDIRECT_ORIGINS"`
-	BrowserTicketTTL     time.Duration `env:"AUTH_BROWSER_TICKET_TTL" envDefault:"1m"`
-	Zitadel              Zitadel
+	JWTSecret             string        `env:"AUTH_JWT_SECRET"`
+	JWTSecretFile         string        `env:"AUTH_JWT_SECRET_FILE"`
+	AccessTTL             time.Duration `env:"AUTH_ACCESS_TTL" envDefault:"15m"`
+	RefreshSessionTTL     time.Duration `env:"AUTH_REFRESH_TTL" envDefault:"720h"`
+	GuestAccessTTL        time.Duration `env:"AUTH_GUEST_ACCESS_TTL" envDefault:"24h"`
+	PasswordLoginEnabled  bool          `env:"AUTH_PASSWORD_LOGIN_ENABLED" envDefault:"true"`
+	LocalSignupEnabled    bool          `env:"AUTH_LOCAL_SIGNUP_ENABLED" envDefault:"true"`
+	PlatformBootstrapIDs  string        `env:"AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS"`
+	PlatformAutoGrantFile string        `env:"AUTH_PLATFORM_AUTO_GRANT_FILE"`
+	BrowserDefaultReturn  string        `env:"AUTH_BROWSER_DEFAULT_RETURN_URL"`
+	BrowserRedirects      string        `env:"AUTH_BROWSER_REDIRECT_ORIGINS"`
+	BrowserTicketTTL      time.Duration `env:"AUTH_BROWSER_TICKET_TTL" envDefault:"1m"`
+	Zitadel               Zitadel
 }
 
 type Zitadel struct {
@@ -166,6 +167,9 @@ func New() *Config {
 	}
 	if _, err := c.Auth.PlatformBootstrapAccountUUIDs(); err != nil {
 		log.Fatalf("invalid AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS: %s", err)
+	}
+	if _, err := c.Auth.PlatformAutoGrantRules(); err != nil {
+		log.Fatalf("invalid AUTH_PLATFORM_AUTO_GRANT_FILE: %s", err)
 	}
 
 	return &c

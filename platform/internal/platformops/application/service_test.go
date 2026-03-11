@@ -2,12 +2,14 @@ package application
 
 import (
 	"context"
+	stderrors "errors"
 	"testing"
 	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	authports "github.com/NikolayNam/collabsphere/internal/auth/application/ports"
 	"github.com/NikolayNam/collabsphere/internal/platformops/domain"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
 	"github.com/google/uuid"
 )
 
@@ -42,6 +44,47 @@ func (f *fakeRoleRepo) ReplaceRoles(ctx context.Context, accountID uuid.UUID, ro
 	f.lastReplace = append([]domain.Role{}, roles...)
 	f.rolesByAccount[accountID] = append([]domain.Role{}, roles...)
 	return nil
+}
+
+type fakeAutoGrantRepo struct {
+	rules       []domain.AutoGrantRule
+	createCalls int
+	deleteCalls int
+}
+
+func (f *fakeAutoGrantRepo) ListAutoGrantRules(ctx context.Context) ([]domain.AutoGrantRule, error) {
+	return append([]domain.AutoGrantRule{}, f.rules...), nil
+}
+
+func (f *fakeAutoGrantRepo) CreateAutoGrantRule(ctx context.Context, role domain.Role, matchType domain.AutoGrantMatchType, matchValue string, grantedByAccountID *uuid.UUID, now time.Time) (*domain.AutoGrantRule, error) {
+	f.createCalls++
+	id := uuid.New()
+	createdAt := now
+	updatedAt := now
+	rule := domain.AutoGrantRule{
+		ID:                 &id,
+		Role:               role,
+		MatchType:          matchType,
+		MatchValue:         matchValue,
+		Source:             domain.AutoGrantSourceDatabase,
+		CreatedByAccountID: grantedByAccountID,
+		CreatedAt:          &createdAt,
+		UpdatedAt:          &updatedAt,
+	}
+	f.rules = append(f.rules, rule)
+	return &rule, nil
+}
+
+func (f *fakeAutoGrantRepo) DeleteAutoGrantRule(ctx context.Context, ruleID uuid.UUID) (*domain.AutoGrantRule, error) {
+	f.deleteCalls++
+	for idx, rule := range f.rules {
+		if rule.ID != nil && *rule.ID == ruleID {
+			deleted := rule
+			f.rules = append(f.rules[:idx], f.rules[idx+1:]...)
+			return &deleted, nil
+		}
+	}
+	return nil, nil
 }
 
 type fakeAuditRepo struct {
@@ -82,8 +125,17 @@ func (f fakeZitadelAdminClient) ForceVerifyUserEmail(ctx context.Context, userID
 	return f.result, f.err
 }
 
-func newTestService(roleRepo *fakeRoleRepo, auditRepo *fakeAuditRepo, accountReader *fakeAccountReader, zitadel authports.ZitadelAdminClient, bootstrap []uuid.UUID) *Service {
-	return New(roleRepo, auditRepo, accountReader, fakeDashboardReader{}, fakeUploadReader{}, fakeClock{now: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)}, fakeTxManager{}, zitadel, bootstrap)
+type nilAwareZitadelAdminClient struct{}
+
+func (c *nilAwareZitadelAdminClient) ForceVerifyUserEmail(ctx context.Context, userID string) (*authports.ZitadelUserEmailVerificationResult, error) {
+	if c == nil {
+		return nil, stderrors.New("zitadel admin client is nil")
+	}
+	return nil, nil
+}
+
+func newTestService(roleRepo *fakeRoleRepo, autoGrantRepo *fakeAutoGrantRepo, auditRepo *fakeAuditRepo, accountReader *fakeAccountReader, zitadel authports.ZitadelAdminClient, bootstrap []uuid.UUID) *Service {
+	return New(roleRepo, autoGrantRepo, auditRepo, accountReader, fakeDashboardReader{}, fakeUploadReader{}, fakeClock{now: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)}, fakeTxManager{}, zitadel, bootstrap)
 }
 
 func mustAccount(t *testing.T, id uuid.UUID, email string) *accdomain.Account {
@@ -113,9 +165,10 @@ func TestResolveAccessIncludesBootstrapAdmin(t *testing.T) {
 	accountID := uuid.New()
 	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{accountID: {domain.RoleSupportOperator}}}
 	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{accountID: mustAccount(t, accountID, "bootstrap@example.com")}}
 
-	svc := newTestService(roleRepo, auditRepo, accounts, nil, []uuid.UUID{accountID})
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, []uuid.UUID{accountID})
 
 	access, err := svc.ResolveAccess(context.Background(), accountID)
 	if err != nil {
@@ -139,11 +192,12 @@ func TestReplaceAccountRolesRejectsRemovingLastAdmin(t *testing.T) {
 		adminIDs:       []uuid.UUID{targetID},
 	}
 	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{
 		actorID:  mustAccount(t, actorID, "actor@example.com"),
 		targetID: mustAccount(t, targetID, "target@example.com"),
 	}}
-	svc := newTestService(roleRepo, auditRepo, accounts, nil, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
 
 	_, err := svc.ReplaceAccountRoles(context.Background(), ReplaceAccountRolesCmd{
 		ActorAccountID:  actorID,
@@ -164,11 +218,12 @@ func TestReplaceAccountRolesWritesAuditAndStoredRoles(t *testing.T) {
 	targetID := uuid.New()
 	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{}, adminIDs: []uuid.UUID{actorID}}
 	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{
 		actorID:  mustAccount(t, actorID, "actor@example.com"),
 		targetID: mustAccount(t, targetID, "target@example.com"),
 	}}
-	svc := newTestService(roleRepo, auditRepo, accounts, nil, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
 
 	access, err := svc.ReplaceAccountRoles(context.Background(), ReplaceAccountRolesCmd{
 		ActorAccountID:  actorID,
@@ -192,12 +247,93 @@ func TestReplaceAccountRolesWritesAuditAndStoredRoles(t *testing.T) {
 	}
 }
 
+func TestAddAutoGrantRuleRejectsBootstrapDuplicate(t *testing.T) {
+	actorID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RolePlatformAdmin}}, adminIDs: []uuid.UUID{actorID}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{rules: []domain.AutoGrantRule{{
+		Role:       domain.RolePlatformAdmin,
+		MatchType:  domain.AutoGrantMatchEmail,
+		MatchValue: "admin@collabsphere.ru",
+		Source:     domain.AutoGrantSourceBootstrap,
+	}}}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
+
+	_, err := svc.AddAutoGrantRule(context.Background(), AddAutoGrantRuleCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RolePlatformAdmin},
+		Role:           "platform_admin",
+		MatchType:      "email",
+		MatchValue:     "admin@collabsphere.ru",
+	})
+	if err == nil {
+		t.Fatal("AddAutoGrantRule() error = nil, want conflict")
+	}
+	if autoGrantRepo.createCalls != 0 {
+		t.Fatalf("CreateAutoGrantRule() calls = %d, want 0", autoGrantRepo.createCalls)
+	}
+}
+
+func TestAddAutoGrantRuleCreatesDatabaseRule(t *testing.T) {
+	actorID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RolePlatformAdmin}}, adminIDs: []uuid.UUID{actorID}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
+
+	rule, err := svc.AddAutoGrantRule(context.Background(), AddAutoGrantRuleCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RolePlatformAdmin},
+		Role:           "support_operator",
+		MatchType:      "email",
+		MatchValue:     "Support@collabsphere.ru",
+	})
+	if err != nil {
+		t.Fatalf("AddAutoGrantRule() error = %v", err)
+	}
+	if rule.Source != domain.AutoGrantSourceDatabase || rule.MatchValue != "support@collabsphere.ru" {
+		t.Fatalf("AddAutoGrantRule() rule = %+v", rule)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Action != "platform.access.auto_grant_rule.create" {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestForceVerifyUserEmailWithTypedNilClientReturnsDisabled(t *testing.T) {
+	actorID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RolePlatformAdmin}}, adminIDs: []uuid.UUID{actorID}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
+	var client *nilAwareZitadelAdminClient
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, client, nil)
+
+	_, err := svc.ForceVerifyUserEmail(context.Background(), ForceVerifyUserEmailCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RolePlatformAdmin},
+		UserID:         "123",
+	})
+	if err == nil {
+		t.Fatal("ForceVerifyUserEmail() error = nil, want disabled error")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil {
+		t.Fatalf("ForceVerifyUserEmail() error = %v, want fault error", err)
+	}
+	if appErr.Kind != fault.KindForbidden || appErr.Code != "PLATFORM_ZITADEL_ADMIN_DISABLED" {
+		t.Fatalf("ForceVerifyUserEmail() error = kind=%s code=%s, want forbidden/PLATFORM_ZITADEL_ADMIN_DISABLED", appErr.Kind, appErr.Code)
+	}
+}
+
 func TestForceVerifyUserEmailWritesAudit(t *testing.T) {
 	actorID := uuid.New()
 	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RolePlatformAdmin}}, adminIDs: []uuid.UUID{actorID}}
 	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
-	svc := newTestService(roleRepo, auditRepo, accounts, fakeZitadelAdminClient{result: &authports.ZitadelUserEmailVerificationResult{UserID: "123", Email: "user@example.com", AlreadyVerified: false}}, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, fakeZitadelAdminClient{result: &authports.ZitadelUserEmailVerificationResult{UserID: "123", Email: "user@example.com", AlreadyVerified: false}}, nil)
 
 	res, err := svc.ForceVerifyUserEmail(context.Background(), ForceVerifyUserEmailCmd{
 		ActorAccountID: actorID,
@@ -217,3 +353,4 @@ func TestForceVerifyUserEmailWritesAudit(t *testing.T) {
 		t.Fatalf("audit action = %q, want force-verify", auditRepo.events[0].Action)
 	}
 }
+

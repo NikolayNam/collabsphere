@@ -114,6 +114,8 @@ networks:
 secrets:
   zitadel_postgres_admin_password:
     file: secrets/identity/zitadel_postgres_admin_password
+  zitadel_postgres_admin_token:
+    file: secrets/identity/zitadel_postgres_admin_token
   zitadel_master_key:
     file: secrets/identity/zitadel_master_key
   zitadel_runtime_secrets_yaml:

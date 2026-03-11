@@ -11,6 +11,7 @@ services:
     secrets:
       - dev_password
       - neon_password
+      - platform_auto_grant_yaml
     networks:
       - internal.network
     command: [ "/migrate" ]
@@ -25,6 +26,7 @@ services:
     secrets:
       - dev_password
       - neon_password
+      - platform_auto_grant_yaml
     networks:
       - internal.network
     command: [ "/seed" ]
@@ -40,3 +42,5 @@ secrets:
     file: secrets/postgres/dev/db_password
   neon_password:
     file: secrets/postgres/prod/db_password
+  platform_auto_grant_yaml:
+    file: secrets/identity/platform_auto_grant.yaml

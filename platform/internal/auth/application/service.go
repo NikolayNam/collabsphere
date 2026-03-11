@@ -46,6 +46,8 @@ func New(
 	externalIdentities ports.ExternalIdentityRepository,
 	states ports.OIDCStateRepository,
 	oneTimeCodes ports.OneTimeCodeRepository,
+	platformRoles ports.PlatformRoleGrantRepository,
+	oidcAutoGrant OIDCPlatformAutoGrantPolicy,
 	oidcProvider ports.OIDCProvider,
 	zitadelAdminClient ports.ZitadelAdminClient,
 	oidcStateTTL time.Duration,
@@ -57,7 +59,7 @@ func New(
 		refresh:      refresh.NewHandler(accounts, sessions, tokens, random, clock),
 		logout:       logout.NewHandler(sessions, random),
 		me:           me.NewHandler(accounts),
-		oidc:         newOIDCFlow(txm, accounts, externalIdentities, states, oneTimeCodes, oidcProvider, tokens, random, sessions, clock, oidcStateTTL, oidcNonceTTL, browserTicketTTL),
+		oidc:         newOIDCFlow(txm, accounts, externalIdentities, states, oneTimeCodes, platformRoles, oidcAutoGrant, oidcProvider, tokens, random, sessions, clock, oidcStateTTL, oidcNonceTTL, browserTicketTTL),
 		zitadelAdmin: newZitadelAdmin(zitadelAdminClient),
 	}
 }

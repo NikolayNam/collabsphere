@@ -10,6 +10,7 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/bootstrap"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/logger"
+	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/authcallback"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/docsportal"
 	"github.com/NikolayNam/collabsphere/internal/system"
 )
@@ -35,16 +36,17 @@ func New(conf *config.Config) *App {
 	router := bootstrap.NewRouter(httpLog)
 
 	apiV1 := chi.NewRouter()
-	router.Mount("/api/v1", apiV1)
+	router.Mount("/v1", apiV1)
 
 	api := bootstrap.NewAPI(apiV1, conf)
-	bootstrap.RegisterScalarDocs(apiV1, conf.APP.Title, "/api/v1/openapi.json")
+	bootstrap.RegisterScalarDocs(apiV1, conf.APP.Title, "/v1/openapi.json")
+	authcallback.Register(router, conf.APP.Title)
 	docsportal.Register(router, conf.APP.Title)
 	router.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/api/v1/openapi.yaml", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/v1/openapi.yaml", http.StatusTemporaryRedirect)
 	})
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/api/v1/health", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/v1/health", http.StatusTemporaryRedirect)
 	})
 
 	db := bootstrap.MustOpenGormDB(conf, dbLog)

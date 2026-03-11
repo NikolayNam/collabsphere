@@ -99,13 +99,13 @@ func (h *Handler) CompleteOIDCBrowserCallback(ctx context.Context, input *authdt
 
 func (h *Handler) lookupCallbackReturnTo(ctx context.Context, state string) string {
 	if strings.TrimSpace(state) == "" {
-		return strings.TrimSpace(h.browser.DefaultReturnURL)
+		return h.normalizeBrowserReturnTarget(strings.TrimSpace(h.browser.DefaultReturnURL))
 	}
 	res, err := h.svc.ResolveOIDCCallbackState(ctx, authapp.ResolveOIDCCallbackStateCmd{State: state})
 	if err != nil || res == nil {
-		return strings.TrimSpace(h.browser.DefaultReturnURL)
+		return h.normalizeBrowserReturnTarget(strings.TrimSpace(h.browser.DefaultReturnURL))
 	}
-	return strings.TrimSpace(res.ReturnTo)
+	return h.normalizeBrowserReturnTarget(strings.TrimSpace(res.ReturnTo))
 }
 
 func (h *Handler) resolveBrowserReturnTo(raw string) (string, error) {
@@ -117,7 +117,7 @@ func (h *Handler) resolveBrowserReturnTo(raw string) (string, error) {
 		return "", fault.Validation("browser return URL is required")
 	}
 	if strings.HasPrefix(value, "/") {
-		return value, nil
+		return h.normalizeBrowserReturnTarget(value), nil
 	}
 	parsed, err := url.Parse(value)
 	if err != nil {
@@ -139,8 +139,8 @@ func (h *Handler) resolveBrowserReturnTo(raw string) (string, error) {
 }
 
 func (h *Handler) allowedBrowserOrigins() []string {
-	origins := make([]string, 0, len(h.browser.AllowedRedirectOrigins)+1)
-	seen := make(map[string]struct{}, len(h.browser.AllowedRedirectOrigins)+1)
+	origins := make([]string, 0, len(h.browser.AllowedRedirectOrigins)+2)
+	seen := make(map[string]struct{}, len(h.browser.AllowedRedirectOrigins)+2)
 	add := func(value string) {
 		value = strings.TrimSpace(value)
 		if value == "" {
@@ -163,7 +163,26 @@ func (h *Handler) allowedBrowserOrigins() []string {
 	if parsed, err := url.Parse(strings.TrimSpace(h.browser.DefaultReturnURL)); err == nil && parsed.Scheme != "" && parsed.Host != "" {
 		add(parsed.Scheme + "://" + parsed.Host)
 	}
+	if parsed, err := url.Parse(strings.TrimSpace(h.browser.PublicBaseURL)); err == nil && parsed.Scheme != "" && parsed.Host != "" {
+		add(parsed.Scheme + "://" + parsed.Host)
+	}
 	return origins
+}
+
+func (h *Handler) normalizeBrowserReturnTarget(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || !strings.HasPrefix(value, "/") {
+		return value
+	}
+	base := strings.TrimSpace(h.browser.PublicBaseURL)
+	if base == "" {
+		return value
+	}
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return value
+	}
+	return parsed.Scheme + "://" + parsed.Host + value
 }
 
 func (h *Handler) redirectWithBrowserError(returnTo, code, description string) (string, bool) {

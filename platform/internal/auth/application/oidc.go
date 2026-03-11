@@ -69,6 +69,8 @@ type oidcFlow struct {
 	externalIdentities ports.ExternalIdentityRepository
 	states             ports.OIDCStateRepository
 	oneTimeCodes       ports.OneTimeCodeRepository
+	platformRoles      ports.PlatformRoleGrantRepository
+	autoGrantPolicy    oidcPlatformAutoGrantPolicy
 	provider           ports.OIDCProvider
 	tokens             ports.TokenManager
 	random             ports.RandomTokenGenerator
@@ -85,6 +87,8 @@ func newOIDCFlow(
 	externalIdentities ports.ExternalIdentityRepository,
 	states ports.OIDCStateRepository,
 	oneTimeCodes ports.OneTimeCodeRepository,
+	platformRoles ports.PlatformRoleGrantRepository,
+	autoGrantPolicy OIDCPlatformAutoGrantPolicy,
 	provider ports.OIDCProvider,
 	tokens ports.TokenManager,
 	random ports.RandomTokenGenerator,
@@ -100,6 +104,8 @@ func newOIDCFlow(
 		externalIdentities: externalIdentities,
 		states:             states,
 		oneTimeCodes:       oneTimeCodes,
+		platformRoles:      platformRoles,
+		autoGrantPolicy:    newOIDCPlatformAutoGrantPolicy(autoGrantPolicy),
 		provider:           provider,
 		tokens:             tokens,
 		random:             random,
@@ -233,7 +239,9 @@ func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbac
 				return err
 			}
 		}
-
+		if err := f.autoGrantPlatformRoles(ctx, account.ID().UUID(), identity, now); err != nil {
+			return autherrors.Internal("auto grant platform admin failed", err)
+		}
 		ticketRaw, err := f.random.Generate()
 		if err != nil {
 			return autherrors.Internal("generate exchange ticket failed", err)
@@ -491,3 +499,4 @@ func oidcPromptForIntent(intent string) string {
 	}
 	return ""
 }
+

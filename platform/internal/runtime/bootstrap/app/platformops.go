@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	accpg "github.com/NikolayNam/collabsphere/internal/accounts/repository/postgres"
+	authports "github.com/NikolayNam/collabsphere/internal/auth/application/ports"
 	platformapp "github.com/NikolayNam/collabsphere/internal/platformops/application"
 	platformhttp "github.com/NikolayNam/collabsphere/internal/platformops/delivery/http"
 	platformpg "github.com/NikolayNam/collabsphere/internal/platformops/repository/postgres"
@@ -18,7 +19,11 @@ import (
 
 func registerPlatformOpsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	accountRepo := accpg.NewAccountRepo(db)
-	repo := platformpg.NewRepo(db)
+	autoGrantCfg, err := conf.Auth.PlatformAutoGrantRules()
+	if err != nil {
+		panic(fmt.Errorf("load platform auto-grant rules: %w", err))
+	}
+	repo := platformpg.NewRepo(db, platformpg.WithBootstrapAutoGrantRules(buildBootstrapAutoGrantRules(autoGrantCfg)))
 	txManager := dbtx.New(db)
 	clk := clock.NewSystemClock()
 
@@ -31,8 +36,12 @@ func registerPlatformOpsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	if err != nil {
 		panic(fmt.Errorf("build platform zitadel admin client: %w", err))
 	}
+	var zitadelAdmin authports.ZitadelAdminClient
+	if zitadelAdminClient != nil {
+		zitadelAdmin = zitadelAdminClient
+	}
 
-	service := platformapp.New(repo, repo, accountRepo, repo, repo, clk, txManager, zitadelAdminClient, bootstrapAccountIDs)
+	service := platformapp.New(repo, repo, repo, accountRepo, repo, repo, clk, txManager, zitadelAdmin, bootstrapAccountIDs)
 	handler := platformhttp.NewHandler(service)
 
 	secret, err := conf.Auth.JWTSecretValue()
@@ -43,3 +52,4 @@ func registerPlatformOpsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 
 	platformhttp.Register(api, handler, jwtManager)
 }
+

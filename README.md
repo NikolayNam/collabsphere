@@ -20,7 +20,7 @@ CollabSphere - backend-платформа на Go для управления а
 | Область | Текущая технология |
 | --- | --- |
 | HTTP API | Go 1.26, `chi`, `huma` |
-| OpenAPI / docs | `huma`, Scalar API reference на `/api/v1/docs` |
+| OpenAPI / docs | `huma`, Scalar API reference на `/v1/docs` |
 | Доступ к БД | `gorm`, `pgx` |
 | База данных | PostgreSQL |
 | Миграции | `goose` + генерация bundled SQL |
@@ -94,7 +94,7 @@ make migrate-up
 
 После запуска:
 
-- Scalar API reference: [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
+- Scalar API reference: [http://localhost:8080/v1/docs](http://localhost:8080/v1/docs)
 - OpenAPI YAML: [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
 - Health-check: [http://localhost:8080/health](http://localhost:8080/health)
 
@@ -141,7 +141,7 @@ docker compose `
 
 Проверка после запуска:
 
-- [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
+- [http://localhost:8080/v1/docs](http://localhost:8080/v1/docs)
 - [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
 - [http://localhost:8080/health](http://localhost:8080/health)
 
@@ -164,9 +164,11 @@ docker compose `
 3. Поднять стек вместе с `deploy/docker-compose.zitadel.yaml`
 4. При необходимости заранее переопределить bootstrap-поля первого администратора в `deploy/secrets/identity/zitadel_init_steps.yaml`
 5. Если ZITADEL уже запускался с неверным hostname или старыми настройками Login V2, удалить локальные тома `zitadel.postgres.data` и `zitadel.shared`, затем повторить первый старт
-6. Создать в ZITADEL OIDC application для backend callback `http://localhost:8080/api/v1/auth/zitadel/callback`
+6. Создать в ZITADEL OIDC application для backend callback `http://api.localhost:8080/v1/auth/zitadel/callback`
 7. Перенести выданные `client_id` в `AUTH_ZITADEL_CLIENT_ID`, а `client_secret` в `deploy/secrets/identity/zitadel_client_secret`, затем установить `AUTH_ZITADEL_ENABLED=true`
-8. Перезапустить `api`
+8. При необходимости включить browser return URL через `APPLICATION_PUBLIC_BASE_URL=http://api.localhost:8080` и `AUTH_BROWSER_DEFAULT_RETURN_URL=/auth/callback`
+9. Если нужен platform endpoint `POST /v1/platform/users/{userId}/email/force-verify`, создать отдельный service account в ZITADEL, выдать ему admin-права и сохранить его PAT в `AUTH_ZITADEL_ADMIN_TOKEN` или `AUTH_ZITADEL_ADMIN_TOKEN_FILE`
+10. Перезапустить `api`
 
 Для `deploy/secrets/identity/zitadel_master_key` используйте случайный ASCII-ключ ровно на 32 символа. В PowerShell его можно сгенерировать так:
 ```powershell
@@ -174,6 +176,49 @@ docker compose `
 ```
 
 `AUTH_ZITADEL_CLIENT_ID` и `deploy/secrets/identity/zitadel_client_secret` не генерируются заранее. Они появляются только после первого запуска ZITADEL, когда вы создаёте OIDC application в админ-панели и копируете оттуда выданные значения.
+
+### ZITADEL admin token для force-verify
+
+`AUTH_ZITADEL_ADMIN_TOKEN` не должен содержать `client_secret`, пароль пользователя или JSON-ответ OAuth. Здесь ожидается сырой Bearer token, и для текущего backend-кода правильный вариант - Personal Access Token сервисного аккаунта ZITADEL.
+
+Практический сценарий:
+
+1. Открыть консоль ZITADEL: [http://auth.localhost:8090/ui/console](http://auth.localhost:8090/ui/console)
+2. Создать service account в `Users -> Service Accounts`
+3. Создать для него Personal Access Token и сохранить показанное значение
+4. Выдать service account административную роль. Для локального `dev` самый безопасный с точки зрения совместимости вариант - `IAM_OWNER`; если хотите сузить права и точно знаете границы своей org, можно использовать `ORG_OWNER`
+5. Сохранить токен в `deploy/.env.dev`:
+
+```env
+AUTH_ZITADEL_ADMIN_TOKEN=<PASTE_PAT_HERE>
+```
+
+Или сохранить токен в файл и указать:
+
+```env
+AUTH_ZITADEL_ADMIN_TOKEN_FILE=/run/secrets/zitadel_admin_token
+```
+
+6. Пересоздать `api`
+7. Выполнить force-verify через backend route:
+
+```http
+POST /v1/platform/users/{userId}/email/force-verify
+Authorization: Bearer <backend access token platform_admin>
+```
+
+Где взять `userId`:
+
+- это ZITADEL user id, а не локальный `account_id`
+- его можно получить в ZITADEL console или через `ListUsers/GetUserByID`
+
+Что важно:
+
+- backend-to-ZITADEL credential и пользовательский токен backend - разные вещи
+- `AUTH_ZITADEL_ADMIN_TOKEN` использует только backend
+- без этого токена route не должен выполнять verification и будет возвращать `PLATFORM_ZITADEL_ADMIN_DISABLED`
+
+Подробная пошаговая инструкция вынесена в [`docs/content/authentication/zitadel.md`](docs/content/authentication/zitadel.md).
 
 
 По умолчанию используется hostname `auth.localhost`.
@@ -290,43 +335,45 @@ go -C platform test ./...
 
 ### Базовый префикс
 
-Все зарегистрированные маршруты API живут под префиксом `/api/v1`.
+Все зарегистрированные маршруты API живут под префиксом `/v1`.
 
 ### Redirects из корня
 
 Корневой router дополнительно пробрасывает удобные entrypoints:
 
-- `/openapi.yaml` -> `/api/v1/openapi.yaml`
-- `/health` -> `/api/v1/health`
+- `/openapi.yaml` -> `/v1/openapi.yaml`
+- `/health` -> `/v1/health`
 
 ### Основные группы маршрутов
 
 Системные:
 
-- `GET /api/v1/health`
+- `GET /v1/health`
 
 Accounts:
 
-- `POST /api/v1/accounts`
-- `GET /api/v1/accounts/{id}`
-- `GET /api/v1/accounts/by-email`
+- `POST /v1/accounts`
+- `GET /v1/accounts/{id}`
+- `GET /v1/accounts/by-email`
 
 Organizations:
 
-- `POST /api/v1/organizations`
-- `GET /api/v1/organizations/{id}`
+- `POST /v1/organizations`
+- `GET /v1/organizations/{id}`
 
 Memberships:
 
-- `POST /api/v1/organizations/{organization_id}/members`
-- `GET /api/v1/organizations/{organization_id}/members`
+- `POST /v1/organizations/{organization_id}/members`
+- `GET /v1/organizations/{organization_id}/members`
 
 Auth:
 
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/auth/me`
+- `GET /v1/auth/zitadel/login`
+- `GET /v1/auth/zitadel/callback`
+- `POST /v1/auth/exchange`
+- `POST /v1/auth/refresh`
+- `POST /v1/auth/logout`
+- `GET /v1/auth/me`
 
 Маршруты `auth` есть в OpenAPI и регистрируются в приложении, но текущую реализацию нельзя считать стабилизированной. Подробности см. в разделе ниже.
 
@@ -344,4 +391,5 @@ Auth:
 - ADR по архитектурным границам: [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
 - Compose-файлы: `deploy/docker-compose.postgres.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
 - Исходники API: `platform/cmd/api`, `platform/internal/`
+
 

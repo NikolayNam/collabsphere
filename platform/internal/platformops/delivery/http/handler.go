@@ -65,6 +65,63 @@ func (h *Handler) ReplaceAccountRoles(ctx context.Context, input *platformdto.Re
 	return accessResponse(http.StatusOK, result), nil
 }
 
+func (h *Handler) ListAutoGrantRules(ctx context.Context, _ *platformdto.ListAutoGrantRulesInput) (*platformdto.AutoGrantRuleListResponse, error) {
+	rules, err := h.svc.ListAutoGrantRules(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AutoGrantRuleListResponse{Status: http.StatusOK}
+	out.Body.Items = make([]platformdto.AutoGrantRule, 0, len(rules))
+	for _, rule := range rules {
+		out.Body.Items = append(out.Body.Items, autoGrantRuleDTO(rule))
+	}
+	return out, nil
+}
+
+func (h *Handler) CreateAutoGrantRule(ctx context.Context, input *platformdto.CreateAutoGrantRuleInput) (*platformdto.AutoGrantRuleResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	rule, err := h.svc.AddAutoGrantRule(ctx, platformapp.AddAutoGrantRuleCmd{
+		ActorAccountID: access.AccountID,
+		ActorRoles:     access.EffectiveRoles,
+		ActorBootstrap: access.BootstrapAdmin,
+		Role:           input.Body.Role,
+		MatchType:      input.Body.MatchType,
+		MatchValue:     input.Body.MatchValue,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AutoGrantRuleResponse{Status: http.StatusCreated}
+	out.Body = autoGrantRuleDTO(*rule)
+	return out, nil
+}
+
+func (h *Handler) DeleteAutoGrantRule(ctx context.Context, input *platformdto.DeleteAutoGrantRuleInput) (*platformdto.AutoGrantRuleResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	ruleID, err := httpbind.ParseUUID(input.RuleID, fault.Validation("Auto-grant rule id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("ruleId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	rule, err := h.svc.DeleteAutoGrantRule(ctx, platformapp.DeleteAutoGrantRuleCmd{
+		ActorAccountID: access.AccountID,
+		ActorRoles:     access.EffectiveRoles,
+		ActorBootstrap: access.BootstrapAdmin,
+		RuleID:         ruleID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AutoGrantRuleResponse{Status: http.StatusOK}
+	out.Body = autoGrantRuleDTO(*rule)
+	return out, nil
+}
+
 func (h *Handler) GetDashboardSummary(ctx context.Context, _ *platformdto.DashboardSummaryInput) (*platformdto.DashboardSummaryResponse, error) {
 	summary, err := h.svc.GetDashboardSummary(ctx)
 	if err != nil {
@@ -160,6 +217,19 @@ func accessResponse(status int, access *platformdomain.Access) *platformdto.Plat
 	out.Body.EffectiveRoles = platformdomain.RoleStrings(access.EffectiveRoles)
 	out.Body.BootstrapAdmin = access.BootstrapAdmin
 	return out
+}
+
+func autoGrantRuleDTO(rule platformdomain.AutoGrantRule) platformdto.AutoGrantRule {
+	return platformdto.AutoGrantRule{
+		ID:                 rule.ID,
+		Role:               string(rule.Role),
+		MatchType:          string(rule.MatchType),
+		MatchValue:         rule.MatchValue,
+		Source:             string(rule.Source),
+		CreatedByAccountID: rule.CreatedByAccountID,
+		CreatedAt:          rule.CreatedAt,
+		UpdatedAt:          rule.UpdatedAt,
+	}
 }
 
 func parseOptionalUUID(raw string, field string) (*uuid.UUID, error) {

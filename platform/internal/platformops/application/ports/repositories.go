@@ -16,6 +16,12 @@ type RoleBindingRepository interface {
 	ReplaceRoles(ctx context.Context, accountID uuid.UUID, roles []domain.Role, grantedByAccountID *uuid.UUID, now time.Time) error
 }
 
+type AutoGrantRuleRepository interface {
+	ListAutoGrantRules(ctx context.Context) ([]domain.AutoGrantRule, error)
+	CreateAutoGrantRule(ctx context.Context, role domain.Role, matchType domain.AutoGrantMatchType, matchValue string, grantedByAccountID *uuid.UUID, now time.Time) (*domain.AutoGrantRule, error)
+	DeleteAutoGrantRule(ctx context.Context, ruleID uuid.UUID) (*domain.AutoGrantRule, error)
+}
+
 type AuditRepository interface {
 	Append(ctx context.Context, event domain.AuditEvent) error
 }

@@ -1,11 +1,30 @@
 package postgres
 
-import "gorm.io/gorm"
+import (
+	platformdomain "github.com/NikolayNam/collabsphere/internal/platformops/domain"
+	"gorm.io/gorm"
+)
 
 type Repo struct {
-	db *gorm.DB
+	db                      *gorm.DB
+	bootstrapAutoGrantRules []platformdomain.AutoGrantRule
 }
 
-func NewRepo(db *gorm.DB) *Repo {
-	return &Repo{db: db}
+type Option func(*Repo)
+
+func WithBootstrapAutoGrantRules(rules []platformdomain.AutoGrantRule) Option {
+	cloned := append([]platformdomain.AutoGrantRule{}, rules...)
+	return func(r *Repo) {
+		r.bootstrapAutoGrantRules = cloned
+	}
+}
+
+func NewRepo(db *gorm.DB, opts ...Option) *Repo {
+	repo := &Repo{db: db}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(repo)
+		}
+	}
+	return repo
 }

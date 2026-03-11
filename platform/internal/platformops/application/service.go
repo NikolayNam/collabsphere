@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
@@ -24,6 +25,22 @@ type ReplaceAccountRolesCmd struct {
 	ActorBootstrap  bool
 	TargetAccountID uuid.UUID
 	Roles           []string
+}
+
+type AddAutoGrantRuleCmd struct {
+	ActorAccountID uuid.UUID
+	ActorRoles     []domain.Role
+	ActorBootstrap bool
+	Role           string
+	MatchType      string
+	MatchValue     string
+}
+
+type DeleteAutoGrantRuleCmd struct {
+	ActorAccountID uuid.UUID
+	ActorRoles     []domain.Role
+	ActorBootstrap bool
+	RuleID         uuid.UUID
 }
 
 type ForceVerifyUserEmailCmd struct {
@@ -61,6 +78,7 @@ type ListUploadQueueCmd struct {
 
 type Service struct {
 	roles           ports.RoleBindingRepository
+	autoGrants      ports.AutoGrantRuleRepository
 	audits          ports.AuditRepository
 	accounts        ports.AccountReader
 	dashboards      ports.DashboardReader
@@ -73,6 +91,7 @@ type Service struct {
 
 func New(
 	roles ports.RoleBindingRepository,
+	autoGrants ports.AutoGrantRuleRepository,
 	audits ports.AuditRepository,
 	accounts ports.AccountReader,
 	dashboards ports.DashboardReader,
@@ -91,6 +110,7 @@ func New(
 	}
 	return &Service{
 		roles:           roles,
+		autoGrants:      autoGrants,
 		audits:          audits,
 		accounts:        accounts,
 		dashboards:      dashboards,
@@ -103,7 +123,7 @@ func New(
 }
 
 func (s *Service) ZitadelAdminEnabled() bool {
-	return s != nil && s.zitadelAdmin != nil
+	return s != nil && hasZitadelAdminClient(s.zitadelAdmin)
 }
 
 func (s *Service) ResolveAccess(ctx context.Context, accountID uuid.UUID) (*domain.Access, error) {
@@ -198,6 +218,108 @@ func (s *Service) ReplaceAccountRoles(ctx context.Context, cmd ReplaceAccountRol
 	return s.ResolveAccess(ctx, cmd.TargetAccountID)
 }
 
+func (s *Service) ListAutoGrantRules(ctx context.Context) ([]domain.AutoGrantRule, error) {
+	rules, err := s.autoGrants.ListAutoGrantRules(ctx)
+	if err != nil {
+		return nil, fault.Internal("Load platform auto-grant rules failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return rules, nil
+}
+
+func (s *Service) AddAutoGrantRule(ctx context.Context, cmd AddAutoGrantRuleCmd) (*domain.AutoGrantRule, error) {
+	if cmd.ActorAccountID == uuid.Nil {
+		return nil, fault.Unauthorized("Authentication required", fault.Code("PLATFORM_UNAUTHORIZED"))
+	}
+	role, matchType, matchValue, err := normalizeAutoGrantRuleInput(cmd.Role, cmd.MatchType, cmd.MatchValue)
+	if err != nil {
+		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.access.auto_grant_rule.create", "platform_auto_grant_rule", "", err.Error())
+		return nil, err
+	}
+	existingRules, err := s.autoGrants.ListAutoGrantRules(ctx)
+	if err != nil {
+		err = fault.Internal("Load platform auto-grant rules failed", fault.Code("INTERNAL"), fault.WithCause(err))
+		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.access.auto_grant_rule.create", "platform_auto_grant_rule", "", err.Error())
+		return nil, err
+	}
+	for _, existing := range existingRules {
+		if existing.Role != role || existing.MatchType != matchType || existing.MatchValue != matchValue {
+			continue
+		}
+		message := "Platform auto-grant rule already exists"
+		if existing.Source == domain.AutoGrantSourceBootstrap {
+			message = "Platform auto-grant rule already exists in bootstrap config"
+		}
+		conflictErr := fault.Conflict(message, fault.Code("PLATFORM_AUTO_GRANT_EXISTS"))
+		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.access.auto_grant_rule.create", "platform_auto_grant_rule", derefUUID(existing.ID), conflictErr.Error())
+		return nil, conflictErr
+	}
+	actorID := cmd.ActorAccountID
+	now := s.clock.Now()
+	var created *domain.AutoGrantRule
+	if err := s.txm.WithinTransaction(ctx, func(txCtx context.Context) error {
+		created, err = s.autoGrants.CreateAutoGrantRule(txCtx, role, matchType, matchValue, &actorID, now)
+		if err != nil {
+			return fault.Internal("Create platform auto-grant rule failed", fault.Code("INTERNAL"), fault.WithCause(err))
+		}
+		summary := fmt.Sprintf("role=%s matchType=%s matchValue=%s", created.Role, created.MatchType, created.MatchValue)
+		return s.audits.Append(txCtx, domain.AuditEvent{
+			ActorAccountID: &actorID,
+			ActorRoles:     cmd.ActorRoles,
+			ActorBootstrap: cmd.ActorBootstrap,
+			Action:         "platform.access.auto_grant_rule.create",
+			TargetType:     "platform_auto_grant_rule",
+			TargetID:       stringPtr(derefUUID(created.ID)),
+			Status:         domain.AuditStatusSuccess,
+			Summary:        stringPtr(summary),
+			CreatedAt:      now,
+		})
+	}); err != nil {
+		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.access.auto_grant_rule.create", "platform_auto_grant_rule", derefUUID(createdID(created)), err.Error())
+		return nil, err
+	}
+	return created, nil
+}
+
+func (s *Service) DeleteAutoGrantRule(ctx context.Context, cmd DeleteAutoGrantRuleCmd) (*domain.AutoGrantRule, error) {
+	if cmd.ActorAccountID == uuid.Nil {
+		return nil, fault.Unauthorized("Authentication required", fault.Code("PLATFORM_UNAUTHORIZED"))
+	}
+	if cmd.RuleID == uuid.Nil {
+		err := fault.Validation("Auto-grant rule id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("ruleId", "must be a UUID"))
+		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.access.auto_grant_rule.delete", "platform_auto_grant_rule", "", err.Error())
+		return nil, err
+	}
+	actorID := cmd.ActorAccountID
+	now := s.clock.Now()
+	var deleted *domain.AutoGrantRule
+	if err := s.txm.WithinTransaction(ctx, func(txCtx context.Context) error {
+		deletedRule, opErr := s.autoGrants.DeleteAutoGrantRule(txCtx, cmd.RuleID)
+		if opErr != nil {
+			return fault.Internal("Delete platform auto-grant rule failed", fault.Code("INTERNAL"), fault.WithCause(opErr))
+		}
+		deleted = deletedRule
+		if deleted == nil {
+			return fault.NotFound("Platform auto-grant rule not found", fault.Code("PLATFORM_AUTO_GRANT_NOT_FOUND"))
+		}
+		summary := fmt.Sprintf("role=%s matchType=%s matchValue=%s", deleted.Role, deleted.MatchType, deleted.MatchValue)
+		return s.audits.Append(txCtx, domain.AuditEvent{
+			ActorAccountID: &actorID,
+			ActorRoles:     cmd.ActorRoles,
+			ActorBootstrap: cmd.ActorBootstrap,
+			Action:         "platform.access.auto_grant_rule.delete",
+			TargetType:     "platform_auto_grant_rule",
+			TargetID:       stringPtr(cmd.RuleID.String()),
+			Status:         domain.AuditStatusSuccess,
+			Summary:        stringPtr(summary),
+			CreatedAt:      now,
+		})
+	}); err != nil {
+		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.access.auto_grant_rule.delete", "platform_auto_grant_rule", cmd.RuleID.String(), err.Error())
+		return nil, err
+	}
+	return deleted, nil
+}
+
 func (s *Service) ForceVerifyUserEmail(ctx context.Context, cmd ForceVerifyUserEmailCmd) (*ForceVerifyUserEmailResult, error) {
 	if cmd.ActorAccountID == uuid.Nil {
 		return nil, fault.Unauthorized("Authentication required", fault.Code("PLATFORM_UNAUTHORIZED"))
@@ -208,7 +330,7 @@ func (s *Service) ForceVerifyUserEmail(ctx context.Context, cmd ForceVerifyUserE
 		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.user.email.force_verify", "zitadel_user", userID, err.Error())
 		return nil, err
 	}
-	if s.zitadelAdmin == nil {
+	if !hasZitadelAdminClient(s.zitadelAdmin) {
 		err := fault.Forbidden("ZITADEL admin email verification is disabled. Configure AUTH_ZITADEL_ADMIN_TOKEN to enable it.", fault.Code("PLATFORM_ZITADEL_ADMIN_DISABLED"))
 		s.recordFailure(ctx, cmd.ActorAccountID, cmd.ActorRoles, cmd.ActorBootstrap, "platform.user.email.force_verify", "zitadel_user", userID, err.Error())
 		return nil, err
@@ -358,6 +480,22 @@ func normalizeInputRoles(raw []string) ([]domain.Role, error) {
 	return domain.UniqueSortedRoles(parsed), nil
 }
 
+func normalizeAutoGrantRuleInput(rawRole string, rawMatchType string, rawMatchValue string) (domain.Role, domain.AutoGrantMatchType, string, error) {
+	role := domain.ParseRole(rawRole)
+	if !role.IsValid() {
+		return "", "", "", fault.Validation("Unsupported platform role", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("role", "must be platform_admin, support_operator, or review_operator"))
+	}
+	matchType := domain.ParseAutoGrantMatchType(rawMatchType)
+	if !matchType.IsValid() {
+		return "", "", "", fault.Validation("Unsupported auto-grant match type", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("matchType", "must be email or subject"))
+	}
+	matchValue := domain.NormalizeAutoGrantMatchValue(matchType, rawMatchValue)
+	if matchValue == "" {
+		return "", "", "", fault.Validation("Auto-grant match value is required", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("matchValue", "is required"))
+	}
+	return role, matchType, matchValue, nil
+}
+
 func normalizeOptionalUploadStatus(value *string) *string {
 	if value == nil {
 		return nil
@@ -432,6 +570,19 @@ func (s *Service) appendAuditBestEffort(ctx context.Context, event domain.AuditE
 	}
 }
 
+func hasZitadelAdminClient(client authports.ZitadelAdminClient) bool {
+	if client == nil {
+		return false
+	}
+	value := reflect.ValueOf(client)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return !value.IsNil()
+	default:
+		return true
+	}
+}
+
 func mapZitadelAdminError(err error) error {
 	var apiErr *authports.ZitadelAdminAPIError
 	if stderrors.As(err, &apiErr) && apiErr != nil {
@@ -487,6 +638,20 @@ func derefString(value *string) string {
 	return strings.TrimSpace(*value)
 }
 
+func derefUUID(value *uuid.UUID) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
+}
+
+func createdID(rule *domain.AutoGrantRule) *uuid.UUID {
+	if rule == nil {
+		return nil
+	}
+	return rule.ID
+}
+
 func nonEmpty(values ...string) string {
 	for _, value := range values {
 		value = strings.TrimSpace(value)
@@ -496,3 +661,4 @@ func nonEmpty(values ...string) string {
 	}
 	return ""
 }
+

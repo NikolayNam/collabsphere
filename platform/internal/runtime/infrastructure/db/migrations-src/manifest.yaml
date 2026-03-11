@@ -82,5 +82,7 @@ migrations:
   - auth/one_time_codes.sql
   - iam/platform_role_bindings.sql
   - iam/platform_audit_events.sql
+  - iam/platform_auto_grant_rules.sql
+
 
 

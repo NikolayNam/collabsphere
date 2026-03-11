@@ -32,7 +32,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 		"",
 		"## Как читать API reference",
 		"",
-		"- Все маршруты живут под базовым префиксом `/api/v1`.",
+		"- Все маршруты живут под базовым префиксом `/v1`.",
 		"- Защищенные ручки используют `Authorization: Bearer <token>`.",
 		"- Загрузки файлов доступны в двух режимах: маленькие файлы можно отправлять прямым `multipart/form-data`, а тяжёлые сценарии используют tracked upload sessions с presigned `uploadUrl` и последующим `complete` шагом.",
 		"- Скачивание файлов работает через предметные download endpoint'ы и возвращает short-lived `downloadUrl`.",
@@ -100,7 +100,7 @@ func NewAPI(router chi.Router, conf *config.Config) huma.API {
 	}
 
 	cfg.Servers = []*huma.Server{
-		{URL: "/api/v1"},
+		{URL: "/v1"},
 	}
 
 	return humachi.New(router, cfg)

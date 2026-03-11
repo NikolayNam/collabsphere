@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"net/http"
+	"reflect"
 	"strings"
 
 	autherrors "github.com/NikolayNam/collabsphere/internal/auth/application/errors"
@@ -31,7 +32,7 @@ func newZitadelAdmin(client ports.ZitadelAdminClient) *zitadelAdmin {
 }
 
 func (z *zitadelAdmin) ForceVerifyUserEmail(ctx context.Context, cmd ForceVerifyZitadelUserEmailCmd) (*ForceVerifyZitadelUserEmailResult, error) {
-	if z == nil || z.client == nil {
+	if z == nil || !hasZitadelAdminClient(z.client) {
 		return nil, autherrors.Unavailable("ZITADEL admin email verification is unavailable")
 	}
 	userID := strings.TrimSpace(cmd.UserID)
@@ -74,6 +75,19 @@ func mapZitadelAdminError(err error) error {
 	return autherrors.Internal("force verify zitadel email failed", err)
 }
 
+func hasZitadelAdminClient(client ports.ZitadelAdminClient) bool {
+	if client == nil {
+		return false
+	}
+	value := reflect.ValueOf(client)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return !value.IsNil()
+	default:
+		return true
+	}
+}
+
 func nonEmpty(values ...string) string {
 	for _, value := range values {
 		value = strings.TrimSpace(value)
@@ -83,3 +97,4 @@ func nonEmpty(values ...string) string {
 	}
 	return ""
 }
+

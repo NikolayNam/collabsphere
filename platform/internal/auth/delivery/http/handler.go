@@ -16,6 +16,7 @@ import (
 type BrowserFlowConfig struct {
 	DefaultReturnURL       string
 	AllowedRedirectOrigins []string
+	PublicBaseURL          string
 }
 
 type Handler struct {

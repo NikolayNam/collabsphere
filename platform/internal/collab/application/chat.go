@@ -430,7 +430,7 @@ func sanitizeFileName(fileName string) string {
 }
 
 func (s *Service) exchangeURL(token string) string {
-	path := "/api/v1/guest-invites/" + token + "/exchange"
+	path := "/v1/guest-invites/" + token + "/exchange"
 	base := strings.TrimRight(strings.TrimSpace(s.publicBaseURL), "/")
 	if base == "" {
 		return path

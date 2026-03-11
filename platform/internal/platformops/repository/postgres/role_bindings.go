@@ -79,22 +79,34 @@ func (r *Repo) ReplaceRoles(ctx context.Context, accountID uuid.UUID, roles []do
 	}
 
 	for _, role := range normalized {
-		payload := map[string]any{
-			"account_id":            accountID,
-			"role":                  string(role),
-			"granted_by_account_id": grantedByAccountID,
-			"created_at":            now,
-			"updated_at":            now,
-		}
-		if err := db.Table("iam.platform_role_bindings").Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "account_id"}, {Name: "role"}},
-			DoUpdates: clause.Assignments(map[string]any{"granted_by_account_id": grantedByAccountID, "updated_at": now}),
-		}).Create(payload).Error; err != nil {
+		if err := r.ensureRole(ctx, accountID, role, grantedByAccountID, now); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (r *Repo) ensureRole(ctx context.Context, accountID uuid.UUID, role domain.Role, grantedByAccountID *uuid.UUID, now time.Time) error {
+	if !role.IsValid() {
+		return fmt.Errorf("unsupported platform role: %q", role)
+	}
+	return r.dbFrom(ctx).WithContext(ctx).
+		Table("iam.platform_role_bindings").
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{{Name: "account_id"}, {Name: "role"}},
+			DoUpdates: clause.Assignments(map[string]any{
+				"granted_by_account_id": grantedByAccountID,
+				"updated_at":            now,
+			}),
+		}).
+		Create(map[string]any{
+			"account_id":            accountID,
+			"role":                  string(role),
+			"granted_by_account_id": grantedByAccountID,
+			"created_at":            now,
+			"updated_at":            now,
+		}).Error
 }
 
 func jsonbExpr(value any) any {
