@@ -164,6 +164,7 @@ docker compose `
 3. Поднять стек вместе с `deploy/docker-compose.zitadel.yaml`
 4. При необходимости заранее переопределить bootstrap-поля первого администратора в `deploy/secrets/identity/zitadel_init_steps.yaml`
 5. Если ZITADEL уже запускался с неверным hostname или старыми настройками Login V2, удалить локальные тома `zitadel.postgres.data` и `zitadel.shared`, затем повторить первый старт
+   Для hosted login это часто проявляется как `500` в `zitadel-login` и `Errors.Token.Invalid (AUTH-7fs1e)` при вызове `ListSessions`
 6. Создать в ZITADEL OIDC application для backend callback `http://api.localhost:8080/v1/auth/zitadel/callback`
 7. Перенести выданные `client_id` в `AUTH_ZITADEL_CLIENT_ID`, а `client_secret` в `deploy/secrets/identity/zitadel_client_secret`, затем установить `AUTH_ZITADEL_ENABLED=true`
 8. При необходимости включить browser return URL через `APPLICATION_PUBLIC_BASE_URL=http://api.localhost:8080` и `AUTH_BROWSER_DEFAULT_RETURN_URL=/auth/callback`
@@ -222,7 +223,7 @@ Authorization: Bearer <backend access token platform_admin>
 
 
 По умолчанию используется hostname `auth.localhost`.
-Это сделано намеренно: браузер на хосте должен открывать `http://auth.localhost:8090` и `http://auth.localhost:3000`, а контейнер `api` получает тот же hostname через `extra_hosts` в `deploy/docker-compose.platform.yaml`. Использование `localhost:3000` для Login V2 приводит к `Instance not found`, потому что инстанс ZITADEL зарегистрирован на `auth.localhost`.
+Это сделано намеренно: браузер на хосте должен открывать `http://auth.localhost:8090` и `http://auth.localhost:3000`, а контейнер `api` для server-side OIDC discovery и token exchange тоже должен использовать `http://auth.localhost:8090` через `host-gateway`. Использование `auth.localhost:8080` внутри `api` в текущей compose-схеме уводит запросы обратно в опубликованный порт самого `api`, а использование `http://zitadel:8080` ломает instance resolution в ZITADEL, потому что инстанс зарегистрирован на `auth.localhost`, а не на `zitadel`.
 `deploy/secrets/identity/zitadel_init_steps.yaml` применяется только на первом bootstrap инстанса. Если ZITADEL уже инициализирован, изменение этого файла само по себе не обновит существующего администратора.
 
 ### Остановка окружения

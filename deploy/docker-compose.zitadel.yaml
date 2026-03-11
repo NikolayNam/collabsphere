@@ -30,6 +30,7 @@ services:
     restart: unless-stopped
     secrets:
       - zitadel_master_key
+      - zitadel_admin_token
       - zitadel_runtime_secrets_yaml
       - zitadel_init_steps_yaml
     user: "0"
@@ -122,3 +123,5 @@ secrets:
     file: secrets/identity/zitadel_runtime_secrets.yaml
   zitadel_init_steps_yaml:
     file: secrets/identity/zitadel_init_steps.yaml
+  zitadel_admin_token:
+    file: secrets/identity/zitadel_admin_token
