@@ -72,6 +72,12 @@ const initialChannelsState: Status = {
   description: "После выбора группы backend вернёт каналы через `GET /v1/groups/{groupId}/channels`.",
 };
 
+const initialJoinRequestState: Status = {
+  kind: "idle",
+  title: "Запрос на присоединение",
+  description: "Можно отправить запрос в backend на добавление аккаунта в группу выбранного канала.",
+};
+
 const initialMessagesState: Status = {
   kind: "idle",
   title: "Лента сообщений",
@@ -130,6 +136,7 @@ export default function ChatPage() {
   const [channelsState, setChannelsState] = useState<Status>(initialChannelsState);
   const [messagesState, setMessagesState] = useState<Status>(initialMessagesState);
   const [composerState, setComposerState] = useState<Status>(initialComposerState);
+  const [joinRequestState, setJoinRequestState] = useState<Status>(initialJoinRequestState);
   const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
   const [messagesRefreshKey, setMessagesRefreshKey] = useState(0);
 
@@ -379,6 +386,25 @@ export default function ChatPage() {
         description: "Список групп будет перечитан. После этого можно сразу открыть default channel.",
       });
     } catch (error) {
+      if (error instanceof APIError && error.status === 403) {
+        const groupHint = selectedGroup ? ` (${selectedGroup.name})` : "";
+        const channelHint = selectedChannel ? `Канал: ${selectedChannel.name}. ` : "";
+        setJoinRequestState({
+          kind: "error",
+          title: "Нужны права owner",
+          description:
+            `${channelHint}Этот endpoint доступен только owner группы. Передайте owner уже выбранный groupId: \`${selectedGroupId}\`${groupHint}. Он сможет добавить вас через \`POST /v1/groups/${selectedGroupId}/accounts\`.`,
+        });
+        return;
+      }
+      if (error instanceof APIError && error.status === 409) {
+        setJoinRequestState({
+          kind: "success",
+          title: "Уже в группе",
+          description: "Аккаунт уже является участником группы выбранного канала. Можно просто открыть канал и писать сообщения.",
+        });
+        return;
+      }
       const message =
         error instanceof APIError
           ? `${error.message}${error.code ? ` (${error.code})` : ""}`
@@ -443,6 +469,54 @@ export default function ChatPage() {
       setComposerState({
         kind: "error",
         title: "Не удалось отправить сообщение",
+        description: message,
+      });
+    }
+  }
+
+  async function handleRequestJoinSelectedChannel() {
+    if (!accessToken || !selectedGroupId || !selectedChannelId) {
+      setJoinRequestState({
+        kind: "error",
+        title: "Нет выбранного канала",
+        description: "Сначала выберите группу и канал, затем отправьте запрос на присоединение.",
+      });
+      return;
+    }
+
+    setJoinRequestState({
+      kind: "working",
+      title: "Отправляем запрос",
+      description: "Запрос уходит в `POST /v1/groups/{groupId}/accounts` с ролью member.",
+    });
+
+    try {
+      const me = await apiFetch<{ id: string }>("/v1/auth/me", { accessToken });
+      await apiFetch(`/v1/groups/${selectedGroupId}/accounts`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: {
+          accountId: me.id,
+          role: "member",
+        },
+      });
+
+      setGroupsRefreshKey((value) => value + 1);
+      setJoinRequestState({
+        kind: "success",
+        title: "Запрос отправлен",
+        description: "Backend принял запрос на добавление в группу выбранного канала.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown join request error";
+      setJoinRequestState({
+        kind: "error",
+        title: "Не удалось отправить запрос",
         description: message,
       });
     }
@@ -515,6 +589,15 @@ export default function ChatPage() {
           <div className={`status-card ${channelsState.kind === "error" ? "error" : channelsState.kind === "success" ? "success" : "info"}`}>
             <strong>{channelsState.title}</strong>
             <p className="status-copy">{channelsState.description}</p>
+          </div>
+          <div className={`status-card ${joinRequestState.kind === "error" ? "error" : joinRequestState.kind === "success" ? "success" : "info"}`}>
+            <strong>{joinRequestState.title}</strong>
+            <p className="status-copy">{joinRequestState.description}</p>
+          </div>
+          <div className="button-row">
+            <button className="button secondary" type="button" onClick={() => void handleRequestJoinSelectedChannel()} disabled={!selectedChannelId}>
+              Запросить присоединение к каналу
+            </button>
           </div>
 
           <div className="chat-list">

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="CollabSphere icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#115e59" />
+    </linearGradient>
+    <linearGradient id="orb" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#ccfbf1" stop-opacity="0.95" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)" />
+  <circle cx="64" cy="64" r="32" fill="none" stroke="url(#orb)" stroke-width="8" />
+  <circle cx="64" cy="64" r="9" fill="url(#orb)" />
+  <circle cx="30" cy="42" r="7" fill="#f0fdfa" />
+  <circle cx="98" cy="42" r="7" fill="#f0fdfa" />
+  <circle cx="24" cy="86" r="7" fill="#f0fdfa" />
+  <circle cx="104" cy="86" r="7" fill="#f0fdfa" />
+  <path d="M38 44L54 55M90 44L74 55M31 83L53 72M97 83L75 72" stroke="#f0fdfa" stroke-width="5" stroke-linecap="round" />
+</svg>

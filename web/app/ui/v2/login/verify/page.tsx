@@ -17,10 +17,32 @@ export default async function VerifyEmailPage({ searchParams }: { searchParams: 
   const verificationCode = readParam(params, "code");
   const message = readParam(params, "message");
   const error = readParam(params, "error");
+  const baseQuery = authRequest ? `authRequest=${encodeURIComponent(authRequest)}` : "";
+  const loginHintQuery = loginHint ? `loginHint=${encodeURIComponent(loginHint)}` : "";
+  const joinQuery = [baseQuery, loginHintQuery].filter(Boolean).join("&");
+  const loginHref = joinQuery ? `/ui/v2/login/login?${joinQuery}` : "/ui/v2/login/login";
+  const signupHref = joinQuery ? `/ui/v2/login/login?mode=signup&${joinQuery}` : "/ui/v2/login/login?mode=signup";
+  const verifyHref = joinQuery ? `/ui/v2/login/verify?${joinQuery}` : "/ui/v2/login/verify";
 
   return (
     <>
-      <Panel title="Verify email" eyebrow="Account activation">
+      <Panel
+        title="Verify email"
+        eyebrow="Account activation"
+        actions={
+          <div className="button-row">
+            <Link className="button-link secondary" href={loginHref}>
+              Login
+            </Link>
+            <Link className="button-link secondary" href={signupHref}>
+              Signup
+            </Link>
+            <Link className="button-link primary" href={verifyHref}>
+              Verify email
+            </Link>
+          </div>
+        }
+      >
         <div className={`status-card ${error ? "error" : message ? "success" : "info"}`}>
           <strong>{error ? "Не удалось подтвердить email" : message ? "Код обновлён" : "Подтвердите email перед первым login"}</strong>
           <p className="status-copy">{error || message || "Этот экран используется и для signup, и для ручной активации по verification code."}</p>

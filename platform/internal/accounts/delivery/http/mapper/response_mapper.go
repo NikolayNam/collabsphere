@@ -19,6 +19,7 @@ func ToAccountResponse(a *domain.Account, status int) *dto.AccountResponse {
 		Body: struct {
 			ID             uuid.UUID   `json:"id"`
 			Email          string      `json:"email"`
+			ZitadelUserID  *string     `json:"zitadelUserId,omitempty"`
 			DisplayName    *string     `json:"displayName,omitempty"`
 			AvatarObjectID *uuid.UUID  `json:"avatarObjectId,omitempty"`
 			VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
@@ -26,6 +27,7 @@ func ToAccountResponse(a *domain.Account, status int) *dto.AccountResponse {
 		}{
 			ID:             a.ID().UUID(),
 			Email:          a.Email().String(),
+			ZitadelUserID:  a.ZitadelUserID(),
 			DisplayName:    a.DisplayName(),
 			AvatarObjectID: a.AvatarObjectID(),
 			VideoObjectIDs: nil,
@@ -44,6 +46,7 @@ func ToAccountProfileResponse(a *domain.Account, status int) *dto.AccountProfile
 		Body: struct {
 			ID             uuid.UUID   `json:"id"`
 			Email          string      `json:"email"`
+			ZitadelUserID  *string     `json:"zitadelUserId,omitempty"`
 			DisplayName    *string     `json:"displayName,omitempty"`
 			AvatarObjectID *uuid.UUID  `json:"avatarObjectId,omitempty"`
 			VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
@@ -58,6 +61,7 @@ func ToAccountProfileResponse(a *domain.Account, status int) *dto.AccountProfile
 		}{
 			ID:             a.ID().UUID(),
 			Email:          a.Email().String(),
+			ZitadelUserID:  a.ZitadelUserID(),
 			DisplayName:    a.DisplayName(),
 			AvatarObjectID: a.AvatarObjectID(),
 			VideoObjectIDs: nil,

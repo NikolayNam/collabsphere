@@ -6,7 +6,10 @@ export function LoginShell({ children }: PropsWithChildren) {
     <div className="login-shell">
       <header className="login-topbar">
         <div>
-          <p className="eyebrow">CollabSphere Login</p>
+          <p className="eyebrow brand-line">
+            <img src="/favicon.svg" alt="CollabSphere icon" className="brand-icon" />
+            <span>CollabSphere Login</span>
+          </p>
           <h1 className="brand">Custom ZITADEL login inside `web/`</h1>
         </div>
         <nav className="nav">

@@ -56,6 +56,48 @@ type LegalDocumentAnalysisLease struct {
 	Attempts       int
 }
 
+type OrganizationKYCProfileRecord struct {
+	OrganizationID     uuid.UUID
+	Status             string
+	LegalName          *string
+	CountryCode        *string
+	RegistrationNumber *string
+	TaxID              *string
+	ReviewNote         *string
+	ReviewerAccountID  *uuid.UUID
+	SubmittedAt        *time.Time
+	ReviewedAt         *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type OrganizationKYCDocumentRecord struct {
+	ID                uuid.UUID
+	OrganizationID    uuid.UUID
+	ObjectID          uuid.UUID
+	DocumentType      string
+	Title             string
+	Status            string
+	ReviewNote        *string
+	ReviewerAccountID *uuid.UUID
+	CreatedAt         time.Time
+	UpdatedAt         *time.Time
+	ReviewedAt        *time.Time
+}
+
+type OrganizationKYCProfilePatch struct {
+	Status             string
+	LegalName          *string
+	CountryCode        *string
+	RegistrationNumber *string
+	TaxID              *string
+	ReviewNote         *string
+	ReviewerAccountID  *uuid.UUID
+	SubmittedAt        *time.Time
+	ReviewedAt         *time.Time
+	UpdatedAt          time.Time
+}
+
 type OrganizationRepository interface {
 	Create(ctx context.Context, t *domain.Organization) error
 	GetByID(ctx context.Context, id domain.OrganizationID) (*domain.Organization, error)
@@ -79,4 +121,9 @@ type OrganizationRepository interface {
 	LeaseNextOrganizationLegalDocumentAnalysisJob(ctx context.Context, now time.Time, leaseFor time.Duration) (*LegalDocumentAnalysisLease, error)
 	CompleteOrganizationLegalDocumentAnalysisJob(ctx context.Context, jobID, documentID uuid.UUID, provider string, result LegalDocumentAnalysisResult, completedAt time.Time) error
 	FailOrganizationLegalDocumentAnalysisJob(ctx context.Context, jobID, documentID uuid.UUID, provider, errMessage string, retryAt time.Time) error
+	GetOrganizationKYCProfile(ctx context.Context, organizationID uuid.UUID) (*OrganizationKYCProfileRecord, error)
+	UpsertOrganizationKYCProfile(ctx context.Context, organizationID uuid.UUID, patch OrganizationKYCProfilePatch) (*OrganizationKYCProfileRecord, error)
+	ListOrganizationKYCDocuments(ctx context.Context, organizationID uuid.UUID) ([]OrganizationKYCDocumentRecord, error)
+	GetOrganizationKYCDocumentByObjectID(ctx context.Context, organizationID, objectID uuid.UUID) (*OrganizationKYCDocumentRecord, error)
+	CreateOrganizationKYCDocument(ctx context.Context, item OrganizationKYCDocumentRecord) (*OrganizationKYCDocumentRecord, error)
 }

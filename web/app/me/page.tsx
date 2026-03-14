@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 
 import { Panel } from "@/components/panel";
-import { APIError } from "@/lib/api";
+import { APIError, apiFetch } from "@/lib/api";
 import { clearTokens, loadMe, logout, readStoredTokens, rotateTokens, storeTokens, type MeResponse } from "@/lib/auth";
 
 type LoadState =
@@ -12,10 +12,80 @@ type LoadState =
   | { kind: "error"; message: string }
   | { kind: "success"; message: string };
 
+type AccountKYCDocument = {
+  id: string;
+  accountId: string;
+  objectId: string;
+  documentType: string;
+  title: string;
+  status: string;
+  reviewNote?: string;
+  reviewerAccountId?: string;
+  createdAt: string;
+  updatedAt?: string;
+  reviewedAt?: string;
+};
+
+type AccountKYCProfile = {
+  accountId: string;
+  status: string;
+  legalName?: string;
+  countryCode?: string;
+  documentNumber?: string;
+  residenceAddress?: string;
+  reviewNote?: string;
+  reviewerAccountId?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  documents: AccountKYCDocument[];
+};
+
+function kycStatusLabel(status?: string): string {
+  const value = (status || "").trim().toLowerCase();
+  switch (value) {
+    case "draft":
+      return "Черновик";
+    case "submitted":
+      return "Отправлено на проверку";
+    case "in_review":
+      return "На проверке";
+    case "needs_info":
+      return "Нужны уточнения";
+    case "approved":
+      return "Подтверждено";
+    case "rejected":
+      return "Отклонено";
+    default:
+      return status || "unknown";
+  }
+}
+
+function isReviewSubmissionLocked(status?: string): boolean {
+  const value = (status || "").trim().toLowerCase();
+  return value === "submitted" || value === "in_review" || value === "approved";
+}
+
 export default function MePage() {
   const [state, setState] = useState<LoadState>({ kind: "idle", message: "Ожидаем локальную сессию." });
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [tokenPreview, setTokenPreview] = useState<{ access: string; refresh: string } | null>(null);
+  const [kyc, setKYC] = useState<AccountKYCProfile | null>(null);
+  const [kycState, setKYCState] = useState<LoadState>({
+    kind: "idle",
+    message: "KYC профиль ещё не загружен.",
+  });
+  const [kycDraft, setKYCDraft] = useState({
+    status: "draft",
+    legalName: "",
+    countryCode: "",
+    documentNumber: "",
+    residenceAddress: "",
+  });
+  const [kycFile, setKYCFile] = useState<File | null>(null);
+  const [kycDocumentType, setKYCDocumentType] = useState("identity_document");
+  const [kycDocumentTitle, setKYCDocumentTitle] = useState("");
 
   async function refreshProfile() {
     const stored = readStoredTokens();
@@ -45,6 +115,7 @@ export default function MePage() {
         kind: "success",
         message: "Backend principal загружен успешно.",
       });
+      await refreshKYC(stored.accessToken);
     } catch (error) {
       const message =
         error instanceof APIError
@@ -54,6 +125,162 @@ export default function MePage() {
             : "Unknown /auth/me error";
       setProfile(null);
       setState({ kind: "error", message });
+    }
+  }
+
+  async function refreshKYC(accessToken?: string | null) {
+    const token = accessToken || readStoredTokens()?.accessToken || null;
+    if (!token) {
+      setKYC(null);
+      setKYCState({ kind: "error", message: "Нет токена для чтения KYC." });
+      return;
+    }
+    try {
+      const payload = await apiFetch<AccountKYCProfile>("/v1/accounts/me/kyc", { accessToken: token });
+      setKYC(payload);
+      setKYCDraft({
+        status: payload.status || "draft",
+        legalName: payload.legalName || "",
+        countryCode: payload.countryCode || "",
+        documentNumber: payload.documentNumber || "",
+        residenceAddress: payload.residenceAddress || "",
+      });
+      setKYCState({ kind: "success", message: "KYC профиль загружен." });
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown KYC error";
+      setKYC(null);
+      setKYCState({ kind: "error", message });
+    }
+  }
+
+  async function handleSaveKYC(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const accessToken = readStoredTokens()?.accessToken || null;
+    if (!accessToken) {
+      setKYCState({ kind: "error", message: "Сначала выполните login." });
+      return;
+    }
+    setKYCState({ kind: "working", message: "Сохраняем KYC профиль..." });
+    try {
+      await apiFetch<AccountKYCProfile>("/v1/accounts/me/kyc", {
+        method: "PATCH",
+        accessToken,
+        bodyJSON: {
+          status: kycDraft.status,
+          legalName: kycDraft.legalName,
+          countryCode: kycDraft.countryCode,
+          documentNumber: kycDraft.documentNumber,
+          residenceAddress: kycDraft.residenceAddress,
+        },
+      });
+      await refreshKYC(accessToken);
+      setKYCState({ kind: "success", message: "KYC профиль сохранён." });
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown KYC update error";
+      setKYCState({ kind: "error", message });
+    }
+  }
+
+  async function handleSubmitKYCForReview() {
+    const accessToken = readStoredTokens()?.accessToken || null;
+    if (!accessToken) {
+      setKYCState({ kind: "error", message: "Сначала выполните login." });
+      return;
+    }
+    setKYCState({ kind: "working", message: "Отправляем KYC профиль на review..." });
+    try {
+      await apiFetch<AccountKYCProfile>("/v1/accounts/me/kyc", {
+        method: "PATCH",
+        accessToken,
+        bodyJSON: {
+          status: "submitted",
+          legalName: kycDraft.legalName,
+          countryCode: kycDraft.countryCode,
+          documentNumber: kycDraft.documentNumber,
+          residenceAddress: kycDraft.residenceAddress,
+        },
+      });
+      await refreshKYC(accessToken);
+      setKYCState({ kind: "success", message: "KYC профиль отправлен на проверку." });
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown KYC submit error";
+      setKYCState({ kind: "error", message });
+    }
+  }
+
+  function handleKYCFileSelection(event: ChangeEvent<HTMLInputElement>) {
+    setKYCFile(event.target.files?.[0] || null);
+  }
+
+  async function handleUploadKYCDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const accessToken = readStoredTokens()?.accessToken || null;
+    if (!accessToken) {
+      setKYCState({ kind: "error", message: "Сначала выполните login." });
+      return;
+    }
+    if (!kycFile) {
+      setKYCState({ kind: "error", message: "Выберите файл KYC документа." });
+      return;
+    }
+    setKYCState({ kind: "working", message: "Создаём upload session..." });
+    try {
+      const upload = await apiFetch<{
+        id: string;
+        uploadUrl: string;
+      }>("/v1/accounts/me/kyc/documents/uploads", {
+        method: "POST",
+        accessToken,
+        bodyJSON: {
+          documentType: kycDocumentType,
+          title: kycDocumentTitle || undefined,
+          fileName: kycFile.name,
+          contentType: kycFile.type || "application/octet-stream",
+          sizeBytes: kycFile.size,
+        },
+      });
+
+      const putResponse = await fetch(upload.uploadUrl, {
+        method: "PUT",
+        headers: kycFile.type ? { "Content-Type": kycFile.type } : undefined,
+        body: kycFile,
+      });
+      if (!putResponse.ok) {
+        throw new Error(`KYC upload PUT failed: HTTP ${putResponse.status}`);
+      }
+
+      await apiFetch(`/v1/accounts/me/kyc/documents/uploads/${encodeURIComponent(upload.id)}/complete`, {
+        method: "POST",
+        accessToken,
+      });
+
+      setKYCFile(null);
+      setKYCDocumentTitle("");
+      await refreshKYC(accessToken);
+      setKYCState({ kind: "success", message: "KYC документ загружен и зарегистрирован." });
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown KYC upload error";
+      setKYCState({ kind: "error", message });
     }
   }
 
@@ -179,6 +406,92 @@ export default function MePage() {
               </Panel>
             </section>
           ) : null}
+
+          <Panel title="Account KYC" eyebrow="Accounts / KYC">
+            <div className={`status-card ${kycState.kind === "error" ? "error" : kycState.kind === "success" ? "success" : "info"}`}>
+              <strong>KYC status</strong>
+              <p className="status-copy">{kycState.message}</p>
+              {kyc?.status ? (
+                <p className="status-copy">
+                  Текущий статус: <strong>{kycStatusLabel(kyc.status)}</strong>
+                </p>
+              ) : null}
+            </div>
+            <form className="form-grid" onSubmit={handleSaveKYC}>
+              <div className="form-row two">
+                <div className="form-row">
+                  <label className="form-label">Review status</label>
+                  <input className="text-input" value={kycStatusLabel(kyc?.status || kycDraft.status)} readOnly />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Country code</label>
+                  <input className="text-input" value={kycDraft.countryCode} onChange={(e) => setKYCDraft((v) => ({ ...v, countryCode: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row two">
+                <div className="form-row">
+                  <label className="form-label">Legal name</label>
+                  <input className="text-input" value={kycDraft.legalName} onChange={(e) => setKYCDraft((v) => ({ ...v, legalName: e.target.value }))} />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Document number</label>
+                  <input className="text-input" value={kycDraft.documentNumber} onChange={(e) => setKYCDraft((v) => ({ ...v, documentNumber: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <label className="form-label">Residence address</label>
+                <textarea className="textarea" rows={3} value={kycDraft.residenceAddress} onChange={(e) => setKYCDraft((v) => ({ ...v, residenceAddress: e.target.value }))} />
+              </div>
+              <div className="button-row">
+                <button className="button primary" type="submit">Save KYC profile</button>
+                <button
+                  className="button secondary"
+                  onClick={() => void handleSubmitKYCForReview()}
+                  type="button"
+                  disabled={isReviewSubmissionLocked(kyc?.status)}
+                >
+                  Submit for review
+                </button>
+              </div>
+            </form>
+
+            <form className="form-grid" onSubmit={handleUploadKYCDocument}>
+              <div className="form-row two">
+                <div className="form-row">
+                  <label className="form-label">Document type</label>
+                  <input className="text-input" value={kycDocumentType} onChange={(e) => setKYCDocumentType(e.target.value)} />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Title</label>
+                  <input className="text-input" value={kycDocumentTitle} onChange={(e) => setKYCDocumentTitle(e.target.value)} />
+                </div>
+              </div>
+              <div className="form-row">
+                <label className="form-label">File</label>
+                <input type="file" onChange={handleKYCFileSelection} />
+              </div>
+              <div className="button-row">
+                <button className="button secondary" type="submit">Upload KYC document</button>
+              </div>
+            </form>
+
+            {kyc?.documents?.length ? (
+              <div className="domain-list">
+                {kyc.documents.map((item) => (
+                  <div key={item.id} className="inline-panel">
+                    <strong>{item.title || item.documentType}</strong>
+                    <p className="muted">
+                      {item.documentType} · {kycStatusLabel(item.status)}
+                    </p>
+                    <p className="muted">Created: {item.createdAt}</p>
+                    {item.reviewNote ? <p className="muted">Note: {item.reviewNote}</p> : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">Пока нет загруженных KYC документов.</div>
+            )}
+          </Panel>
         </>
       ) : (
         <Panel title="No active profile" eyebrow="Session required">

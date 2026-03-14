@@ -60,6 +60,42 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	transitionLegalDocument.Middlewares = reviewOrAdmin
 	huma.Register(api, transitionLegalDocument, h.TransitionLegalDocumentReview)
 
+	listKYCReviews := listKYCReviewsOp
+	listKYCReviews.Middlewares = reviewOrAdmin
+	huma.Register(api, listKYCReviews, h.ListKYCReviews)
+
+	getKYCReview := getKYCReviewOp
+	getKYCReview.Middlewares = reviewOrAdmin
+	huma.Register(api, getKYCReview, h.GetKYCReview)
+
+	decideKYCReview := decideKYCReviewOp
+	decideKYCReview.Middlewares = reviewOrAdmin
+	huma.Register(api, decideKYCReview, h.DecideKYCReview)
+
+	decideKYCDocument := decideKYCDocumentOp
+	decideKYCDocument.Middlewares = reviewOrAdmin
+	huma.Register(api, decideKYCDocument, h.DecideKYCDocument)
+
+	listKYCLevels := listKYCLevelsOp
+	listKYCLevels.Middlewares = anyPlatformRole
+	huma.Register(api, listKYCLevels, h.ListKYCLevels)
+
+	createKYCLevel := createKYCLevelOp
+	createKYCLevel.Middlewares = adminOnly
+	huma.Register(api, createKYCLevel, h.CreateKYCLevel)
+
+	updateKYCLevel := updateKYCLevelOp
+	updateKYCLevel.Middlewares = adminOnly
+	huma.Register(api, updateKYCLevel, h.UpdateKYCLevel)
+
+	deleteKYCLevel := deleteKYCLevelOp
+	deleteKYCLevel.Middlewares = adminOnly
+	huma.Register(api, deleteKYCLevel, h.DeleteKYCLevel)
+
+	issueKYCLevel := issueKYCLevelOp
+	issueKYCLevel.Middlewares = reviewOrAdmin
+	huma.Register(api, issueKYCLevel, h.IssueKYCLevel)
+
 	forceVerify := forceVerifyUserEmailOp
 	forceVerify.Middlewares = adminOnly
 	if !h.svc.ZitadelAdminEnabled() {

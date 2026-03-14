@@ -11,6 +11,7 @@ type AccountResponse struct {
 	Body   struct {
 		ID             uuid.UUID   `json:"id"`
 		Email          string      `json:"email"`
+		ZitadelUserID  *string     `json:"zitadelUserId,omitempty"`
 		DisplayName    *string     `json:"displayName,omitempty"`
 		AvatarObjectID *uuid.UUID  `json:"avatarObjectId,omitempty"`
 		VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
@@ -23,6 +24,7 @@ type AccountProfileResponse struct {
 	Body   struct {
 		ID             uuid.UUID   `json:"id"`
 		Email          string      `json:"email"`
+		ZitadelUserID  *string     `json:"zitadelUserId,omitempty"`
 		DisplayName    *string     `json:"displayName,omitempty"`
 		AvatarObjectID *uuid.UUID  `json:"avatarObjectId,omitempty"`
 		VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`

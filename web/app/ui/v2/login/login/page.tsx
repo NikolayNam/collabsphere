@@ -47,6 +47,12 @@ export default async function ZitadelLoginPage({ searchParams }: { searchParams:
   }
 
   const signupMode = mode === "signup" || prompt === "create";
+  const baseQuery = authRequestId ? `authRequest=${encodeURIComponent(authRequestId)}` : "";
+  const loginHintQuery = loginHint ? `loginHint=${encodeURIComponent(loginHint)}` : "";
+  const joinQuery = [baseQuery, loginHintQuery].filter(Boolean).join("&");
+  const loginHref = joinQuery ? `/ui/v2/login/login?${joinQuery}` : "/ui/v2/login/login";
+  const signupHref = joinQuery ? `/ui/v2/login/login?mode=signup&${joinQuery}` : "/ui/v2/login/login?mode=signup";
+  const verifyHref = joinQuery ? `/ui/v2/login/verify?${joinQuery}` : "/ui/v2/login/verify";
 
   return (
     <>
@@ -55,8 +61,14 @@ export default async function ZitadelLoginPage({ searchParams }: { searchParams:
         eyebrow={signupMode ? "Browser signup" : "Browser login"}
         actions={
           <div className="button-row">
-            <Link className="button-link secondary" href={signupMode ? "/ui/v2/login/login" : "/ui/v2/login/login?mode=signup"}>
-              {signupMode ? "У меня уже есть аккаунт" : "Создать аккаунт"}
+            <Link className={`button-link ${signupMode ? "secondary" : "primary"}`} href={loginHref}>
+              Login
+            </Link>
+            <Link className={`button-link ${signupMode ? "primary" : "secondary"}`} href={signupHref}>
+              Signup
+            </Link>
+            <Link className="button-link secondary" href={verifyHref}>
+              Verify email
             </Link>
           </div>
         }

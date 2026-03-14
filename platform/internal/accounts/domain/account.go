@@ -12,6 +12,7 @@ type Account struct {
 	id             AccountID
 	email          Email
 	passwordHash   PasswordHash
+	zitadelUserID  *string
 	displayName    *string
 	avatarObjectID *uuid.UUID
 	bio            *string
@@ -62,6 +63,7 @@ type RehydrateAccountParams struct {
 	ID             AccountID
 	Email          Email
 	PasswordHash   PasswordHash
+	ZitadelUserID  *string
 	DisplayName    *string
 	AvatarObjectID *uuid.UUID
 	Bio            *string
@@ -116,6 +118,7 @@ func RehydrateAccount(p RehydrateAccountParams) (*Account, error) {
 		id:             p.ID,
 		email:          p.Email,
 		passwordHash:   p.PasswordHash,
+		zitadelUserID:  cloneStringPtr(p.ZitadelUserID),
 		displayName:    displayName,
 		avatarObjectID: cloneUUIDPtr(p.AvatarObjectID),
 		bio:            bio,
@@ -203,6 +206,7 @@ func (a *Account) ApplyProfilePatch(p AccountProfilePatch) error {
 func (a *Account) ID() AccountID              { return a.id }
 func (a *Account) Email() Email               { return a.email }
 func (a *Account) PasswordHash() PasswordHash { return a.passwordHash }
+func (a *Account) ZitadelUserID() *string     { return cloneStringPtr(a.zitadelUserID) }
 func (a *Account) DisplayName() *string       { return cloneStringPtr(a.displayName) }
 func (a *Account) AvatarObjectID() *uuid.UUID { return cloneUUIDPtr(a.avatarObjectID) }
 func (a *Account) Bio() *string               { return cloneStringPtr(a.bio) }

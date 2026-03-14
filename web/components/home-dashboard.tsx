@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Panel } from "@/components/panel";
@@ -16,13 +17,14 @@ type SessionView =
 
 const initialState: SessionView = {
   kind: "loading",
-  message: "Проверяем локальную сессию и готовим домашнюю страницу.",
+  message: "Проверяем локальную сессию и готовим стартовый экран.",
   tokens: null,
   profile: null,
 };
 
 export function HomeDashboard() {
   const [session, setSession] = useState<SessionView>(initialState);
+  const searchParams = useSearchParams();
   const apiBaseURL = getAPIBaseURL();
   const appBaseURL = getAppBaseURL();
 
@@ -31,7 +33,7 @@ export function HomeDashboard() {
     if (!stored?.accessToken) {
       setSession({
         kind: "guest",
-        message: "Локальная сессия не найдена. Можно начать с browser login или signup.",
+        message: "Сессия не найдена. Начните с входа через ZITADEL или создайте аккаунт.",
         tokens: null,
         profile: null,
       });
@@ -40,7 +42,7 @@ export function HomeDashboard() {
 
     setSession({
       kind: "loading",
-      message: "Запрашиваем backend principal через /v1/auth/me.",
+      message: "Проверяем пользователя через /v1/auth/me.",
       tokens: stored,
       profile: null,
     });
@@ -49,7 +51,7 @@ export function HomeDashboard() {
       const profile = await loadMe(stored.accessToken);
       setSession({
         kind: "ready",
-        message: "Сессия активна, домашняя страница уже знает ваш backend principal.",
+        message: "Сессия активна: главная уже знает ваш профиль и готова к работе.",
         tokens: stored,
         profile,
       });
@@ -82,7 +84,7 @@ export function HomeDashboard() {
       clearTokens();
       setSession({
         kind: "guest",
-        message: "Сессия очищена. Можно войти снова или открыть signup.",
+        message: "Вы вышли из аккаунта. Можно войти снова в любой момент.",
         tokens: null,
         profile: null,
       });
@@ -97,22 +99,35 @@ export function HomeDashboard() {
   const profile = session.profile;
   const tokens = session.tokens;
   const heroName = isAuthenticated ? profile?.displayName || profile?.email || "внутри платформы" : "";
+  const signupCreated = searchParams.get("signup") === "created" || Boolean(searchParams.get("verificationCode"));
 
   return (
     <>
       <section className="hero hero-home">
         <div className="panel hero-copy home-hero-copy">
+          {signupCreated ? (
+            <div className="status-card success">
+              <strong>Аккаунт создан</strong>
+              <p className="status-copy">Регистрация завершена. Проверьте email и подтвердите адрес перед первым входом.</p>
+              <div className="hero-actions">
+                <Link href="/ui/v2/login/verify" className="button-link secondary">
+                  Перейти к Verify email
+                </Link>
+              </div>
+            </div>
+          ) : null}
           <p className="kicker">{isAuthenticated ? "Session live" : "CollabSphere Web"}</p>
           <h2 className="hero-title">
             {isAuthenticated
               ? `Добро пожаловать, ${heroName}.`
-              : "Главная страница теперь может быть первой точкой входа после авторизации."}
+              : "Главная страница может быть вашим первым экраном после авторизации."}
           </h2>
           <p className="hero-text">
             {isAuthenticated
-              ? "Browser login завершён, локальные токены выпущены backend’ом, и дальше можно уже двигаться в organizations, профиль и следующий продуктовый UI."
-              : "Это не просто экран со ссылками. Главная уже понимает, есть ли локальная сессия, умеет показать backend principal и остаётся поверх существующего Go API без второго backend-контракта."}
+              ? "Вход завершён, локальные токены выпущены backend-ом. Дальше можно сразу переходить в организации, профиль и рабочие экраны."
+              : "Это главная страница нашей платформы CollabSphere: она понимает состояние сессии, показывает backend principal и помогает быстро стартовать."}
           </p>
+          <img className="hero-illustration" src="/illustrations/orbit.svg" alt="Схема совместной работы в CollabSphere" />
           <div className="hero-actions">
             {isAuthenticated ? (
               <>
@@ -137,8 +152,8 @@ export function HomeDashboard() {
                 <Link href="/login" className="button-link primary">
                   Войти через ZITADEL
                 </Link>
-                <Link href="/login" className="button-link secondary">
-                  Открыть login shell
+                <Link href="/ui/v2/login/verify" className="button-link secondary">
+                  Verify email
                 </Link>
                 <a href={`${apiBaseURL}/v1/docs`} className="button-link secondary" target="_blank" rel="noreferrer">
                   API docs
@@ -191,27 +206,30 @@ export function HomeDashboard() {
         <Panel title="Что делать дальше" eyebrow="Immediate paths">
           <div className="feature-grid">
             <div className="feature-card">
+              <img className="feature-illustration" src="/illustrations/workspace.svg" alt="Рабочее пространство организации" />
               <strong>Organizations</strong>
               <p className="muted">
-                Создать organization, открыть её профиль, обновить основные поля, загрузить logo и проверить resolve-by-host.
+                Создайте organization, обновите профиль, загрузите logo и проверьте resolve-by-host в одном рабочем потоке.
               </p>
               <Link href="/organizations" className="button-link secondary">
                 Перейти в organizations
               </Link>
             </div>
             <div className="feature-card">
+              <img className="feature-illustration" src="/illustrations/mail-check.svg" alt="Подтверждение email пользователя" />
               <strong>Profile</strong>
               <p className="muted">
-                Посмотреть текущий backend principal, refresh/logout и убедиться, что локальная сессия жива.
+                Посмотрите текущий backend principal, обновите сессию и проверьте, что email и токены в порядке.
               </p>
               <Link href="/me" className="button-link secondary">
                 Открыть /me
               </Link>
             </div>
             <div className="feature-card">
+              <img className="feature-illustration" src="/illustrations/orbit.svg" alt="Командное общение и каналы" />
               <strong>Chat</strong>
               <p className="muted">
-                Channels и messages уже существуют в backend. Новый экран выводит их в продуктовый UI без отдельного chat-backend.
+                Каналы и сообщения уже работают в backend, а этот экран показывает их в продуктовой форме без отдельного chat-backend.
               </p>
               <Link href="/chat" className="button-link secondary">
                 Открыть chat

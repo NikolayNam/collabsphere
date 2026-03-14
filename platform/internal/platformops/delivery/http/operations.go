@@ -133,3 +133,93 @@ var forceVerifyUserEmailOp = huma.Operation{
 	Description: "Uses the backend's server-side ZITADEL admin token to verify an existing user's email. The backend first requests a verification code from ZITADEL and then immediately verifies the email with that code.\n\n" + platformControlPlaneCaution,
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var listKYCReviewsOp = huma.Operation{
+	OperationID: "platform-list-kyc-reviews",
+	Method:      "GET",
+	Path:        "/platform/kyc/reviews",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "List KYC reviews",
+	Description: "Returns account and organization KYC reviews for platform reviewers.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var getKYCReviewOp = huma.Operation{
+	OperationID: "platform-get-kyc-review",
+	Method:      "GET",
+	Path:        "/platform/kyc/reviews/{reviewId}",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Get KYC review details",
+	Description: "Returns a single KYC review card for account or organization scope.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var decideKYCReviewOp = huma.Operation{
+	OperationID: "platform-decide-kyc-review",
+	Method:      "POST",
+	Path:        "/platform/kyc/reviews/{reviewId}/decision",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Apply KYC review decision",
+	Description: "Applies approve/reject/request_info decision to account or organization KYC profile.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var decideKYCDocumentOp = huma.Operation{
+	OperationID: "platform-decide-kyc-document",
+	Method:      "POST",
+	Path:        "/platform/kyc/reviews/{reviewId}/documents/{documentId}/decision",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Apply KYC document decision",
+	Description: "Applies approve/reject/request_info decision to a single KYC document and recalculates aggregate review status.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var listKYCLevelsOp = huma.Operation{
+	OperationID: "platform-list-kyc-levels",
+	Method:      "GET",
+	Path:        "/platform/kyc/levels",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "List configurable KYC levels",
+	Description: "Returns configured KYC levels and document requirements.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var createKYCLevelOp = huma.Operation{
+	OperationID: "platform-create-kyc-level",
+	Method:      "POST",
+	Path:        "/platform/kyc/levels",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Create KYC level",
+	Description: "Creates configurable KYC level with document requirements.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var updateKYCLevelOp = huma.Operation{
+	OperationID: "platform-update-kyc-level",
+	Method:      "PUT",
+	Path:        "/platform/kyc/levels/{levelId}",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Update KYC level",
+	Description: "Updates configurable KYC level and replaces document requirements.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var deleteKYCLevelOp = huma.Operation{
+	OperationID: "platform-delete-kyc-level",
+	Method:      "DELETE",
+	Path:        "/platform/kyc/levels/{levelId}",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Delete KYC level",
+	Description: "Deletes configurable KYC level and all attached requirements.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var issueKYCLevelOp = huma.Operation{
+	OperationID: "platform-issue-kyc-level",
+	Method:      "POST",
+	Path:        "/platform/kyc/reviews/{reviewId}/issue-level",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Issue KYC level by verified documents",
+	Description: "Evaluates configured requirements against verified documents and assigns the highest matching KYC level.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

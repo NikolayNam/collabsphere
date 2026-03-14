@@ -78,3 +78,43 @@ var listMyVideosOp = huma.Operation{
 	Description: "Returns the videos attached to the authenticated account in display order.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var getMyKYCOp = huma.Operation{
+	OperationID: "get-my-account-kyc",
+	Method:      "GET",
+	Path:        "/accounts/me/kyc",
+	Tags:        []string{"Accounts / KYC"},
+	Summary:     "Get account KYC profile",
+	Description: "Returns the current account KYC profile state and uploaded KYC documents.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var updateMyKYCOp = huma.Operation{
+	OperationID: "update-my-account-kyc",
+	Method:      "PATCH",
+	Path:        "/accounts/me/kyc",
+	Tags:        []string{"Accounts / KYC"},
+	Summary:     "Update account KYC profile",
+	Description: "Updates self-service account KYC profile fields and allows moving status between draft and submitted.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var createMyKYCDocumentUploadOp = huma.Operation{
+	OperationID: "create-my-account-kyc-document-upload",
+	Method:      "POST",
+	Path:        "/accounts/me/kyc/documents/uploads",
+	Tags:        []string{"Accounts / KYC"},
+	Summary:     "Create account KYC document upload",
+	Description: "Creates an upload session and returns a presigned URL for account KYC document upload.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var completeMyKYCDocumentUploadOp = huma.Operation{
+	OperationID: "complete-my-account-kyc-document-upload",
+	Method:      "POST",
+	Path:        "/accounts/me/kyc/documents/uploads/{upload_id}/complete",
+	Tags:        []string{"Accounts / KYC"},
+	Summary:     "Finalize account KYC document upload",
+	Description: "Finalizes a previously created account KYC document upload session and registers the document in KYC profile.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

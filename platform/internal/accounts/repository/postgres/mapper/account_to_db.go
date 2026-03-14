@@ -56,6 +56,7 @@ func ToDBPasswordCredentialForCreate(a *domain.Account) *dbmodel.PasswordCredent
 type AccountRow struct {
 	ID             uuid.UUID
 	Email          string
+	ZitadelUserID  *string
 	DisplayName    *string
 	AvatarObjectID *uuid.UUID
 	Bio            *string
@@ -97,6 +98,7 @@ func ToDomainAccount(row *AccountRow) (*domain.Account, error) {
 		ID:             id,
 		Email:          email,
 		PasswordHash:   hash,
+		ZitadelUserID:  row.ZitadelUserID,
 		DisplayName:    row.DisplayName,
 		AvatarObjectID: row.AvatarObjectID,
 		Bio:            row.Bio,

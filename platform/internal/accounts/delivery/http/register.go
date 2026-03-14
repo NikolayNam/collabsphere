@@ -33,4 +33,20 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	listVideos := listMyVideosOp
 	listVideos.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, listVideos, h.ListMyVideos)
+
+	getKYC := getMyKYCOp
+	getKYC.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, getKYC, h.GetMyKYC)
+
+	updateKYC := updateMyKYCOp
+	updateKYC.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, updateKYC, h.UpdateMyKYC)
+
+	createKYCDocUpload := createMyKYCDocumentUploadOp
+	createKYCDocUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, createKYCDocUpload, h.CreateMyKYCDocumentUpload)
+
+	completeKYCDocUpload := completeMyKYCDocumentUploadOp
+	completeKYCDocUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, completeKYCDocUpload, h.CompleteMyKYCDocumentUpload)
 }

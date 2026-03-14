@@ -140,28 +140,58 @@ export async function createHumanUser(input: {
   email: string;
   password: string;
 }): Promise<SignupResult> {
-  const payload = await zitadelFetch<Record<string, unknown>>("/v2/users/new", {
-    method: "POST",
-    bodyJSON: {
-      username: input.email,
-      human: {
-        profile: {
-          givenName: firstWord(input.displayName),
-          familyName: remainderWords(input.displayName) || "User",
-          displayName: input.displayName,
-        },
-        email: {
-          email: input.email,
-          isVerified: false,
-          returnCode: {},
-        },
-        password: {
-          password: input.password,
-          changeRequired: false,
-        },
+  const nestedPayload = {
+    username: input.email,
+    human: {
+      profile: {
+        givenName: firstWord(input.displayName),
+        familyName: remainderWords(input.displayName) || "User",
+        displayName: input.displayName,
+      },
+      email: {
+        email: input.email,
+        returnCode: {},
+      },
+      password: {
+        password: input.password,
+        changeRequired: false,
       },
     },
-  });
+  };
+  const flatPayload = {
+    username: input.email,
+    profile: {
+      givenName: firstWord(input.displayName),
+      familyName: remainderWords(input.displayName) || "User",
+      displayName: input.displayName,
+    },
+    email: {
+      email: input.email,
+      returnCode: {},
+    },
+    password: {
+      password: input.password,
+      changeRequired: false,
+    },
+  };
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = await zitadelFetch<Record<string, unknown>>("/v2/users/new", {
+      method: "POST",
+      bodyJSON: nestedPayload,
+    });
+  } catch (error) {
+    // Some ZITADEL setups accept only /v2/users/human with flat payload.
+    // Fall back to keep signup flow portable across local versions/configs.
+    if (!(error instanceof ZitadelAPIError) || error.status < 400 || error.status >= 500) {
+      throw error;
+    }
+    payload = await zitadelFetch<Record<string, unknown>>("/v2/users/human", {
+      method: "POST",
+      bodyJSON: flatPayload,
+    });
+  }
   const userId = readString(payload, ["userId", "id"]);
   if (!userId) {
     throw new Error("ZITADEL CreateUser did not return userId");

@@ -65,3 +65,5 @@
 0063 | auth/oauth_states_pkce.sql                          | 0063_oauth_states_pkce.sql
 0064 | iam/organization_invitations.sql                    | 0064_organization_invitations.sql
 0065 | iam/organization_access_audit_events.sql            | 0065_organization_access_audit_events.sql
+0066 | kyc/profiles_documents_reviews.sql                  | 0066_profiles_documents_reviews.sql
+0067 | kyc/levels.sql                                      | 0067_levels.sql

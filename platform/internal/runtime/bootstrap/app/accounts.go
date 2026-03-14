@@ -16,10 +16,12 @@ import (
 	accports "github.com/NikolayNam/collabsphere/internal/accounts/application/ports"
 	acchttp "github.com/NikolayNam/collabsphere/internal/accounts/delivery/http"
 	"github.com/NikolayNam/collabsphere/internal/accounts/repository/postgres"
+	uploadspg "github.com/NikolayNam/collabsphere/internal/uploads/repository/postgres"
 )
 
 func registerAccountsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	accountRepo := postgres.NewAccountRepo(db)
+	uploadRepo := uploadspg.NewRepo(db)
 
 	hasher := bcrypt.NewBcryptHasher()
 	clk := clock.NewSystemClock()
@@ -33,7 +35,7 @@ func registerAccountsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 		objectStorage = client
 	}
 
-	accountService := application.New(accountRepo, hasher, clk, objectStorage, conf.Storage.S3.Bucket)
+	accountService := application.New(accountRepo, hasher, clk, objectStorage, conf.Storage.S3.Bucket, uploadRepo)
 	accountHandler := acchttp.NewHandler(accountService, conf.Auth.LocalSignupEnabled)
 
 	secret, err := conf.Auth.JWTSecretValue()

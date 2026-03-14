@@ -15,6 +15,8 @@ type ResultKind string
 const (
 	PurposeOrganizationLegalDocument Purpose = "organization_legal_document"
 	PurposeProductImport             Purpose = "product_import"
+	PurposeAccountKYCDocument        Purpose = "account_kyc_document"
+	PurposeOrganizationKYCDocument   Purpose = "organization_kyc_document"
 )
 
 const (
@@ -26,6 +28,8 @@ const (
 const (
 	ResultKindOrganizationLegalDocument ResultKind = "organization_legal_document"
 	ResultKindProductImportBatch        ResultKind = "product_import_batch"
+	ResultKindAccountKYCDocument        ResultKind = "account_kyc_document"
+	ResultKindOrganizationKYCDocument   ResultKind = "organization_kyc_document"
 )
 
 type Upload struct {

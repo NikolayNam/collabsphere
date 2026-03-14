@@ -57,6 +57,22 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	completeLegalDocumentUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, completeLegalDocumentUpload, h.CompleteOrganizationLegalDocumentUpload)
 
+	getKYCProfile := getOrganizationKYCProfileOp
+	getKYCProfile.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, getKYCProfile, h.GetOrganizationKYCProfile)
+
+	updateKYCProfile := updateOrganizationKYCProfileOp
+	updateKYCProfile.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, updateKYCProfile, h.UpdateOrganizationKYCProfile)
+
+	createKYCDocumentUpload := createOrganizationKYCDocumentUploadOp
+	createKYCDocumentUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, createKYCDocumentUpload, h.CreateOrganizationKYCDocumentUpload)
+
+	completeKYCDocumentUpload := completeOrganizationKYCDocumentUploadOp
+	completeKYCDocumentUpload.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, completeKYCDocumentUpload, h.CompleteOrganizationKYCDocumentUpload)
+
 	uploadLegalDocument := uploadOrganizationLegalDocumentOp
 	uploadLegalDocument.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, uploadLegalDocument, h.UploadOrganizationLegalDocument)

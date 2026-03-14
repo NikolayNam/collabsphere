@@ -25,15 +25,10 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const created = await createHumanUser({ displayName, email, password });
-    const target = createLoginURL("/ui/v2/login/verify");
-    target.searchParams.set("userId", created.userId);
-    target.searchParams.set("loginHint", email);
-    if (authRequest) {
-      target.searchParams.set("authRequest", authRequest);
-    }
+    const target = createLoginURL("/");
+    target.searchParams.set("signup", "created");
     if (created.verificationCode) {
-      target.searchParams.set("code", created.verificationCode);
-      target.searchParams.set("message", "User created. Verification code returned directly by ZITADEL.");
+      target.searchParams.set("verificationCode", created.verificationCode);
     }
     return NextResponse.redirect(target, { status: 303 });
   } catch (error) {

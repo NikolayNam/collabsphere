@@ -8,8 +8,15 @@ import { isLoginHostValue } from "@/lib/login/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CollabSphere Web",
-  description: "Next.js frontend shell for the CollabSphere Go backend.",
+  title: {
+    default: "CollabSphere Web",
+    template: "%s · CollabSphere Web",
+  },
+  description: "Frontend shell for CollabSphere: auth, organizations, profile and chat.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
 };
 
 export default async function RootLayout({ children }: PropsWithChildren) {

@@ -87,6 +87,8 @@ migrations:
   - auth/oauth_states_pkce.sql
   - iam/organization_invitations.sql
   - iam/organization_access_audit_events.sql
+  - kyc/profiles_documents_reviews.sql
+  - kyc/levels.sql
 
 
 

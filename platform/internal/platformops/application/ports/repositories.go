@@ -43,6 +43,17 @@ type OrganizationReviewRepository interface {
 	GetOrganizationReview(ctx context.Context, organizationID uuid.UUID) (*domain.OrganizationReviewDetail, error)
 	UpdateCooperationApplicationReview(ctx context.Context, organizationID uuid.UUID, patch domain.CooperationApplicationReviewPatch) (*domain.OrganizationReviewCooperationApplication, error)
 	UpdateLegalDocumentReview(ctx context.Context, organizationID, documentID uuid.UUID, patch domain.LegalDocumentReviewPatch) (*domain.OrganizationReviewLegalDocument, error)
+	ListKYCReviews(ctx context.Context, query domain.KYCReviewQuery) ([]domain.KYCReviewItem, int, error)
+	GetKYCReview(ctx context.Context, scope string, subjectID uuid.UUID) (*domain.KYCReviewDetail, error)
+	ApplyKYCDecision(ctx context.Context, patch domain.KYCDecisionPatch) (*domain.KYCReviewDetail, error)
+	ListKYCDocuments(ctx context.Context, scope string, subjectID uuid.UUID) ([]domain.KYCDocumentReviewItem, error)
+	ApplyKYCDocumentDecision(ctx context.Context, patch domain.KYCDocumentDecisionPatch) (*domain.KYCDocumentReviewItem, error)
+	AppendKYCReviewEvent(ctx context.Context, event domain.KYCReviewEvent) error
+	ListKYCReviewEvents(ctx context.Context, scope string, subjectID uuid.UUID, limit int) ([]domain.KYCReviewEvent, error)
+	ListKYCLevels(ctx context.Context, scope *string) ([]domain.KYCLevel, error)
+	UpsertKYCLevel(ctx context.Context, level domain.KYCLevel) (*domain.KYCLevel, error)
+	DeleteKYCLevel(ctx context.Context, levelID uuid.UUID) error
+	EvaluateAndAssignKYCLevel(ctx context.Context, scope string, subjectID, actorAccountID uuid.UUID, now time.Time) (*domain.KYCLevelAssignment, error)
 }
 
 type ZitadelAdminClient = authports.ZitadelAdminClient

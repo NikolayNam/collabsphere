@@ -6,6 +6,7 @@ const navItems = [
   { href: "/login", label: "Login" },
   { href: "/me", label: "Me" },
   { href: "/organizations", label: "Organizations" },
+  { href: "/admin/users", label: "Admin Users" },
   { href: "/chat", label: "Chat" },
 ];
 
@@ -14,7 +15,10 @@ export function AppShell({ children }: PropsWithChildren) {
     <div className="app-shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">CollabSphere Web</p>
+          <p className="eyebrow brand-line">
+            <img src="/favicon.svg" alt="CollabSphere icon" className="brand-icon" />
+            <span>CollabSphere Web</span>
+          </p>
           <h1 className="brand">Next.js shell over the Go backend</h1>
         </div>
         <nav className="nav">

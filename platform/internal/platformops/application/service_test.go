@@ -129,6 +129,15 @@ type fakeReviewRepo struct {
 	lastLegalDocumentPatch domain.LegalDocumentReviewPatch
 	lastOrganization       uuid.UUID
 	lastDocumentID         uuid.UUID
+	kycItems               []domain.KYCReviewItem
+	kycTotal               int
+	kycDetail              *domain.KYCReviewDetail
+	lastKYCQuery           domain.KYCReviewQuery
+	lastKYCPatch           domain.KYCDecisionPatch
+	lastKYCDocumentPatch   domain.KYCDocumentDecisionPatch
+	kycDocuments           []domain.KYCDocumentReviewItem
+	kycEvents              []domain.KYCReviewEvent
+	kycLevels              []domain.KYCLevel
 }
 
 func (f *fakeReviewRepo) ListOrganizationReviewQueue(ctx context.Context, query domain.OrganizationReviewQueueQuery) ([]domain.OrganizationReviewQueueItem, int, error) {
@@ -152,6 +161,102 @@ func (f *fakeReviewRepo) UpdateLegalDocumentReview(ctx context.Context, organiza
 	f.lastDocumentID = documentID
 	f.lastLegalDocumentPatch = patch
 	return f.updatedLegalDocument, nil
+}
+
+func (f *fakeReviewRepo) ListKYCReviews(ctx context.Context, query domain.KYCReviewQuery) ([]domain.KYCReviewItem, int, error) {
+	f.lastKYCQuery = query
+	return append([]domain.KYCReviewItem{}, f.kycItems...), f.kycTotal, nil
+}
+
+func (f *fakeReviewRepo) GetKYCReview(ctx context.Context, scope string, subjectID uuid.UUID) (*domain.KYCReviewDetail, error) {
+	if f.kycDetail != nil {
+		f.kycDetail.Scope = scope
+		f.kycDetail.SubjectID = subjectID
+	}
+	return f.kycDetail, nil
+}
+
+func (f *fakeReviewRepo) ApplyKYCDecision(ctx context.Context, patch domain.KYCDecisionPatch) (*domain.KYCReviewDetail, error) {
+	f.lastKYCPatch = patch
+	return f.kycDetail, nil
+}
+
+func (f *fakeReviewRepo) ListKYCDocuments(ctx context.Context, scope string, subjectID uuid.UUID) ([]domain.KYCDocumentReviewItem, error) {
+	return append([]domain.KYCDocumentReviewItem{}, f.kycDocuments...), nil
+}
+
+func (f *fakeReviewRepo) ApplyKYCDocumentDecision(ctx context.Context, patch domain.KYCDocumentDecisionPatch) (*domain.KYCDocumentReviewItem, error) {
+	f.lastKYCDocumentPatch = patch
+	if len(f.kycDocuments) == 0 {
+		return nil, nil
+	}
+	item := f.kycDocuments[0]
+	item.Status = patch.Status
+	item.ReviewNote = patch.ReviewNote
+	item.ReviewerAccountID = &patch.ReviewerAccountID
+	item.UpdatedAt = &patch.UpdatedAt
+	item.ReviewedAt = &patch.ReviewedAt
+	f.kycDocuments[0] = item
+	return &item, nil
+}
+
+func (f *fakeReviewRepo) AppendKYCReviewEvent(ctx context.Context, event domain.KYCReviewEvent) error {
+	f.kycEvents = append([]domain.KYCReviewEvent{event}, f.kycEvents...)
+	return nil
+}
+
+func (f *fakeReviewRepo) ListKYCReviewEvents(ctx context.Context, scope string, subjectID uuid.UUID, limit int) ([]domain.KYCReviewEvent, error) {
+	if limit <= 0 || limit > len(f.kycEvents) {
+		limit = len(f.kycEvents)
+	}
+	return append([]domain.KYCReviewEvent{}, f.kycEvents[:limit]...), nil
+}
+
+func (f *fakeReviewRepo) ListKYCLevels(ctx context.Context, scope *string) ([]domain.KYCLevel, error) {
+	if scope == nil || *scope == "" {
+		return append([]domain.KYCLevel{}, f.kycLevels...), nil
+	}
+	filtered := make([]domain.KYCLevel, 0, len(f.kycLevels))
+	for _, item := range f.kycLevels {
+		if item.Scope == *scope {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered, nil
+}
+
+func (f *fakeReviewRepo) UpsertKYCLevel(ctx context.Context, level domain.KYCLevel) (*domain.KYCLevel, error) {
+	for index, item := range f.kycLevels {
+		if item.ID == level.ID {
+			f.kycLevels[index] = level
+			return &level, nil
+		}
+	}
+	f.kycLevels = append(f.kycLevels, level)
+	return &level, nil
+}
+
+func (f *fakeReviewRepo) DeleteKYCLevel(ctx context.Context, levelID uuid.UUID) error {
+	for index, item := range f.kycLevels {
+		if item.ID == levelID {
+			f.kycLevels = append(f.kycLevels[:index], f.kycLevels[index+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (f *fakeReviewRepo) EvaluateAndAssignKYCLevel(ctx context.Context, scope string, subjectID, actorAccountID uuid.UUID, now time.Time) (*domain.KYCLevelAssignment, error) {
+	if len(f.kycLevels) == 0 {
+		return &domain.KYCLevelAssignment{}, nil
+	}
+	item := f.kycLevels[0]
+	return &domain.KYCLevelAssignment{
+		LevelID:   &item.ID,
+		LevelCode: &item.Code,
+		LevelName: &item.Name,
+		IssuedAt:  &now,
+	}, nil
 }
 
 type fakeZitadelAdminClient struct {
