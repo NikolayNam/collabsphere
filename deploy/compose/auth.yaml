@@ -82,6 +82,22 @@ services:
       zitadel-db:
         condition: service_healthy
 
+  zitadel-login:
+    profiles: [ "local" ]
+    image: ghcr.io/zitadel/zitadel-login:${ZITADEL_LOGIN_VERSION}
+    restart: unless-stopped
+    user: "0"
+    environment:
+      ZITADEL_API_URL: http://${ZITADEL_DOMAIN}:8080
+      NEXT_PUBLIC_BASE_PATH: /ui/v2/login
+      ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/login-client.pat
+    network_mode: service:zitadel
+    volumes:
+      - zitadel.shared:/zitadel
+    depends_on:
+      zitadel:
+        condition: service_healthy
+
 volumes:
   zitadel.postgres.data:
     name: "zitadel.postgres.data"
