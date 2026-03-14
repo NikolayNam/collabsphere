@@ -197,7 +197,7 @@ make up-dev-web
 
 - `deploy/compose/core.yaml`
 
-Этот профиль не только поднимает `web`/`web-login`, но и переопределяет `AUTH_BROWSER_REDIRECT_ORIGINS` у `api` под frontend origin, чтобы browser login не упирался в redirect allowlist.
+Этот профиль поднимает `web`/`web-login`. Allowlist для browser auth (`AUTH_BROWSER_REDIRECT_ORIGINS`) задаётся напрямую через env-файлы backend.
 
 Полезные overrides:
 
@@ -205,7 +205,7 @@ make up-dev-web
 - `WEB_NEXT_PUBLIC_APP_BASE_URL` — внешний frontend origin, по умолчанию `http://collabsphere.localhost:3002`
 - `WEB_NEXT_PUBLIC_API_BASE_URL` — внешний backend origin для browser login/callback, по умолчанию `http://api.localhost:8080`
 - `WEB_NEXT_INTERNAL_API_BASE_URL` — backend origin внутри Docker network, по умолчанию `http://api:8080`
-- `WEB_AUTH_BROWSER_REDIRECT_ORIGINS` — allowlist origins для backend browser auth при включённом `deploy/compose/core.yaml` c профилем `web`; по умолчанию `http://api.localhost:8080,http://collabsphere.localhost:3002`
+- `AUTH_BROWSER_REDIRECT_ORIGINS` — allowlist origins для backend browser auth; по умолчанию `http://api.localhost:8080,http://collabsphere.localhost:3002` (настраивается в `deploy/env/.env.dev` или override-файлах)
 
 ### Prometheus
 

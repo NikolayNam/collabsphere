@@ -23,7 +23,7 @@ services:
       - -config.file=/etc/loki/config.yaml
     volumes:
       - ../observability/loki/loki-config.yaml:/etc/loki/config.yaml:ro
-      - loki_data:/loki
+      - grafana.loki.data:/loki
 
   alloy:
     profiles: ["observability"]
@@ -36,7 +36,7 @@ services:
       - /etc/alloy/config.alloy
     volumes:
       - ../observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - alloy_data:/var/lib/alloy/data
+      - grafana.alloy.data:/var/lib/alloy/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - loki
@@ -56,11 +56,14 @@ services:
     volumes:
       - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
+      - grafana.data:/var/lib/grafana
     depends_on:
       - loki
 
 volumes:
-  loki_data:
-  alloy_data:
-  grafana_data:
+  grafana.loki.data:
+    name: "grafana.loki.data"
+  grafana.alloy.data:
+    name: "grafana.alloy.data"
+  grafana.data:
+    name: "grafana.data"

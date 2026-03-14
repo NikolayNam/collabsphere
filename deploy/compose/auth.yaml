@@ -2,7 +2,7 @@ name: collabsphere
 
 services:
   zitadel-db:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: postgres:18.3-trixie
     restart: unless-stopped
     secrets:
@@ -12,7 +12,7 @@ services:
       POSTGRES_DB: zitadel
       POSTGRES_PASSWORD_FILE: /run/secrets/zitadel_postgres_admin_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d zitadel -U postgres"]
+      test: [ "CMD-SHELL", "sh /opt/healthcheck/postgres-zitadel.sh" ]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -21,11 +21,12 @@ services:
       - "${ZITADEL_POSTGRES_HOST_PORT}:5432"
     volumes:
       - zitadel.postgres.data:/var/lib/postgresql
+      - ../scripts/healthcheck/postgres-zitadel.sh:/opt/healthcheck/postgres-zitadel.sh:ro
     networks:
       - zitadel.network
 
   zitadel:
-    profiles: ["local"]
+    profiles: [ "local" ]
     image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION}
     restart: unless-stopped
     secrets:
@@ -45,22 +46,22 @@ services:
       - --tlsMode
       - disabled
     environment:
-      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_DOMAIN}
-      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNALPORT}
-      ZITADEL_EXTERNALSECURE: ${ZITADEL_EXTERNALSECURE}
+      ZITADEL_EXTERNALDOMAIN: "${ZITADEL_DOMAIN}"
+      ZITADEL_EXTERNALPORT: "${ZITADEL_EXTERNALPORT}"
+      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNALSECURE}"
       ZITADEL_TLS_ENABLED: "false"
       ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
       ZITADEL_DATABASE_POSTGRES_PORT: 5432
       ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
       ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
       ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: ${ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED}
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: ${ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI}
-      ZITADEL_OIDC_DEFAULTLOGINURLV2: ${ZITADEL_OIDC_DEFAULTLOGINURLV2}
-      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: ${ZITADEL_OIDC_DEFAULTLOGOUTURLV2}
-      ZITADEL_SAML_DEFAULTLOGINURLV2: ${ZITADEL_SAML_DEFAULTLOGINURLV2}
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "${ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED}"
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: "${ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI}"
+      ZITADEL_OIDC_DEFAULTLOGINURLV2: "${ZITADEL_OIDC_DEFAULTLOGINURLV2}"
+      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: "${ZITADEL_OIDC_DEFAULTLOGOUTURLV2}"
+      ZITADEL_SAML_DEFAULTLOGINURLV2: "${ZITADEL_SAML_DEFAULTLOGINURLV2}"
     healthcheck:
-      test: ["CMD", "/app/zitadel", "ready"]
+      test: [ "CMD", "/app/zitadel", "ready" ]
       interval: 10s
       timeout: 60s
       retries: 5
@@ -69,6 +70,7 @@ services:
       - "${ZITADEL_HOST_PORT}:8080"
     volumes:
       - zitadel.shared:/zitadel
+      - ../scripts/healthcheck/zitadel-ready.sh:/opt/healthcheck/zitadel-ready.sh:ro
     networks:
       zitadel.network:
         aliases:
@@ -82,9 +84,9 @@ services:
 
 volumes:
   zitadel.postgres.data:
-    name: zitadel.postgres.data
+    name: "zitadel.postgres.data"
   zitadel.shared:
-    name: zitadel.shared
+    name: "zitadel.shared"
 
 networks:
   zitadel.network:

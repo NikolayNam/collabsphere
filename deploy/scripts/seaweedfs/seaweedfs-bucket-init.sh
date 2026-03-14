@@ -25,7 +25,7 @@ EOF
       ;;
   esac
 
-  if [ "$status" -eq 0 ] && ! printf '%s\n' "$output" | grep -q '^error:'; then
+  if [ "$status" -eq 0 ] && ! printf '%s\n' "$output" | grep -qi 'error:'; then
     printf '%s\n' "$output"
     exit 0
   fi

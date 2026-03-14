@@ -17,17 +17,18 @@ services:
     secrets:
       - test_postgres_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TEST_POSTGRES_USER} -d ${TEST_POSTGRES_DB}"]
+      test: ["CMD-SHELL", "sh /opt/healthcheck/postgres-test.sh"]
       interval: 3s
       timeout: 3s
       retries: 20
     ports:
       - "${TEST_POSTGRES_PORT}:5432"
     volumes:
-      - postgres.data_test:/var/lib/postgresql
+      - postgres.data.test:/var/lib/postgresql
+      - ../scripts/healthcheck/postgres-test.sh:/opt/healthcheck/postgres-test.sh:ro
 
 volumes:
-  postgres.data_test:
+  postgres.data.test:
     name: "postgres.data_test"
 
 networks:

@@ -80,9 +80,9 @@ docker compose \
   --profile local --profile web up -d --build --force-recreate
 ```
 
-По умолчанию containerized frontend слушает `http://localhost:3002`, а для browser auth flow использует внешний origin `http://collabsphere.localhost:3002`. Если у вас `collabsphere.localhost` не резолвится в loopback, можно временно переопределить `WEB_NEXT_PUBLIC_APP_BASE_URL=http://localhost:3002` и синхронно обновить `WEB_AUTH_BROWSER_REDIRECT_ORIGINS`.
+По умолчанию containerized frontend слушает `http://localhost:3002`, а для browser auth flow использует внешний origin `http://collabsphere.localhost:3002`. Если у вас `collabsphere.localhost` не резолвится в loopback, можно временно переопределить `WEB_NEXT_PUBLIC_APP_BASE_URL=http://localhost:3002` и синхронно обновить backend `AUTH_BROWSER_REDIRECT_ORIGINS`.
 
-Важно: `deploy/compose/core.yaml` содержит web-профиль и дополняет `api`-конфиг значением `AUTH_BROWSER_REDIRECT_ORIGINS`, чтобы combined stack принимал frontend callback origin без ручного редактирования backend env.
+Важно: `deploy/compose/core.yaml` содержит web-профиль, а `AUTH_BROWSER_REDIRECT_ORIGINS` задаётся напрямую в backend env-файлах (`deploy/env/.env.dev` и/или overrides).
 
 ## Переменные окружения
 

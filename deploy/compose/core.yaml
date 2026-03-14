@@ -14,7 +14,7 @@ services:
     secrets:
       - dev_postgres_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d collabsphere"]
+      test: ["CMD-SHELL", "sh /opt/healthcheck/postgres-collabsphere.sh"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -22,6 +22,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres.data:/var/lib/postgresql
+      - ../scripts/healthcheck/postgres-collabsphere.sh:/opt/healthcheck/postgres-collabsphere.sh:ro
 
   api:
     profiles: ["local", "prod"]
@@ -29,15 +30,13 @@ services:
     restart: unless-stopped
     build:
       context: ../../platform
-      dockerfile: ../../platform/Dockerfile
+      dockerfile: Dockerfile
     env_file:
       - ../env/.env.dev
       - ../env/.env.postgres.dev
       - ../env/.env.storage.dev
       - ../env/.env.redis.dev
       - ../env/.env.zitadel.dev
-    environment:
-      AUTH_BROWSER_REDIRECT_ORIGINS: ${WEB_AUTH_BROWSER_REDIRECT_ORIGINS:-}
     secrets:
       - dev_postgres_password
       - neon_postgres_password
@@ -54,8 +53,10 @@ services:
       - "${AUTH_ZITADEL_DOCKER_HOST_ALIAS:-auth.localhost}:host-gateway"
     ports:
       - "${APPLICATION_PORT}:${APPLICATION_PORT}"
+    volumes:
+      - ../scripts/healthcheck/api-health.sh:/opt/healthcheck/api-health.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsSL http://localhost:8080/health"]
+      test: ["CMD-SHELL", "sh /opt/healthcheck/api-health.sh"]
       interval: 5s
       timeout: 30s
       retries: 10
@@ -73,23 +74,21 @@ services:
       - ../env/.env.web.dev
     build:
       context: ../../web
-      dockerfile: ../../web/Dockerfile
+      dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${WEB_NEXT_PUBLIC_API_BASE_URL}
-        NEXT_PUBLIC_APP_BASE_URL: ${WEB_NEXT_PUBLIC_APP_BASE_URL}
-        NEXT_INTERNAL_API_BASE_URL: ${WEB_NEXT_INTERNAL_API_BASE_URL}
+        NEXT_PUBLIC_API_BASE_URL: ${WEB_NEXT_PUBLIC_API_BASE_URL:-http://api.localhost:8080}
+        NEXT_PUBLIC_APP_BASE_URL: ${WEB_NEXT_PUBLIC_APP_BASE_URL:-http://collabsphere.localhost:3002}
+        NEXT_INTERNAL_API_BASE_URL: ${WEB_NEXT_INTERNAL_API_BASE_URL:-http://api:8080}
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
     ports:
-      - "${WEB_HOST_PORT}:3000"
+      - "${WEB_HOST_PORT:-3002}:3000"
+    volumes:
+      - ../scripts/healthcheck/web-health.sh:/opt/healthcheck/web-health.sh:ro
     healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      test: ["CMD-SHELL", "sh /opt/healthcheck/web-health.sh"]
       interval: 5s
       timeout: 10s
       retries: 20
@@ -110,25 +109,22 @@ services:
       - ../env/.env.web.login.dev
     build:
       context: ../../web
-      dockerfile: ../../web/Dockerfile
+      dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${WEB_NEXT_PUBLIC_API_BASE_URL}
-        NEXT_PUBLIC_APP_BASE_URL: ${WEB_NEXT_PUBLIC_APP_BASE_URL}
-        NEXT_INTERNAL_API_BASE_URL: ${WEB_NEXT_INTERNAL_API_BASE_URL}
+        NEXT_PUBLIC_API_BASE_URL: ${WEB_NEXT_PUBLIC_API_BASE_URL:-http://api.localhost:8080}
+        NEXT_PUBLIC_APP_BASE_URL: ${WEB_NEXT_PUBLIC_APP_BASE_URL:-http://collabsphere.localhost:3002}
+        NEXT_INTERNAL_API_BASE_URL: ${WEB_NEXT_INTERNAL_API_BASE_URL:-http://api:8080}
     environment:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
     ports:
-      - "${WEB_LOGIN_HOST_PORT}:3000"
+      - "${WEB_LOGIN_HOST_PORT:-3000}:3000"
     volumes:
       - zitadel.shared:/zitadel:ro
+      - ../scripts/healthcheck/web-login-health.sh:/opt/healthcheck/web-login-health.sh:ro
     healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - fetch('http://127.0.0.1:3000/ui/v2/login/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      test: ["CMD-SHELL", "sh /opt/healthcheck/web-login-health.sh"]
       interval: 5s
       timeout: 10s
       retries: 20
@@ -153,7 +149,7 @@ volumes:
   postgres.data:
     name: "postgres.data"
   zitadel.shared:
-    name: zitadel.shared
+    name: "zitadel.shared"
 
 secrets:
   dev_postgres_password:

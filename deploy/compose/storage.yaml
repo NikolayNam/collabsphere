@@ -44,8 +44,15 @@ services:
     volumes:
       - ../scripts/seaweedfs:/bootstrap:ro
       - storage.filer.data:/data
+      - ../scripts/healthcheck/seaweedfs-filer-ready.sh:/opt/healthcheck/seaweedfs-filer-ready.sh:ro
     entrypoint: ["/bin/sh", "/bootstrap/seaweedfs-filer.sh"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "sh /opt/healthcheck/seaweedfs-filer-ready.sh"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     networks:
       - internal.network
     ports:
@@ -74,9 +81,12 @@ services:
       - "${STORAGE_S3_HOST_PORT}:8333"
       - "${STORAGE_S3_METRICS_HOST_PORT}:9327"
     depends_on:
-      - master
-      - volume
-      - filer
+      master:
+        condition: service_started
+      volume:
+        condition: service_started
+      filer:
+        condition: service_healthy
 
   bucket-init:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
@@ -89,9 +99,12 @@ services:
     networks:
       - internal.network
     depends_on:
-      - master
-      - filer
-      - s3
+      master:
+        condition: service_started
+      filer:
+        condition: service_healthy
+      s3:
+        condition: service_started
     restart: "no"
 
 volumes:

@@ -14,9 +14,41 @@ if [ ! -f "$secret_key_file" ]; then
   exit 1
 fi
 
-access_key="$(tr -d '\r\n' < "$access_key_file")"
-secret_key="$(tr -d '\r\n' < "$secret_key_file")"
+access_key="$access_key_file"
+secret_key="$secret_key_file"
 config_file="/tmp/seaweedfs-s3.json"
+master_addr="${STORAGE_MASTER_ADDRESS:-master:9333}"
+filer_addr="${STORAGE_FILER_ADDRESS:-filer:8888}"
+max_attempts="${STORAGE_S3_WAIT_MAX_ATTEMPTS:-30}"
+retry_delay_seconds="${STORAGE_S3_WAIT_RETRY_DELAY_SECONDS:-2}"
+
+wait_for_storage_ready() {
+  attempt=1
+  while [ "$attempt" -le "$max_attempts" ]; do
+    set +e
+    output="$(weed shell -master="$master_addr" -filer="$filer_addr" 2>&1 <<'EOF'
+s3.bucket.list
+exit
+EOF
+)"
+    status=$?
+    set -e
+
+    if [ "$status" -eq 0 ] && ! printf '%s\n' "$output" | grep -qi 'error:'; then
+      return 0
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      printf '%s\n' "$output" >&2
+      echo "seaweedfs-s3: storage endpoints are not ready after $max_attempts attempts (master=$master_addr filer=$filer_addr)" >&2
+      return 1
+    fi
+
+    attempt=$((attempt + 1))
+    sleep "$retry_delay_seconds"
+  done
+  return 1
+}
 
 cat >"$config_file" <<EOF
 {
@@ -35,8 +67,10 @@ cat >"$config_file" <<EOF
 }
 EOF
 
+wait_for_storage_ready
+
 exec weed s3 \
-  -filer="${STORAGE_FILER_ADDRESS:-filer:8888}" \
+  -filer="$filer_addr" \
   -ip.bind=0.0.0.0 \
   -metricsPort="${STORAGE_S3_METRICS_PORT:-9327}" \
   -config="$config_file"
