@@ -15,11 +15,12 @@ import (
 )
 
 type Handler struct {
-	svc *authapp.Service
+	svc               *authapp.Service
+	trustProxyHeaders bool
 }
 
-func NewHandler(svc *authapp.Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *authapp.Service, trustProxyHeaders bool) *Handler {
+	return &Handler{svc: svc, trustProxyHeaders: trustProxyHeaders}
 }
 
 func (h *Handler) CreateChannel(ctx context.Context, input *dto.CreateChannelInput) (*dto.ChannelResponse, error) {
@@ -200,7 +201,17 @@ func (h *Handler) CreateGuestInvite(ctx context.Context, input *dto.CreateGuestI
 }
 
 func (h *Handler) ExchangeGuestInvite(ctx context.Context, input *dto.ExchangeGuestInviteInput) (*dto.ExchangeGuestInviteResponse, error) {
-	res, err := h.svc.ExchangeGuestInvite(ctx, authapp.ExchangeGuestInviteCmd{Token: input.Token, DisplayName: input.Body.DisplayName, UserAgent: optionalString(input.UserAgent), IP: extractClientIP(input.XForwardedFor, input.XRealIP)})
+	res, err := h.svc.ExchangeGuestInvite(ctx, authapp.ExchangeGuestInviteCmd{
+		Token:       input.Token,
+		DisplayName: input.Body.DisplayName,
+		UserAgent:   optionalString(input.UserAgent),
+		IP: authmw.ExtractClientIP(
+			input.XForwardedFor,
+			input.XRealIP,
+			"",
+			authmw.ClientIPOptions{TrustProxyHeaders: h.trustProxyHeaders},
+		),
+	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
@@ -370,26 +381,6 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &value
-}
-
-func extractClientIP(forwardedFor, realIP string) *string {
-	if value := firstHeaderValue(forwardedFor); value != "" {
-		return &value
-	}
-	if value := strings.TrimSpace(realIP); value != "" {
-		return &value
-	}
-	return nil
-}
-
-func firstHeaderValue(value string) string {
-	for _, part := range strings.Split(value, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			return part
-		}
-	}
-	return ""
 }
 
 func toChannelPayload(channel collabdomain.Channel) dto.ChannelPayload {

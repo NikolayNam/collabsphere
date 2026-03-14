@@ -95,7 +95,6 @@ func registerAuthModule(router chi.Router, api huma.API, db *gorm.DB, conf *conf
 		DefaultReturnURL:       conf.Auth.BrowserDefaultReturn,
 		AllowedRedirectOrigins: conf.Auth.BrowserRedirectOriginList(),
 		PublicBaseURL:          conf.APP.PublicBaseURL,
-	})
+	}, conf.APP.TrustProxyHeaders)
 	authhttp.Register(router, api, authHandler, jwtManager)
 }
-

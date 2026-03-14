@@ -42,6 +42,7 @@ type repoStub struct {
 	channelIDs                []uuid.UUID
 	accountFiles              []ListedFile
 	orgFiles                  []ListedFile
+	accountHasAnyOrgAccess    bool
 }
 
 func (r repoStub) GetObjectByID(ctx context.Context, objectID uuid.UUID) (*StoredObject, error) {
@@ -91,6 +92,15 @@ func (r repoStub) AccountOwnsVideo(ctx context.Context, accountID, objectID uuid
 }
 func (r repoStub) ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error) {
 	return r.orgIDs, nil
+}
+func (r repoStub) AccountHasAnyOrganizationAccess(ctx context.Context, accountID uuid.UUID, organizationIDs []uuid.UUID) (bool, error) {
+	if len(organizationIDs) == 0 {
+		return false, nil
+	}
+	if r.accountHasAnyOrgAccess {
+		return true, nil
+	}
+	return len(r.orgIDs) > 0, nil
 }
 func (r repoStub) ListRelatedChannelIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error) {
 	return r.channelIDs, nil

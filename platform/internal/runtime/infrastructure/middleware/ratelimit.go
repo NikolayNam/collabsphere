@@ -21,44 +21,62 @@ const (
 	rlCleanupInterval = 1 * time.Minute
 )
 
-var (
-	rlMu          sync.Mutex
-	rlClients     = make(map[string]*rlClient, 256)
-	rlLastCleanup time.Time
-)
-
-func RateLimit(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := remoteIP(r.RemoteAddr)
-		lim := getLimiter(ip)
-
-		if !lim.Allow() {
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+type RateLimitOptions struct {
+	Rate            rate.Limit
+	Burst           int
+	TTL             time.Duration
+	CleanupInterval time.Duration
 }
 
-func getLimiter(ip string) *rate.Limiter {
+type rateLimiterState struct {
+	mu          sync.Mutex
+	clients     map[string]*rlClient
+	lastCleanup time.Time
+	options     RateLimitOptions
+}
+
+func NewRateLimit(options RateLimitOptions) func(http.Handler) http.Handler {
+	state := &rateLimiterState{
+		clients: make(map[string]*rlClient, 256),
+		options: normalizeRateLimitOptions(options),
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := remoteIP(r.RemoteAddr)
+			lim := state.getLimiter(ip)
+
+			if !lim.Allow() {
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func RateLimit(next http.Handler) http.Handler {
+	return NewRateLimit(RateLimitOptions{})(next)
+}
+
+func (s *rateLimiterState) getLimiter(ip string) *rate.Limiter {
 	now := time.Now()
 
-	rlMu.Lock()
-	defer rlMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	if rlLastCleanup.IsZero() || now.Sub(rlLastCleanup) >= rlCleanupInterval {
-		cleanupLocked(now)
-		rlLastCleanup = now
+	if s.lastCleanup.IsZero() || now.Sub(s.lastCleanup) >= s.options.CleanupInterval {
+		s.cleanupLocked(now)
+		s.lastCleanup = now
 	}
 
-	c := rlClients[ip]
+	c := s.clients[ip]
 	if c == nil {
 		c = &rlClient{
-			lim:      rate.NewLimiter(rlRate, rlBurst),
+			lim:      rate.NewLimiter(s.options.Rate, s.options.Burst),
 			lastSeen: now,
 		}
-		rlClients[ip] = c
+		s.clients[ip] = c
 		return c.lim
 	}
 
@@ -66,14 +84,31 @@ func getLimiter(ip string) *rate.Limiter {
 	return c.lim
 }
 
-func cleanupLocked(now time.Time) {
-	cutoff := now.Add(-rlTTL)
+func (s *rateLimiterState) cleanupLocked(now time.Time) {
+	cutoff := now.Add(-s.options.TTL)
 
-	for ip, c := range rlClients {
+	for ip, c := range s.clients {
 		if c.lastSeen.Before(cutoff) {
-			delete(rlClients, ip)
+			delete(s.clients, ip)
 		}
 	}
+}
+
+func normalizeRateLimitOptions(options RateLimitOptions) RateLimitOptions {
+	out := options
+	if out.Rate <= 0 {
+		out.Rate = rlRate
+	}
+	if out.Burst <= 0 {
+		out.Burst = rlBurst
+	}
+	if out.TTL <= 0 {
+		out.TTL = rlTTL
+	}
+	if out.CleanupInterval <= 0 {
+		out.CleanupInterval = rlCleanupInterval
+	}
+	return out
 }
 
 func remoteIP(remoteAddr string) string {

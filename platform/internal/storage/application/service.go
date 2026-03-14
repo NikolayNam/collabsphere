@@ -34,6 +34,7 @@ type Repository interface {
 	AccountOwnsAvatar(ctx context.Context, accountID, objectID uuid.UUID) (bool, error)
 	AccountOwnsVideo(ctx context.Context, accountID, objectID uuid.UUID) (bool, error)
 	ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error)
+	AccountHasAnyOrganizationAccess(ctx context.Context, accountID uuid.UUID, organizationIDs []uuid.UUID) (bool, error)
 	ListRelatedChannelIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error)
 	ListAccountFiles(ctx context.Context, accountID uuid.UUID) ([]ListedFile, error)
 	ListOrganizationFiles(ctx context.Context, organizationID uuid.UUID) ([]ListedFile, error)
@@ -466,10 +467,11 @@ func (s *Service) accountCanDownload(ctx context.Context, obj *StoredObject, acc
 	if err != nil {
 		return false, fault.Internal("Resolve organization file access failed", fault.WithCause(err))
 	}
-	for _, orgUUID := range uniqueUUIDs(orgIDs) {
-		allowed, accessErr := s.accountHasOrganizationAccess(ctx, orgUUID, accountUUID)
+	uniqueOrgIDs := uniqueUUIDs(orgIDs)
+	if len(uniqueOrgIDs) > 0 {
+		allowed, accessErr := s.repo.AccountHasAnyOrganizationAccess(ctx, accountUUID, uniqueOrgIDs)
 		if accessErr != nil {
-			return false, accessErr
+			return false, fault.Internal("Resolve organization membership failed", fault.WithCause(accessErr))
 		}
 		if allowed {
 			return true, nil

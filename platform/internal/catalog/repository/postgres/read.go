@@ -16,6 +16,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const maxCatalogListRows = 500
+
 type catalogProductCategoryRow struct {
 	ID             uuid.UUID  `gorm:"column:id"`
 	OrganizationID uuid.UUID  `gorm:"column:organization_id"`
@@ -122,6 +124,7 @@ func (r *CatalogRepo) ListProductCategories(ctx context.Context, organizationID 
 		Select("id", "organization_id", "parent_id", "template_id", "code", "name", "sort_order", "created_at", "updated_at").
 		Where("organization_id = ? AND deleted_at IS NULL", organizationID.UUID()).
 		Order("sort_order ASC, name ASC, id ASC").
+		Limit(maxCatalogListRows).
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -187,6 +190,7 @@ func (r *CatalogRepo) ListProducts(ctx context.Context, organizationID orgdomain
 		Select("id", "organization_id", "product_type_id", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
 		Where("organization_id = ? AND deleted_at IS NULL", organizationID.UUID()).
 		Order("created_at DESC, id DESC").
+		Limit(maxCatalogListRows).
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
@@ -255,6 +259,7 @@ func (r *CatalogRepo) ListProductImportErrors(ctx context.Context, batchID uuid.
 		Select("id", "batch_id", "row_no", "code", "message", "details::text AS details", "created_at").
 		Where("batch_id = ?", batchID).
 		Order("row_no ASC NULLS FIRST, created_at ASC, id ASC").
+		Limit(maxCatalogListRows).
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}

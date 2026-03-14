@@ -49,7 +49,17 @@ func (s *Service) CreateConference(ctx context.Context, cmd CreateConferenceCmd)
 	if err != nil {
 		return nil, fault.Internal("Create conference failed", fault.WithCause(err))
 	}
-	_, _ = s.repo.CreateMessage(ctx, collabdomain.Message{ID: uuid.New(), ChannelID: channel.ID, Type: collabdomain.MessageTypeSystem, AuthorType: collabdomain.ActorTypeSystem, Body: fmt.Sprintf("Conference scheduled: %s", conference.Title), CreatedAt: now}, nil, nil)
+	s.bestEffort(ctx, "conference.create.system_message", func() error {
+		_, err := s.repo.CreateMessage(ctx, collabdomain.Message{
+			ID:         uuid.New(),
+			ChannelID:  channel.ID,
+			Type:       collabdomain.MessageTypeSystem,
+			AuthorType: collabdomain.ActorTypeSystem,
+			Body:       fmt.Sprintf("Conference scheduled: %s", conference.Title),
+			CreatedAt:  now,
+		}, nil, nil)
+		return err
+	})
 	s.publish(ctx, collabdomain.Event{Type: "conference.created", ChannelID: channel.ID, Payload: conference})
 	return conference, nil
 }
@@ -89,7 +99,17 @@ func (s *Service) StartConferenceRecording(ctx context.Context, cmd UpdateConfer
 	if err != nil {
 		return nil, fault.Internal("Start conference recording failed", fault.WithCause(err))
 	}
-	_, _ = s.repo.CreateMessage(ctx, collabdomain.Message{ID: uuid.New(), ChannelID: conference.ChannelID, Type: collabdomain.MessageTypeSystem, AuthorType: collabdomain.ActorTypeSystem, Body: fmt.Sprintf("Recording started for conference: %s", conference.Title), CreatedAt: now}, nil, nil)
+	s.bestEffort(ctx, "conference.recording.started.system_message", func() error {
+		_, err := s.repo.CreateMessage(ctx, collabdomain.Message{
+			ID:         uuid.New(),
+			ChannelID:  conference.ChannelID,
+			Type:       collabdomain.MessageTypeSystem,
+			AuthorType: collabdomain.ActorTypeSystem,
+			Body:       fmt.Sprintf("Recording started for conference: %s", conference.Title),
+			CreatedAt:  now,
+		}, nil, nil)
+		return err
+	})
 	s.publish(ctx, collabdomain.Event{Type: "conference.recording.started", ChannelID: conference.ChannelID, Payload: updated})
 	return updated, nil
 }
@@ -104,7 +124,17 @@ func (s *Service) StopConferenceRecording(ctx context.Context, cmd UpdateConfere
 	if err != nil {
 		return nil, fault.Internal("Stop conference recording failed", fault.WithCause(err))
 	}
-	_, _ = s.repo.CreateMessage(ctx, collabdomain.Message{ID: uuid.New(), ChannelID: conference.ChannelID, Type: collabdomain.MessageTypeSystem, AuthorType: collabdomain.ActorTypeSystem, Body: fmt.Sprintf("Recording stopped for conference: %s", conference.Title), CreatedAt: now}, nil, nil)
+	s.bestEffort(ctx, "conference.recording.stopped.system_message", func() error {
+		_, err := s.repo.CreateMessage(ctx, collabdomain.Message{
+			ID:         uuid.New(),
+			ChannelID:  conference.ChannelID,
+			Type:       collabdomain.MessageTypeSystem,
+			AuthorType: collabdomain.ActorTypeSystem,
+			Body:       fmt.Sprintf("Recording stopped for conference: %s", conference.Title),
+			CreatedAt:  now,
+		}, nil, nil)
+		return err
+	})
 	s.publish(ctx, collabdomain.Event{Type: "conference.recording.stopped", ChannelID: conference.ChannelID, Payload: updated})
 	return updated, nil
 }
@@ -143,13 +173,17 @@ func (s *Service) ProcessNextTranscriptionJob(ctx context.Context) (bool, error)
 	}
 	body, err := s.storage.ReadObject(ctx, lease.Bucket, lease.ObjectKey)
 	if err != nil {
-		_ = s.repo.FailTranscriptionJob(ctx, lease.JobID, err.Error(), s.now().Add(30*time.Second))
+		s.bestEffort(ctx, "conference.transcription.fail_job.read_object", func() error {
+			return s.repo.FailTranscriptionJob(ctx, lease.JobID, err.Error(), s.now().Add(30*time.Second))
+		})
 		return true, fault.Internal("Read recording object failed", fault.WithCause(err))
 	}
 	defer body.Close()
 	result, err := s.transcriber.Transcribe(ctx, lease.FileName, lease.MimeType, body)
 	if err != nil {
-		_ = s.repo.FailTranscriptionJob(ctx, lease.JobID, err.Error(), s.now().Add(30*time.Second))
+		s.bestEffort(ctx, "conference.transcription.fail_job.transcribe", func() error {
+			return s.repo.FailTranscriptionJob(ctx, lease.JobID, err.Error(), s.now().Add(30*time.Second))
+		})
 		return true, fault.Internal("Transcription failed", fault.WithCause(err))
 	}
 	text := strings.TrimSpace(result.Text)
@@ -158,14 +192,39 @@ func (s *Service) ProcessNextTranscriptionJob(ctx context.Context) (bool, error)
 	}
 	transcript := collabdomain.ConferenceTranscript{ConferenceID: lease.ConferenceID, TranscriptText: text, SegmentsJSON: result.SegmentsJSON, LanguageCode: result.LanguageCode}
 	if err := s.repo.UpsertConferenceTranscript(ctx, transcript, s.now()); err != nil {
-		_ = s.repo.FailTranscriptionJob(ctx, lease.JobID, err.Error(), s.now().Add(30*time.Second))
+		s.bestEffort(ctx, "conference.transcription.fail_job.upsert_transcript", func() error {
+			return s.repo.FailTranscriptionJob(ctx, lease.JobID, err.Error(), s.now().Add(30*time.Second))
+		})
 		return true, fault.Internal("Store transcript failed", fault.WithCause(err))
 	}
-	_, _ = s.repo.UpdateConference(ctx, lease.ConferenceID, map[string]any{"transcription_status": string(collabdomain.TranscriptionStatusReady), "updated_at": s.now()})
-	_ = s.repo.CompleteTranscriptionJob(ctx, lease.JobID, s.now())
-	conference, _ := s.repo.GetConferenceByID(ctx, lease.ConferenceID)
+	s.bestEffort(ctx, "conference.transcription.update_status", func() error {
+		_, err := s.repo.UpdateConference(ctx, lease.ConferenceID, map[string]any{
+			"transcription_status": string(collabdomain.TranscriptionStatusReady),
+			"updated_at":           s.now(),
+		})
+		return err
+	})
+	s.bestEffort(ctx, "conference.transcription.complete_job", func() error {
+		return s.repo.CompleteTranscriptionJob(ctx, lease.JobID, s.now())
+	})
+	conference, conferenceErr := s.repo.GetConferenceByID(ctx, lease.ConferenceID)
+	if conferenceErr != nil {
+		s.bestEffort(ctx, "conference.transcription.load_conference", func() error {
+			return conferenceErr
+		})
+	}
 	if conference != nil {
-		_, _ = s.repo.CreateMessage(ctx, collabdomain.Message{ID: uuid.New(), ChannelID: conference.ChannelID, Type: collabdomain.MessageTypeSystem, AuthorType: collabdomain.ActorTypeSystem, Body: fmt.Sprintf("Transcript ready for conference: %s", conference.Title), CreatedAt: s.now()}, nil, nil)
+		s.bestEffort(ctx, "conference.transcription.ready.system_message", func() error {
+			_, err := s.repo.CreateMessage(ctx, collabdomain.Message{
+				ID:         uuid.New(),
+				ChannelID:  conference.ChannelID,
+				Type:       collabdomain.MessageTypeSystem,
+				AuthorType: collabdomain.ActorTypeSystem,
+				Body:       fmt.Sprintf("Transcript ready for conference: %s", conference.Title),
+				CreatedAt:  s.now(),
+			}, nil, nil)
+			return err
+		})
 		s.publish(ctx, collabdomain.Event{Type: "conference.transcript.ready", ChannelID: conference.ChannelID, Payload: map[string]any{"conferenceId": lease.ConferenceID}})
 	}
 	return true, nil

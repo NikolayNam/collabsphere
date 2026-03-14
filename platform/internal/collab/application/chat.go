@@ -89,7 +89,9 @@ func (s *Service) CreateMessage(ctx context.Context, cmd CreateMessageCmd) (*col
 	if err != nil {
 		return nil, fault.Internal("Create message failed", fault.WithCause(err))
 	}
-	_ = s.repo.UpsertReadCursor(ctx, cmd.Actor, cmd.ChannelID, created.ChannelSeq, s.now())
+	s.bestEffort(ctx, "message.create.upsert_read_cursor", func() error {
+		return s.repo.UpsertReadCursor(ctx, cmd.Actor, cmd.ChannelID, created.ChannelSeq, s.now())
+	})
 	s.publish(ctx, collabdomain.Event{Type: "message.created", ChannelID: cmd.ChannelID, Payload: created})
 	return created, nil
 }

@@ -108,15 +108,7 @@ func buildApp(conf *config.Config, openDB func(*config.Config, *slog.Logger) *go
 		}
 		return sqlDB.PingContext(ctx)
 	}))
-	registerPlatformOpsModule(api, db, conf)
-	registerAccountsModule(api, db, conf)
-	registerOrganzationsModule(api, db, conf)
-	registerMembershipsModule(api, db, conf)
-	registerCatalogModule(api, db, conf)
-	registerGroupsModule(api, db, conf)
-	registerCollabModule(api, router, db, conf)
-	registerStorageModule(api, db, conf)
-	registerAuthModule(apiV1, api, db, conf)
+	registerAllModules(api, apiV1, router, db, conf)
 
 	appLog.Info("application bootstrapped",
 		"event", "app.bootstrap.completed",

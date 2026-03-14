@@ -68,7 +68,30 @@ func MustOpenGormDB(conf *config.Config, dbLog *slog.Logger) *gorm.DB {
 		"schema", conf.DB.DBSchema,
 	)
 
+	sqlDB, err := db.DB()
+	if err != nil {
+		panic(err)
+	}
+	applyDBPoolConfig(sqlDB, conf)
+	dbLog.Info("db pool configured",
+		"event", "db.pool.configured",
+		"max_open_conns", conf.DB.MaxOpenConns,
+		"max_idle_conns", conf.DB.MaxIdleConns,
+		"conn_max_lifetime", conf.DB.ConnMaxLifetime.String(),
+		"conn_max_idle_time", conf.DB.ConnMaxIdleTime.String(),
+	)
+
 	return db
+}
+
+func applyDBPoolConfig(sqlDB *sql.DB, conf *config.Config) {
+	if sqlDB == nil || conf == nil {
+		return
+	}
+	sqlDB.SetMaxOpenConns(conf.DB.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(conf.DB.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(conf.DB.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(conf.DB.ConnMaxIdleTime)
 }
 
 func MustOpenNoopGormDB(dbLog *slog.Logger) *gorm.DB {

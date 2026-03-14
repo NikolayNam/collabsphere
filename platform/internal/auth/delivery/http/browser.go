@@ -10,6 +10,7 @@ import (
 	authdto "github.com/NikolayNam/collabsphere/internal/auth/delivery/http/dto"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/humaerr"
+	authmw "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 )
 
 func (h *Handler) BeginOIDCBrowserLogin(ctx context.Context, input *authdto.OIDCBrowserStartInput) (*authdto.BrowserRedirectResponse, error) {
@@ -73,7 +74,7 @@ func (h *Handler) CompleteOIDCBrowserCallback(ctx context.Context, input *authdt
 		State:     state,
 		Code:      strings.TrimSpace(input.Code),
 		UserAgent: optionalString(input.UserAgent),
-		IP:        extractClientIP(input.XForwardedFor, input.XRealIP),
+		IP:        authmw.ExtractClientIP(input.XForwardedFor, input.XRealIP, "", authmw.ClientIPOptions{TrustProxyHeaders: h.trustProxyHeaders}),
 	})
 	if err != nil {
 		code, description := browserErrorPayload(err)

@@ -24,10 +24,17 @@ type Handler struct {
 	passwordLoginEnabled bool
 	zitadelAdminEnabled  bool
 	browser              BrowserFlowConfig
+	trustProxyHeaders    bool
 }
 
-func NewHandler(svc *authapp.Service, passwordLoginEnabled bool, zitadelAdminEnabled bool, browser BrowserFlowConfig) *Handler {
-	return &Handler{svc: svc, passwordLoginEnabled: passwordLoginEnabled, zitadelAdminEnabled: zitadelAdminEnabled, browser: browser}
+func NewHandler(svc *authapp.Service, passwordLoginEnabled bool, zitadelAdminEnabled bool, browser BrowserFlowConfig, trustProxyHeaders bool) *Handler {
+	return &Handler{
+		svc:                  svc,
+		passwordLoginEnabled: passwordLoginEnabled,
+		zitadelAdminEnabled:  zitadelAdminEnabled,
+		browser:              browser,
+		trustProxyHeaders:    trustProxyHeaders,
+	}
 }
 
 func (h *Handler) Login(ctx context.Context, input *authdto.LoginInput) (*authdto.TokenResponse, error) {
@@ -39,7 +46,7 @@ func (h *Handler) Login(ctx context.Context, input *authdto.LoginInput) (*authdt
 		Email:     input.Body.Email,
 		Password:  input.Body.Password,
 		UserAgent: optionalString(input.UserAgent),
-		IP:        extractClientIP(input.XForwardedFor, input.XRealIP),
+		IP:        authmw.ExtractClientIP(input.XForwardedFor, input.XRealIP, "", authmw.ClientIPOptions{TrustProxyHeaders: h.trustProxyHeaders}),
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -78,7 +85,7 @@ func (h *Handler) Exchange(ctx context.Context, input *authdto.ExchangeAuthTicke
 	res, err := h.svc.ExchangeAuthTicket(ctx, authapp.ExchangeAuthTicketCmd{
 		Ticket:    input.Body.Ticket,
 		UserAgent: optionalString(input.UserAgent),
-		IP:        extractClientIP(input.XForwardedFor, input.XRealIP),
+		IP:        authmw.ExtractClientIP(input.XForwardedFor, input.XRealIP, "", authmw.ClientIPOptions{TrustProxyHeaders: h.trustProxyHeaders}),
 	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
@@ -150,26 +157,6 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &value
-}
-
-func extractClientIP(forwardedFor, realIP string) *string {
-	if value := firstHeaderValue(forwardedFor); value != "" {
-		return &value
-	}
-	if value := strings.TrimSpace(realIP); value != "" {
-		return &value
-	}
-	return nil
-}
-
-func firstHeaderValue(value string) string {
-	for _, part := range strings.Split(value, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			return part
-		}
-	}
-	return ""
 }
 
 func requireAuthenticatedAccount(ctx context.Context) error {

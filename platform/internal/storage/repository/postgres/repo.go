@@ -15,6 +15,8 @@ type Repo struct {
 	db *gorm.DB
 }
 
+const maxListedFilesRows = 500
+
 type listedFileRow struct {
 	ObjectID       uuid.UUID  `gorm:"column:object_id"`
 	OrganizationID *uuid.UUID `gorm:"column:organization_id"`
@@ -216,6 +218,21 @@ func (r *Repo) ListRelatedOrganizationIDs(ctx context.Context, objectID uuid.UUI
 	return out, nil
 }
 
+func (r *Repo) AccountHasAnyOrganizationAccess(ctx context.Context, accountID uuid.UUID, organizationIDs []uuid.UUID) (bool, error) {
+	if accountID == uuid.Nil || len(organizationIDs) == 0 {
+		return false, nil
+	}
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Table("iam.memberships").
+		Where("account_id = ? AND organization_id IN ? AND is_active = true AND deleted_at IS NULL", accountID, organizationIDs).
+		Limit(1).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *Repo) ListRelatedChannelIDs(ctx context.Context, objectID uuid.UUID) ([]uuid.UUID, error) {
 	var rows []struct {
 		ChannelID uuid.UUID `gorm:"column:channel_id"`
@@ -272,7 +289,7 @@ func (r *Repo) ListAccountFiles(ctx context.Context, accountID uuid.UUID) ([]sto
 	if err := r.db.WithContext(ctx).Raw(query, sql.Named("account_id", accountID)).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	return mapListedFiles(rows), nil
+	return trimListedFiles(mapListedFiles(rows), maxListedFilesRows), nil
 }
 
 func (r *Repo) ListOrganizationFiles(ctx context.Context, organizationID uuid.UUID) ([]storageapp.ListedFile, error) {
@@ -378,7 +395,7 @@ func (r *Repo) ListOrganizationFiles(ctx context.Context, organizationID uuid.UU
 	if err := r.db.WithContext(ctx).Raw(query, sql.Named("organization_id", organizationID)).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	return mapListedFiles(rows), nil
+	return trimListedFiles(mapListedFiles(rows), maxListedFilesRows), nil
 }
 
 func (r *Repo) queryOptionalObjectID(ctx context.Context, table, column, where string, args ...any) (*uuid.UUID, error) {
@@ -387,7 +404,7 @@ func (r *Repo) queryOptionalObjectID(ctx context.Context, table, column, where s
 	}
 	if err := r.db.WithContext(ctx).
 		Table(table).
-		Select(column + " AS object_id").
+		Select(column+" AS object_id").
 		Where(where, args...).
 		Take(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -413,4 +430,11 @@ func mapListedFiles(rows []listedFileRow) []storageapp.ListedFile {
 		})
 	}
 	return out
+}
+
+func trimListedFiles(values []storageapp.ListedFile, limit int) []storageapp.ListedFile {
+	if limit <= 0 || len(values) <= limit {
+		return values
+	}
+	return values[:limit]
 }

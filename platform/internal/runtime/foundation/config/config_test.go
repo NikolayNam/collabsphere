@@ -405,3 +405,22 @@ func TestConfigValidateForWorkerRequiresJWT(t *testing.T) {
 		t.Fatalf("ValidateFor(ProfileWorker) error = %v, want missing jwt validation error", err)
 	}
 }
+
+func TestDBValidateRejectsInvalidPoolLimits(t *testing.T) {
+	db := DB{
+		Host:            "localhost",
+		Port:            5432,
+		DBName:          "postgres",
+		DBSchema:        "db",
+		Username:        "postgres",
+		Password:        "postgres",
+		MaxOpenConns:    10,
+		MaxIdleConns:    20,
+		ConnMaxLifetime: time.Minute,
+		ConnMaxIdleTime: time.Minute,
+	}
+	err := db.Validate()
+	if err == nil || !strings.Contains(err.Error(), "max idle conns") {
+		t.Fatalf("Validate() error = %v, want max idle conns validation error", err)
+	}
+}

@@ -51,9 +51,9 @@ func registerCollabModule(api huma.API, router chi.Router, db *gorm.DB, conf *co
 	}
 
 	service := collabapp.New(repo, accountRepo, storageClient, tokenGen, jwtManager, clk, broker, transcriber, conferenceProvider, conf.APP.PublicBaseURL, conf.Storage.S3.Bucket, conf.Collab.GuestInviteTTL, conf.Auth.GuestAccessTTL)
-	handler := collabhttp.NewHandler(service)
+	handler := collabhttp.NewHandler(service, conf.APP.TrustProxyHeaders)
 	collabhttp.Register(api, handler, jwtManager)
 	if router != nil {
-		router.Get("/ws/collab", collabhttp.NewWebSocketHandler(service, jwtManager, broker).ServeHTTP)
+		router.Get("/ws/collab", collabhttp.NewWebSocketHandler(service, jwtManager, broker, conf.Collab.WSAllowQueryAccessToken).ServeHTTP)
 	}
 }

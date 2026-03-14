@@ -16,6 +16,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const maxInvitationListRows = 500
+
 func (r *MembershipRepo) CreateInvitation(ctx context.Context, invitation *memberdomain.OrganizationInvitation) error {
 	if invitation == nil {
 		return apperrors.InvalidInput("Organization invitation is required")
@@ -89,6 +91,7 @@ func (r *MembershipRepo) ListInvitations(ctx context.Context, orgID orgdomain.Or
 		Table("iam.organization_invitations").
 		Where("organization_id = ?", orgID.UUID()).
 		Order("created_at desc").
+		Limit(maxInvitationListRows).
 		Find(&rows).Error; err != nil {
 		return nil, err
 	}

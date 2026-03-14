@@ -14,6 +14,7 @@ import (
 type RouterOptions struct {
 	AccessLogQuietPaths []string
 	HTTPMetrics         func(http.Handler) http.Handler
+	RateLimit           func(http.Handler) http.Handler
 }
 
 func NewRouter(httpLog *slog.Logger, options RouterOptions) chi.Router {
@@ -26,7 +27,11 @@ func NewRouter(httpLog *slog.Logger, options RouterOptions) chi.Router {
 	r.Use(chimw.Recoverer)
 
 	r.Use(middleware.SecurityHeaders)
-	r.Use(middleware.RateLimit)
+	rateLimitMiddleware := options.RateLimit
+	if rateLimitMiddleware == nil {
+		rateLimitMiddleware = middleware.NewRateLimit(middleware.RateLimitOptions{})
+	}
+	r.Use(rateLimitMiddleware)
 	r.Use(middleware.Actor)
 	if options.HTTPMetrics != nil {
 		r.Use(options.HTTPMetrics)

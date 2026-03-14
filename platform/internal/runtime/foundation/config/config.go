@@ -88,20 +88,21 @@ type S3 struct {
 }
 
 type App struct {
-	Title          string        `env:"APPLICATION_TITLE"`
-	Version        string        `env:"APPLICATION_VERSION"`
-	Address        string        `env:"APPLICATION_ADDRESS"`
-	Host           string        `env:"APPLICATION_HOST" envDefault:"0.0.0.0"`
-	Port           string        `env:"APPLICATION_PORT" envDefault:"8080"`
-	PublicBaseURL  string        `env:"APPLICATION_PUBLIC_BASE_URL"`
-	TimeoutRead    time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
-	TimeoutWrite   time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
-	TimeoutIdle    time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
-	MetricsEnabled bool          `env:"APPLICATION_METRICS_ENABLED" envDefault:"false"`
-	MetricsPath    string        `env:"APPLICATION_METRICS_PATH" envDefault:"/metrics"`
-	Debug          bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
-	Environment    string        `env:"APPLICATION_ENVIRONMENT" envDefault:"dev"`
-	LogLevel       string        `env:"APPLICATION_LOG_LEVEL" envDefault:"INFO"`
+	Title             string        `env:"APPLICATION_TITLE"`
+	Version           string        `env:"APPLICATION_VERSION"`
+	Address           string        `env:"APPLICATION_ADDRESS"`
+	Host              string        `env:"APPLICATION_HOST" envDefault:"0.0.0.0"`
+	Port              string        `env:"APPLICATION_PORT" envDefault:"8080"`
+	PublicBaseURL     string        `env:"APPLICATION_PUBLIC_BASE_URL"`
+	TimeoutRead       time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
+	TimeoutWrite      time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
+	TimeoutIdle       time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
+	MetricsEnabled    bool          `env:"APPLICATION_METRICS_ENABLED" envDefault:"false"`
+	MetricsPath       string        `env:"APPLICATION_METRICS_PATH" envDefault:"/metrics"`
+	Debug             bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
+	Environment       string        `env:"APPLICATION_ENVIRONMENT" envDefault:"dev"`
+	LogLevel          string        `env:"APPLICATION_LOG_LEVEL" envDefault:"INFO"`
+	TrustProxyHeaders bool          `env:"APPLICATION_TRUST_PROXY_HEADERS" envDefault:"false"`
 }
 
 type DB struct {
@@ -117,10 +118,16 @@ type DB struct {
 	PasswordFile string `env:"POSTGRES_PASSWORD_FILE"`
 
 	Debug bool `env:"POSTGRES_DEBUG" envDefault:"false"`
+
+	MaxOpenConns    int           `env:"POSTGRES_MAX_OPEN_CONNS" envDefault:"30"`
+	MaxIdleConns    int           `env:"POSTGRES_MAX_IDLE_CONNS" envDefault:"15"`
+	ConnMaxLifetime time.Duration `env:"POSTGRES_CONN_MAX_LIFETIME" envDefault:"30m"`
+	ConnMaxIdleTime time.Duration `env:"POSTGRES_CONN_MAX_IDLE_TIME" envDefault:"5m"`
 }
 
 type Collab struct {
-	GuestInviteTTL time.Duration `env:"COLLAB_GUEST_INVITE_TTL" envDefault:"72h"`
+	GuestInviteTTL          time.Duration `env:"COLLAB_GUEST_INVITE_TTL" envDefault:"72h"`
+	WSAllowQueryAccessToken bool          `env:"COLLAB_WS_ALLOW_QUERY_ACCESS_TOKEN" envDefault:"false"`
 }
 
 type Realtime struct {
@@ -661,6 +668,21 @@ func (d DB) Validate() error {
 	}
 	if _, err := d.PasswordValue(); err != nil {
 		return err
+	}
+	if d.MaxOpenConns < 0 {
+		return errors.New("postgres max open conns must be non-negative")
+	}
+	if d.MaxIdleConns < 0 {
+		return errors.New("postgres max idle conns must be non-negative")
+	}
+	if d.MaxOpenConns > 0 && d.MaxIdleConns > d.MaxOpenConns {
+		return errors.New("postgres max idle conns must be less than or equal to max open conns")
+	}
+	if d.ConnMaxLifetime < 0 {
+		return errors.New("postgres conn max lifetime must be non-negative")
+	}
+	if d.ConnMaxIdleTime < 0 {
+		return errors.New("postgres conn max idle time must be non-negative")
 	}
 	return nil
 }

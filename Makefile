@@ -92,7 +92,11 @@ CONTRACTS_ENV = \
 	APPLICATION_ENVIRONMENT=dev \
 	APPLICATION_LOG_LEVEL=ERROR
 
+<<<<<<< Current (Your changes)
 .PHONY: collabsphere-init network up-app up-dev up-dev-web up-prod down logs sync migrate seed clean-logs migrations-build check-migrations check-contracts contracts-openapi-json contracts-openapi-yaml contracts-routes contracts-snapshot seed-reset-demo test-accounts-integration test-organizations-integration test-platform-reviews-integration smoke-account-signup-login smoke-bootstrap smoke-auth-legacy smoke-auth-zitadel-e2e platform-image-build web-image-build
+=======
+.PHONY: collabsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations check-contracts contracts-openapi-json contracts-openapi-yaml contracts-routes contracts-snapshot seed-reset-demo test-accounts-integration test-organizations-integration test-platform-reviews-integration smoke-account-signup-login smoke-bootstrap smoke-auth-legacy smoke-auth-zitadel-e2e platform-image-build baseline-metrics
+>>>>>>> Incoming (Background Agent changes)
 
 collabsphere-init: network up-dev migrate
 
@@ -339,3 +343,6 @@ smoke-auth-legacy:
 
 smoke-auth-zitadel-e2e:
 	@./scripts/smoke-auth-zitadel-e2e.sh
+
+baseline-metrics:
+	@./scripts/baseline-metrics.sh

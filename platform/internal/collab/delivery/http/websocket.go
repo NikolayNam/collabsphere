@@ -24,13 +24,14 @@ import (
 const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 type WebSocketHandler struct {
-	svc      *authapp.Service
-	verifier authmw.AccessTokenVerifier
-	broker   *realtime.Broker
+	svc             *authapp.Service
+	verifier        authmw.AccessTokenVerifier
+	broker          *realtime.Broker
+	allowQueryToken bool
 }
 
-func NewWebSocketHandler(svc *authapp.Service, verifier authmw.AccessTokenVerifier, broker *realtime.Broker) *WebSocketHandler {
-	return &WebSocketHandler{svc: svc, verifier: verifier, broker: broker}
+func NewWebSocketHandler(svc *authapp.Service, verifier authmw.AccessTokenVerifier, broker *realtime.Broker, allowQueryToken bool) *WebSocketHandler {
+	return &WebSocketHandler{svc: svc, verifier: verifier, broker: broker, allowQueryToken: allowQueryToken}
 }
 
 func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +40,7 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "channel_id is required", http.StatusBadRequest)
 		return
 	}
-	principal := authenticateWSPrincipal(r, h.verifier)
+	principal := authenticateWSPrincipal(r, h.verifier, h.allowQueryToken)
 	if !principal.Authenticated {
 		http.Error(w, "authentication required", http.StatusUnauthorized)
 		return
@@ -95,9 +96,9 @@ func (h *WebSocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func authenticateWSPrincipal(r *http.Request, verifier authmw.AccessTokenVerifier) authdomain.Principal {
+func authenticateWSPrincipal(r *http.Request, verifier authmw.AccessTokenVerifier, allowQueryToken bool) authdomain.Principal {
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
-	if authz == "" {
+	if authz == "" && allowQueryToken {
 		if token := strings.TrimSpace(r.URL.Query().Get("access_token")); token != "" {
 			authz = "Bearer " + token
 		}
