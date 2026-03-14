@@ -300,6 +300,25 @@ func (h *Handler) ListOrganizationLegalDocuments(ctx context.Context, input *dto
 	return mapper.ToOrganizationLegalDocumentsResponse(documents, http.StatusOK), nil
 }
 
+func (h *Handler) GetOrganizationKYCRequirements(ctx context.Context, input *dto.GetOrganizationKYCRequirementsInput) (*dto.OrganizationKYCRequirementsResponse, error) {
+	actorID, err := principalOrganizationActorUUID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.ID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	requirements, err := h.svc.GetOrganizationKYCRequirements(ctx, application.GetOrganizationKYCRequirementsQuery{
+		OrganizationID: organizationID,
+		ActorAccountID: actorID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return mapper.ToOrganizationKYCRequirementsResponse(requirements, http.StatusOK), nil
+}
+
 func (h *Handler) GetOrganizationLegalDocumentAnalysis(ctx context.Context, input *dto.GetOrganizationLegalDocumentAnalysisInput) (*dto.OrganizationLegalDocumentAnalysisResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
@@ -318,6 +337,30 @@ func (h *Handler) GetOrganizationLegalDocumentAnalysis(ctx context.Context, inpu
 		return nil, humaerr.From(ctx, err)
 	}
 	return mapper.ToOrganizationLegalDocumentAnalysisResponse(analysis, http.StatusOK), nil
+}
+
+func (h *Handler) GetOrganizationLegalDocumentVerification(ctx context.Context, input *dto.GetOrganizationLegalDocumentVerificationInput) (*dto.OrganizationLegalDocumentVerificationResponse, error) {
+	actorID, err := principalOrganizationActorUUID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.ID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	documentID, err := parseUUID(input.DocumentID, "Invalid legal document ID")
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	verification, err := h.svc.GetOrganizationLegalDocumentVerification(ctx, application.GetOrganizationLegalDocumentVerificationQuery{
+		OrganizationID: organizationID,
+		ActorAccountID: actorID,
+		DocumentID:     documentID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return mapper.ToOrganizationLegalDocumentVerificationResponse(verification, http.StatusOK), nil
 }
 
 func (h *Handler) ReprocessOrganizationLegalDocumentAnalysis(ctx context.Context, input *dto.ReprocessOrganizationLegalDocumentAnalysisInput) (*dto.OrganizationLegalDocumentAnalysisResponse, error) {

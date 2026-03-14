@@ -6,6 +6,7 @@ import (
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
+	accesspolicy "github.com/NikolayNam/collabsphere/internal/iam/access"
 	memberdomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 )
@@ -15,7 +16,7 @@ func RequireOrganizationAccess(ctx context.Context, organizations ports.Organiza
 	if err != nil {
 		return err
 	}
-	if requireManage && !member.Role().CanManageCatalog() {
+	if requireManage && !accesspolicy.HasOrganizationPermission(member.Role(), accesspolicy.PermissionOrganizationManageCatalog) {
 		return catalogerrors.AccessDenied()
 	}
 	return nil
@@ -26,7 +27,7 @@ func RequireOrganizationEmployeeAccess(ctx context.Context, organizations ports.
 	if err != nil {
 		return err
 	}
-	if member.Role() == memberdomain.MembershipRoleViewer {
+	if !accesspolicy.HasOrganizationPermission(member.Role(), accesspolicy.PermissionOrganizationEmployeeAccess) {
 		return catalogerrors.AccessDenied()
 	}
 	return nil

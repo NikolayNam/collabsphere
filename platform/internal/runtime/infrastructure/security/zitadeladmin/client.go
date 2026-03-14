@@ -101,7 +101,19 @@ func (c *Client) ForceVerifyUserEmail(ctx context.Context, userID string) (*port
 
 	verificationCode, err := c.resendEmailCode(ctx, userID)
 	if err != nil {
-		return nil, err
+		if !shouldSendFreshEmailCode(err) {
+			return nil, err
+		}
+		verificationCode, err = c.sendEmailCode(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if strings.TrimSpace(verificationCode) == "" {
+		verificationCode, err = c.sendEmailCode(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if strings.TrimSpace(verificationCode) == "" {
 		return nil, &ports.ZitadelAdminAPIError{StatusCode: http.StatusBadGateway, Message: "ZITADEL did not return verification code"}
@@ -140,9 +152,30 @@ func (c *Client) resendEmailCode(ctx context.Context, userID string) (string, er
 	return strings.TrimSpace(response.VerificationCode), nil
 }
 
+func (c *Client) sendEmailCode(ctx context.Context, userID string) (string, error) {
+	body := resendEmailCodeRequest{ReturnCode: map[string]any{}}
+	var response resendEmailCodeResponse
+	if err := c.doJSON(ctx, http.MethodPost, "/v2/users/"+url.PathEscape(userID)+"/email/send", body, &response); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(response.VerificationCode), nil
+}
+
 func (c *Client) verifyEmail(ctx context.Context, userID, verificationCode string) error {
 	body := verifyEmailRequest{VerificationCode: strings.TrimSpace(verificationCode)}
 	return c.doJSON(ctx, http.MethodPost, "/v2/users/"+url.PathEscape(userID)+"/email/verify", body, nil)
+}
+
+func shouldSendFreshEmailCode(err error) bool {
+	var apiErr *ports.ZitadelAdminAPIError
+	if !errors.As(err, &apiErr) || apiErr == nil {
+		return false
+	}
+	if apiErr.StatusCode != http.StatusBadRequest && apiErr.StatusCode != http.StatusPreconditionFailed {
+		return false
+	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(message, "code is empty")
 }
 
 func (c *Client) doJSON(ctx context.Context, method, path string, body any, out any) error {

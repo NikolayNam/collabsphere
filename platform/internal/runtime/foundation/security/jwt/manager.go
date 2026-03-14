@@ -139,6 +139,12 @@ func (m *Manager) VerifyAccessToken(ctx context.Context, token string) (authdoma
 			return authdomain.Principal{}, errors.New("jwt guest channel is invalid")
 		}
 		return authdomain.NewGuestPrincipal(guestID, sessionID, channelID), nil
+	case authdomain.SubjectTypeService:
+		serviceID, err := uuid.Parse(claims.Subject)
+		if err != nil || serviceID == uuid.Nil {
+			return authdomain.Principal{}, errors.New("jwt subject is invalid")
+		}
+		return authdomain.NewServicePrincipal(serviceID, sessionID), nil
 	default:
 		return authdomain.Principal{}, errors.New("jwt subject type is invalid")
 	}
@@ -161,6 +167,8 @@ func buildClaims(principal authdomain.Principal, expiresAt time.Time) (accessTok
 		}
 		claims.Subject = principal.GuestID.String()
 		claims.ChannelID = principal.ChannelID.String()
+	case principal.IsService():
+		claims.Subject = principal.ServiceID.String()
 	default:
 		return accessTokenClaims{}, errors.New("principal is not authenticated")
 	}

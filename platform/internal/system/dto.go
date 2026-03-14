@@ -5,3 +5,9 @@ type HealthOutput struct {
 		Status string `json:"status" example:"ok"`
 	}
 }
+
+type ReadyOutput struct {
+	Body struct {
+		Status string `json:"status" example:"ready"`
+	}
+}

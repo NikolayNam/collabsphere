@@ -2,7 +2,7 @@
 
 CollabSphere - backend-платформа на Go для управления аккаунтами, организациями и участниками. Репозиторий содержит HTTP API, миграции PostgreSQL, Docker Compose-конфигурацию для локального запуска и архитектурные документы.
 
-Этот `README.md` описывает текущее состояние проекта. Он не пытается скрыть ограничения: часть инфраструктуры уже собрана, HTTP API для базовых модулей доступно, а auth-контур пока остается незавершенным.
+Этот `README.md` описывает текущее состояние проекта. Он не пытается скрывать ограничения: базовые backend-модули и auth-контур собраны и покрыты критическими тестами, но полная production-готовность всё ещё зависит от локальной конфигурации окружения, секретов и внешних интеграций вроде ZITADEL.
 
 ## Что есть в репозитории
 
@@ -30,8 +30,8 @@ CollabSphere - backend-платформа на Go для управления а
 
 - `accounts`: создание аккаунта, поиск по ID и email
 - `organizations`: создание организации и получение по ID
-- `memberships`: добавление и просмотр участников организации
-- `auth`: маршруты зарегистрированы, но текущая реализация не считается завершенной
+- `memberships`: добавление и просмотр участников организации, invitations и acceptance flow
+- `auth`: browser login через ZITADEL, exchange, refresh rotation с reuse detection, logout, `me` и legacy email/password fallback под feature flags
 
 ### Доменные области в БД
 
@@ -41,7 +41,7 @@ CollabSphere - backend-платформа на Go для управления а
 
 ```text
 collabsphere/
-  deploy/      Docker Compose, env-файл, secrets
+  deploy/      Docker Compose entrypoints, env/, observability/, secrets/
   docs/        ADR и служебная документация
   platform/    Go-код приложения
 ```
@@ -58,6 +58,11 @@ collabsphere/
 
 Архитектурные границы и правила размещения кода зафиксированы в ADR:
 [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
+
+Стабилизационная планка этого цикла вынесена отдельно:
+
+- [`docs/post-stabilization-dod.md`](docs/post-stabilization-dod.md)
+- [`docs/configuration.md`](docs/configuration.md)
 
 ## Требования
 
@@ -97,15 +102,104 @@ make migrate-up
 - Scalar API reference: [http://localhost:8080/v1/docs](http://localhost:8080/v1/docs)
 - OpenAPI YAML: [http://localhost:8080/openapi.yaml](http://localhost:8080/openapi.yaml)
 - Health-check: [http://localhost:8080/health](http://localhost:8080/health)
+- Readiness: [http://localhost:8080/v1/ready](http://localhost:8080/v1/ready)
 
 Полезные команды:
 
 ```bash
 go -C platform test ./...
+make check-contracts
+make contracts-snapshot
+make smoke-bootstrap
+make smoke-auth-legacy
+make smoke-auth-zitadel-e2e
 make migrate-down
 ```
 
 Логи `make up-dev` и `make migrate-up` пишутся в `logs/docker/`.
+
+### Prometheus
+
+Prometheus здесь используется для метрик, а не для хранения сырых request-логов. Для HTTP API он собирает:
+
+- `collabsphere_http_requests_total`
+- `collabsphere_http_request_duration_seconds`
+- `collabsphere_http_response_size_bytes`
+- `collabsphere_http_requests_in_flight`
+
+Чтобы включить endpoint метрик в API, добавьте в `deploy/env/.env.dev`:
+
+```env
+APPLICATION_METRICS_ENABLED=true
+APPLICATION_METRICS_PATH=/metrics
+```
+
+После этого поднимите API как обычно и отдельно запустите Prometheus:
+
+```bash
+docker compose --env-file deploy/env/.env.dev -f deploy/docker-compose.prometheus.yaml --profile observability up -d prometheus
+```
+
+Проверка:
+
+- API metrics: [http://localhost:8080/metrics](http://localhost:8080/metrics)
+- Prometheus UI: [http://localhost:9000](http://localhost:9000)
+
+По умолчанию шумные инфраструктурные запросы на `/health`, `/v1/health` и `/metrics` не пишутся в access-log приложения, чтобы не забивать логи healthcheck'ами и scrape'ами.
+
+### Grafana + Loki + Alloy
+
+Для централизованного сбора логов API добавлен отдельный observability-стек:
+
+- `deploy/docker-compose.observability.yaml`
+- `deploy/observability/loki/loki-config.yaml`
+- `deploy/observability/alloy/config.alloy`
+- `deploy/observability/grafana/provisioning/...`
+
+Первый rollout ограничен только контейнером `api`. `worker` и инфраструктурные контейнеры в Loki пока не отправляются.
+
+Что важно:
+
+- API по-прежнему пишет структурированные JSON-логи в `stdout`
+- Alloy читает Docker logs только у `collabsphere/api`
+- Loki хранит логи
+- Grafana подключается и к Loki, и к уже существующему Prometheus
+- request bodies не логируются
+- чувствительные поля вроде `Authorization`, `Cookie`, `password`, `refresh_token`, `client_secret` в этот MVP не собираются вообще
+
+Запуск:
+
+```bash
+# API должен уже работать, а Prometheus - быть поднят отдельно
+docker compose --env-file deploy/env/.env.dev -f deploy/docker-compose.observability.yaml --profile observability up -d
+```
+
+Проверка:
+
+- Grafana: [http://localhost:3001](http://localhost:3001)
+- Loki datasource провиженится автоматически
+- Prometheus datasource смотрит на `http://host.docker.internal:9000`
+
+В Grafana уже провиженится стартовый dashboard `CollabSphere API Logs` с панелями:
+
+- HTTP `4xx/5xx` по статусам
+- recent HTTP errors
+- auth failures
+- DB/request errors
+- all API logs
+
+Для поиска по конкретному `request_id` используйте Explore в Grafana с Loki-запросом:
+
+```logql
+{service="api"} | json | request_id="<request-id>"
+```
+
+Для работы этой связки должны быть включены API-метрики:
+
+```env
+APPLICATION_METRICS_ENABLED=true
+APPLICATION_METRICS_PATH=/metrics
+```
 
 ### Windows PowerShell
 
@@ -115,17 +209,17 @@ make migrate-down
 docker network create external.network 2>$null
 
 docker compose `
-  --env-file deploy/.env.dev `
+  --env-file deploy/env/.env.dev `
   -f deploy/docker-compose.postgres.yaml `
   -f deploy/docker-compose.platform.yaml `
   --profile local up -d --build --force-recreate
 
 # если нужен локальный ZITADEL для OIDC-login
-# сначала заполните AUTH_ZITADEL_* и ZITADEL_* в deploy/.env.dev
+# сначала заполните AUTH_ZITADEL_* и ZITADEL_* в deploy/env/.env.dev
 # затем поднимите дополнительный compose-файл
 
 docker compose `
-  --env-file deploy/.env.dev `
+  --env-file deploy/env/.env.dev `
   -f deploy/docker-compose.postgres.yaml `
   -f deploy/docker-compose.platform.yaml `
   -f deploy/docker-compose.zitadel.yaml `
@@ -133,7 +227,7 @@ docker compose `
 
 $env:MIGRATE_CMD = "up"
 docker compose `
-  --env-file deploy/.env.dev `
+  --env-file deploy/env/.env.dev `
   -p collabsphere-migrate `
   -f deploy/docker-compose.migrate.yaml `
   --profile migrate run --rm --build migrate
@@ -159,7 +253,7 @@ docker compose `
 
 Минимальная схема локального запуска такая:
 
-1. Заполнить публичные `AUTH_ZITADEL_*` и `ZITADEL_*` в `deploy/.env.dev`
+1. Заполнить публичные `AUTH_ZITADEL_*` и `ZITADEL_*` в `deploy/env/.env.dev`
 2. Заполнить локальные secret-файлы в `deploy/secrets/identity/`: `zitadel_master_key`, `zitadel_runtime_secrets.yaml`, `zitadel_init_steps.yaml`
 3. Поднять стек вместе с `deploy/docker-compose.zitadel.yaml`
 4. При необходимости заранее переопределить bootstrap-поля первого администратора в `deploy/secrets/identity/zitadel_init_steps.yaml`
@@ -170,6 +264,126 @@ docker compose `
 8. При необходимости включить browser return URL через `APPLICATION_PUBLIC_BASE_URL=http://api.localhost:8080` и `AUTH_BROWSER_DEFAULT_RETURN_URL=/auth/callback`
 9. Если нужен platform endpoint `POST /v1/platform/users/{userId}/email/force-verify`, создать отдельный service account в ZITADEL, выдать ему admin-права и сохранить его PAT в `AUTH_ZITADEL_ADMIN_TOKEN` или `AUTH_ZITADEL_ADMIN_TOKEN_FILE`
 10. Перезапустить `api`
+11. После этого можно прогнать живой browser smoke: `make smoke-auth-zitadel-e2e`
+
+Что важно в текущем auth-контуре:
+
+- browser login через ZITADEL использует Authorization Code Flow + PKCE `S256`
+- локальные `POST /v1/accounts` и `POST /v1/auth/login` остаются legacy fallback и управляются `AUTH_LOCAL_SIGNUP_ENABLED` и `AUTH_PASSWORD_LOGIN_ENABLED`
+- liveness и readiness разведены: `GET /v1/health` и `GET /v1/ready`
+
+## Contracts и snapshots
+
+Для OpenAPI/router parity добавлена отдельная утилита:
+
+```bash
+go -C platform run ./cmd/contracts openapi-json
+go -C platform run ./cmd/contracts openapi-yaml
+go -C platform run ./cmd/contracts routes
+go -C platform run ./cmd/contracts check-parity
+```
+
+Локальные удобные алиасы:
+
+```bash
+make check-contracts
+make contracts-openapi-json
+make contracts-openapi-yaml
+make contracts-routes
+make contracts-snapshot
+```
+
+Если текущая shell в WSL/OneDrive потеряла рабочий каталог и обычный `make` падает с `getcwd: No such file or directory`, можно использовать wrapper из корня репозитория:
+
+```bash
+bash /mnt/c/Users/nokclock/OneDrive/Документы/GitHub/collabsphere/makew migrations-build
+```
+
+Он запускает `make` через явный `-C <repo-root>` и не зависит от сломанного текущего `cwd`.
+
+`make check-contracts` и `make contracts-*` используют встроенный минимальный dev-конфиг для `cmd/contracts`, поэтому не требуют заранее экспортировать `POSTGRES_*`, `AUTH_*` и другие runtime secrets. При необходимости app-level поля всё равно можно переопределить через обычные env overrides.
+
+Это поведение теперь зафиксировано профильной валидацией:
+
+- `api` валидирует полный runtime-контур, включая DB, JWT, browser auth, ZITADEL и включённые интеграции
+- `worker` валидирует DB, JWT и только реально используемые worker-интеграции
+- `migrate` и `seed` валидируют только DB-oriented subset и не требуют `AUTH_JWT_SECRET(_FILE)`
+- `contracts` требует только app metadata и не зависит от DB/JWT runtime secrets
+
+Команда `make contracts-snapshot` обновляет:
+
+- `docs/openapi/openapi.json`
+- `docs/openapi/openapi.yaml`
+- `docs/openapi/routes.txt`
+
+Если меняется behavior HTTP handlers, но snapshots не обновлены, это считается ошибкой контракта.
+
+## Readiness и smoke
+
+`GET /v1/health` — лёгкий liveness probe.
+
+`GET /v1/ready` — readiness probe, который в текущем MVP проверяет доступность primary PostgreSQL connection.
+
+Локальные smoke-скрипты не меняют окружение и рассчитаны на уже запущенный API:
+
+```bash
+./scripts/smoke-bootstrap.sh
+./scripts/smoke-auth-legacy.sh
+./scripts/smoke-auth-zitadel-e2e.sh
+```
+
+Или через `make`:
+
+```bash
+make smoke-bootstrap
+make smoke-auth-legacy
+make smoke-auth-zitadel-e2e
+```
+
+По умолчанию они бьют в `http://127.0.0.1:8080`. При необходимости можно переопределить `BASE_URL`.
+
+`smoke-auth-zitadel-e2e` дополнительно требует:
+
+- `Node/npm` только как test-only prerequisite, потому что browser automation идёт через Playwright CLI wrapper
+- уже настроенный локальный ZITADEL OIDC application для backend callback
+- рабочий `AUTH_ZITADEL_ADMIN_TOKEN` или `deploy/secrets/identity/zitadel_admin_token`
+
+Сценарий использует seeded admin из `deploy/secrets/identity/zitadel_init_steps.yaml`, сам создаёт отдельного `unverified` пользователя через ZITADEL User API, подтверждает, что первый external login отклоняется, вызывает backend `force-verify`, а затем подтверждает успешный browser login и visible `accessToken` / `refreshToken` на `/auth/callback`. Артефакты браузера складываются в `output/playwright/`.
+
+## Memberships и invitations
+
+Организационный access-core в этом цикле усилен вокруг существующего tenant boundary `Organization`, без ввода отдельного `Workspace`.
+
+Новые маршруты:
+
+- `POST /v1/organizations/{organization_id}/invitations`
+- `GET /v1/organizations/{organization_id}/invitations`
+- `POST /v1/invitations/{token}/accept`
+
+Что они делают:
+
+- owners/admins могут выпустить time-limited invitation для email + target role
+- invitations видны в organization-scoped list
+- acceptance требует аутентифицированный account, и email приглашения должен совпадать с email текущего аккаунта
+- mutating membership/invitation операции пишут `iam.organization_access_audit_events`
+
+## CI
+
+В репозитории добавлен baseline workflow:
+
+- `.github/workflows/ci.yaml`
+
+Он проверяет:
+
+- core unit/compile tests
+- bundled migrations parity
+- OpenAPI/router parity
+- contract snapshots
+- bootstrap smoke
+- legacy auth smoke
+- DB-backed integration suites
+- access token в backend - JWT, а refresh token - opaque session token
+- refresh token rotation одноразовая: повторное использование уже ротированного refresh token отзывает всю refresh session
 
 Для `deploy/secrets/identity/zitadel_master_key` используйте случайный ASCII-ключ ровно на 32 символа. В PowerShell его можно сгенерировать так:
 ```powershell
@@ -180,21 +394,39 @@ docker compose `
 
 ### ZITADEL admin token для force-verify
 
+Чтобы `POST /v1/platform/users/{userId}/email/force-verify` реально работал, нужны две независимые авторизации:
+
+1. server-side PAT, которым backend сам ходит в ZITADEL
+2. backend access token уже авторизованного CollabSphere-пользователя с ролью `platform_admin`
+
+Это control-plane endpoint. Он не предназначен для ситуации "у меня вообще нет рабочего admin-сеанса, но я хочу этим же запросом починить вход самому себе".
+
 `AUTH_ZITADEL_ADMIN_TOKEN` не должен содержать `client_secret`, пароль пользователя или JSON-ответ OAuth. Здесь ожидается сырой Bearer token, и для текущего backend-кода правильный вариант - Personal Access Token сервисного аккаунта ZITADEL.
 
-Практический сценарий:
+#### 1. Создать service account в ZITADEL
 
 1. Открыть консоль ZITADEL: [http://auth.localhost:8090/ui/console](http://auth.localhost:8090/ui/console)
-2. Создать service account в `Users -> Service Accounts`
-3. Создать для него Personal Access Token и сохранить показанное значение
-4. Выдать service account административную роль. Для локального `dev` самый безопасный с точки зрения совместимости вариант - `IAM_OWNER`; если хотите сузить права и точно знаете границы своей org, можно использовать `ORG_OWNER`
-5. Сохранить токен в `deploy/.env.dev`:
+2. Перейти в `Users -> Service Accounts`
+3. Создать service account
+   Рекомендуемые поля:
+   `User Name`: `collabsphere-platform-service`
+   `Name`: `CollabSphere Platform Service`
+   `Access Token Type`: `Bearer`
+4. Открыть созданный service account и создать для него Personal Access Token
+5. Сразу сохранить показанное значение: ZITADEL показывает PAT только один раз
+6. Выдать service account административную роль
+   Для локального org-scoped dev обычно достаточно назначить его администратором организации `CollabSphere` с ролью `Org Owner`
+   Если backend потом отвечает `PLATFORM_ZITADEL_UNAVAILABLE` или ZITADEL возвращает `401/403`, повысить права до instance-level `IAM_OWNER`
+
+#### 2. Подключить PAT к backend
+
+Сохранить токен в `deploy/env/.env.dev`:
 
 ```env
 AUTH_ZITADEL_ADMIN_TOKEN=<PASTE_PAT_HERE>
 ```
 
-Или сохранить токен в файл и указать:
+Или сохранить токен в файл и указать file-based режим:
 
 ```env
 AUTH_ZITADEL_ADMIN_TOKEN_FILE=/run/secrets/zitadel_admin_token
@@ -203,24 +435,110 @@ AUTH_ZITADEL_ADMIN_TOKEN_SOURCE_FILE=secrets/identity/zitadel_admin_token
 
 По умолчанию file-based режим выключен: `AUTH_ZITADEL_ADMIN_TOKEN_FILE` пустой, а Compose подставляет безопасный placeholder secret, чтобы `api` не падал на старте. Чтобы включить этот режим, создайте `deploy/secrets/identity/zitadel_admin_token`, запишите туда raw PAT и установите значения выше. Docker Compose прочитает этот host-файл и смонтирует его в контейнер `api` как `/run/secrets/zitadel_admin_token`. Содержимое файла должно быть только токеном, без JSON-обёртки.
 
-6. Пересоздать `api`
-7. Выполнить force-verify через backend route:
+После изменения PAT нужно пересоздать `api`:
 
-```http
-POST /v1/platform/users/{userId}/email/force-verify
-Authorization: Bearer <backend access token platform_admin>
+```bash
+docker compose \
+  --env-file deploy/env/.env.dev \
+  -f deploy/docker-compose.postgres.yaml \
+  -f deploy/docker-compose.platform.yaml \
+  -f deploy/docker-compose.storage.seaweedfs.yaml \
+  -f deploy/docker-compose.zitadel.yaml \
+  --profile local up -d --build --force-recreate api
 ```
+
+#### 3. Подготовить вызывающий backend access token
+
+Нужен отдельный токен CollabSphere-пользователя, который уже может входить в backend и имеет effective role `platform_admin`.
+
+Проверка:
+
+1. Получить обычный backend access token любым рабочим способом
+   `POST /v1/auth/login`
+   или browser login через ZITADEL + `POST /v1/auth/exchange`
+2. Проверить, какой локальный account используется этим токеном:
+
+```bash
+curl -H "Authorization: Bearer <backend_access_token>" \
+  http://api.localhost:8080/v1/auth/me
+```
+
+3. Проверить control-plane access:
+
+```bash
+curl -H "Authorization: Bearer <backend_access_token>" \
+  http://api.localhost:8080/v1/platform/access/me
+```
+
+Ожидается, что в ответе `effectiveRoles` содержит `platform_admin`.
+
+Если здесь `403 Platform access denied`, а это локальный dev, самый прямой способ разблокироваться:
+
+1. Взять локальный `id` из ответа `GET /v1/auth/me`
+2. Добавить этот UUID в `AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS` в `deploy/env/.env.dev`
+3. Пересоздать `api`
+4. Повторить `GET /v1/platform/access/me`
+
+#### 4. Проверить PAT напрямую против ZITADEL
+
+Перед вызовом backend route полезно убедиться, что server-side PAT действительно может читать целевого пользователя:
+
+```bash
+curl -H "Authorization: Bearer $(tr -d '\r\n' < deploy/secrets/identity/zitadel_admin_token)" \
+  http://auth.localhost:8090/v2/users/<zitadel_user_id>
+```
+
+Если эта проверка даёт auth/permission error, сама ручка `force-verify` тоже не сработает.
+
+#### 5. Выполнить force-verify через backend route
 
 Где взять `userId`:
 
 - это ZITADEL user id, а не локальный `account_id`
-- его можно получить в ZITADEL console или через `ListUsers/GetUserByID`
+- его можно взять в ZITADEL console или через `GET /v2/users/{id}`
+
+Вызов:
+
+```http
+POST /v1/platform/users/{userId}/email/force-verify
+Authorization: Bearer <backend access token>
+```
 
 Что важно:
 
 - backend-to-ZITADEL credential и пользовательский токен backend - разные вещи
 - `AUTH_ZITADEL_ADMIN_TOKEN` использует только backend
 - без этого токена route не должен выполнять verification и будет возвращать `PLATFORM_ZITADEL_ADMIN_DISABLED`
+- целевого пользователя верифицирует уже backend через свой service-account PAT, а не ваш пользовательский bearer token
+
+На текущем backend flow делает так:
+
+1. читает пользователя из ZITADEL
+2. пытается переиспользовать существующий email verification code через `email/resend`
+3. если существующего кода нет, запрашивает новый через `email/send`
+4. сразу подтверждает email через `email/verify`
+
+#### 6. Закрыть happy-path живым browser smoke
+
+Когда backend OIDC app и admin PAT уже настроены, этот сценарий можно проверить end-to-end одной командой:
+
+```bash
+make smoke-auth-zitadel-e2e
+```
+
+Что делает smoke:
+
+1. логинится в browser flow как seeded admin `admin@collabsphere.ru`
+2. забирает backend `accessToken` прямо с dev callback page `/auth/callback`
+3. подтверждает `platform_admin` через `GET /v1/platform/access/me`
+4. создаёт нового `unverified` ZITADEL user через User API
+5. доказывает, что первый external login этого user отклоняется с `Verified email is required for first external login`
+6. вызывает `POST /v1/platform/users/{userId}/email/force-verify`
+7. повторяет browser login тем же user и подтверждает, что callback page показывает локальные `accessToken` и `refreshToken`
+
+Если в локальной системе нет `npx`, smoke завершится с явной подсказкой по установке Node/npm и Playwright CLI.
+
+Если вы всё ещё видите ответ вида `Code is empty (EMAIL-...)`, это сильное свидетельство, что запущен старый `api` image без этого fallback. В таком случае нужно именно пересобрать и пересоздать `api`, а не только перезапустить контейнер.
 
 Подробная пошаговая инструкция вынесена в [`docs/content/authentication/zitadel.md`](docs/content/authentication/zitadel.md).
 
@@ -307,7 +625,11 @@ make migrate-down
 
 `make migrate-up` и `make migrate-down` используют `deploy/docker-compose.migrate.yaml` и запускают контейнер с `platform/cmd/migrate`.
 
-Если вы меняете SQL в `migrations-src/`, сначала пересоберите bundle через `make migrations-build`, а уже потом прогоняйте миграции.
+Перед запуском `make migrate-*` и `make seed-*` теперь пересобирают локальный образ `colabsphere-api:${IMAGE_TAG}`, чтобы мигратор и сидер всегда поднимались на актуальном коде, а не на старом ранее собранном образе.
+
+После профильного refactor'а `platform/cmd/migrate` и `platform/cmd/seed` больше не зависят от `AUTH_JWT_SECRET(_FILE)` или browser/OIDC secrets. Для них по-прежнему обязателен только валидный `POSTGRES_*` набор.
+
+Если вы меняете SQL в `migrations-src/`, сначала пересоберите bundle через `make migrations-build`, а уже потом прогоняйте миграции. `make check-migrations` теперь сравнивает bundle до и после rebuild через обычный `diff`, так что для него не нужен `git`.
 
 ### Важно для `goose`
 
@@ -332,6 +654,59 @@ $$;
 ```bash
 go -C platform test ./...
 ```
+
+Точечный прогон auth и OIDC тестов:
+
+```bash
+go -C platform test ./internal/auth/... ./internal/runtime/infrastructure/security/oidc
+```
+
+Integration-тесты auth legacy login / refresh / logout / me:
+
+```bash
+go -C platform test -tags=integration ./internal/auth/delivery/http -run 'TestLegacyPasswordLoginIntegration|TestAuthMeIntegration'
+```
+
+Integration-тесты создания аккаунта:
+
+```bash
+go -C platform test -tags=integration ./internal/accounts/delivery/http -run 'TestCreateAccountIntegration'
+```
+
+Integration-тесты организаций:
+
+```bash
+go -C platform test -tags=integration ./internal/organizations/delivery/http -run 'Test.*Organization.*Integration'
+```
+
+Integration-тесты platform organization review:
+
+```bash
+go -C platform test -tags=integration ./internal/platformops/delivery/http -run 'Test.*Review.*Integration'
+```
+
+Integration-тесты memberships:
+
+```bash
+go -C platform test -tags=integration ./internal/memberships/delivery/http -run 'TestMembershipsIntegration'
+```
+
+Через `make` этот набор можно запускать так:
+
+```bash
+make test-platform-reviews-integration
+```
+
+Для integration-прогона нужен `COLLABSPHERE_TEST_POSTGRES_DSN`. Если переменная не задана, тесты этих наборов будут корректно `SKIP`.
+
+Если хотите гонять эти наборы через отдельный test-only PostgreSQL, последовательность такая:
+
+```bash
+docker compose --env-file deploy/env/.env.test -f deploy/docker-compose.postgres-test.yaml --profile test up -d postgres-test
+export COLLABSPHERE_TEST_POSTGRES_DSN="host=127.0.0.1 port=5434 user=postgres password=$(cat deploy/secrets/postgres/test/db_password) dbname=postgres sslmode=disable"
+```
+
+Здесь DSN должен смотреть именно на базу `postgres`, а не на `collabsphere_test`, потому что integration-тесты создают и удаляют временные базы через `CREATE DATABASE`.
 
 Это же полезно запускать перед сборкой Docker-образа. В `platform/Dockerfile` дополнительно выполняются `go vet ./...` и `go test -v ./...` на build stage.
 
@@ -372,28 +747,28 @@ Memberships:
 
 Auth:
 
+- `POST /v1/auth/login`
 - `GET /v1/auth/zitadel/login`
+- `GET /v1/auth/zitadel/signup`
 - `GET /v1/auth/zitadel/callback`
 - `POST /v1/auth/exchange`
 - `POST /v1/auth/refresh`
 - `POST /v1/auth/logout`
 - `GET /v1/auth/me`
 
-Маршруты `auth` есть в OpenAPI и регистрируются в приложении, но текущую реализацию нельзя считать стабилизированной. Подробности см. в разделе ниже.
+Auth-маршруты регистрируются в bootstrap и используют реальный JWT token manager. Legacy password login и local signup остаются флагируемыми fallback-сценариями, а browser login через ZITADEL зависит от корректной внешней конфигурации OIDC и секретов.
 
 ## Known issues
 
 - Старый корневой README был неполным и частично расходился с текущим кодом и Compose-конфигурацией. Этот документ заменяет его целиком.
-- `make network` сейчас создает сеть `platform.web.network`, тогда как Compose-файлы ожидают внешнюю сеть `web.network`. Для безопасного запуска создавайте сеть вручную: `docker network create web.network`.
 - `Makefile` ориентирован на Linux / WSL и использует `bash`. В PowerShell и CMD лучше вызывать `docker compose` напрямую.
-- Auth-контур пока не завершен: маршруты зарегистрированы, но в bootstrap токен-менеджер не подключен, поэтому auth-flow не стоит считать production-ready.
 - В `deploy/.env` есть расхождения с текущим runtime-кодом, включая строку `AUTH_JWT_SECRET_FILE==...`. Кроме того, часть переменных из файла сейчас не читается приложением вообще.
 - Compose-конфигурация и env уже содержат задел под будущие подсистемы и внешние интеграции. Не вся эта конфигурация соответствует текущему фактическому поведению API.
+- Для ZITADEL browser-flow добавлен отдельный live smoke `scripts/smoke-auth-zitadel-e2e.sh` и отдельный CI job `zitadel-e2e`, но этот gate сейчас честно зависит от уже provisioned local OIDC app и admin PAT. На bare checkout без live ZITADEL secret files job пропускается, а не делает вид, что может доказать live E2E.
+- Локальный observability-стек `Grafana + Loki + Alloy` добавлен отдельно от основного compose-стека и требует рабочего локального Docker runtime; container-level валидация `Alloy` может упираться в локальные Docker credential/pull проблемы.
 
 ## Полезные ссылки
 
 - ADR по архитектурным границам: [`docs/architecture/adr-foundation-infrastructure-boundaries.md`](docs/architecture/adr-foundation-infrastructure-boundaries.md)
 - Compose-файлы: `deploy/docker-compose.postgres.yaml`, `deploy/docker-compose.platform.yaml`, `deploy/docker-compose.migrate.yaml`
 - Исходники API: `platform/cmd/api`, `platform/internal/`
-
-

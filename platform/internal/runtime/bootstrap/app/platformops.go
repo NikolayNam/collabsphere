@@ -41,7 +41,7 @@ func registerPlatformOpsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 		zitadelAdmin = zitadelAdminClient
 	}
 
-	service := platformapp.New(repo, repo, repo, accountRepo, repo, repo, clk, txManager, zitadelAdmin, bootstrapAccountIDs)
+	service := platformapp.New(repo, repo, repo, accountRepo, repo, repo, repo, clk, txManager, zitadelAdmin, bootstrapAccountIDs)
 	handler := platformhttp.NewHandler(service)
 
 	secret, err := conf.Auth.JWTSecretValue()
@@ -52,4 +52,3 @@ func registerPlatformOpsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 
 	platformhttp.Register(api, handler, jwtManager)
 }
-

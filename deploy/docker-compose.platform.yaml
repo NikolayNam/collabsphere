@@ -9,10 +9,10 @@ services:
       context: ../platform
       dockerfile: ../platform/Dockerfile
     env_file:
-      - .env.dev
+      - env/.env.dev
     secrets:
-      - dev_password
-      - neon_password
+      - dev_postgres_password
+      - neon_postgres_password
       - jwt_secret_key
       - s3_access_key
       - s3_secret_key
@@ -29,7 +29,7 @@ services:
     healthcheck:
       test: [ "CMD-SHELL", "curl -fsSL http://localhost:8080/health" ]
       interval: 5s
-      timeout: 5s
+      timeout: 30s
       retries: 10
       start_period: 15s
     command: [ "/api" ]
@@ -47,9 +47,9 @@ networks:
     external: true
 
 secrets:
-  dev_password:
+  dev_postgres_password:
     file: secrets/postgres/dev/db_password
-  neon_password:
+  neon_postgres_password:
     file: secrets/postgres/prod/db_password
   jwt_secret_key:
     file: secrets/jwt/jwt_secret_key

@@ -188,6 +188,114 @@ func (h *Handler) ListUploads(ctx context.Context, input *platformdto.ListUpload
 	return out, nil
 }
 
+func (h *Handler) ListOrganizationReviews(ctx context.Context, input *platformdto.ListOrganizationReviewsInput) (*platformdto.OrganizationReviewQueueResponse, error) {
+	organizationID, err := parseOptionalUUID(input.OrganizationID, "organizationId")
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	reviewerAccountID, err := parseOptionalUUID(input.ReviewerAccountID, "reviewerAccountId")
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	items, total, err := h.svc.ListOrganizationReviewQueue(ctx, platformapp.ListOrganizationReviewQueueCmd{
+		Status:            optionalString(input.Status),
+		OrganizationID:    organizationID,
+		ReviewerAccountID: reviewerAccountID,
+		Search:            optionalString(input.Q),
+		Limit:             input.Limit,
+		Offset:            input.Offset,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.OrganizationReviewQueueResponse{Status: http.StatusOK}
+	out.Body.Total = total
+	out.Body.Items = make([]platformdto.OrganizationReviewQueueItem, 0, len(items))
+	for _, item := range items {
+		out.Body.Items = append(out.Body.Items, organizationReviewQueueItemDTO(item))
+	}
+	return out, nil
+}
+
+func (h *Handler) GetOrganizationReview(ctx context.Context, input *platformdto.GetOrganizationReviewInput) (*platformdto.OrganizationReviewDetailResponse, error) {
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	detail, err := h.svc.GetOrganizationReview(ctx, organizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.OrganizationReviewDetailResponse{Status: http.StatusOK}
+	out.Body.Organization = organizationReviewOrganizationDTO(detail.Organization)
+	out.Body.Domains = make([]platformdto.OrganizationReviewDomain, 0, len(detail.Domains))
+	for _, item := range detail.Domains {
+		out.Body.Domains = append(out.Body.Domains, organizationReviewDomainDTO(item))
+	}
+	out.Body.CooperationApplication = organizationReviewCooperationApplicationDTO(detail.CooperationApplication)
+	out.Body.LegalDocuments = make([]platformdto.OrganizationReviewLegalDocument, 0, len(detail.LegalDocuments))
+	for _, item := range detail.LegalDocuments {
+		out.Body.LegalDocuments = append(out.Body.LegalDocuments, organizationReviewLegalDocumentDTO(item))
+	}
+	out.Body.KYC = organizationReviewKYCDTO(detail.KYC)
+	return out, nil
+}
+
+func (h *Handler) TransitionCooperationApplicationReview(ctx context.Context, input *platformdto.TransitionCooperationApplicationReviewInput) (*platformdto.CooperationApplicationReviewResponse, error) {
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	result, err := h.svc.TransitionCooperationApplicationReview(ctx, platformapp.TransitionCooperationApplicationReviewCmd{
+		ActorAccountID: access.AccountID,
+		ActorRoles:     access.EffectiveRoles,
+		ActorBootstrap: access.BootstrapAdmin,
+		OrganizationID: organizationID,
+		TargetStatus:   input.Body.TargetStatus,
+		ReviewNote:     input.Body.ReviewNote,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.CooperationApplicationReviewResponse{Status: http.StatusOK}
+	out.Body = *organizationReviewCooperationApplicationDTO(result)
+	return out, nil
+}
+
+func (h *Handler) TransitionLegalDocumentReview(ctx context.Context, input *platformdto.TransitionLegalDocumentReviewInput) (*platformdto.LegalDocumentReviewResponse, error) {
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	documentID, err := httpbind.ParseUUID(input.DocumentID, fault.Validation("Document id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("documentId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	result, err := h.svc.TransitionLegalDocumentReview(ctx, platformapp.TransitionLegalDocumentReviewCmd{
+		ActorAccountID: access.AccountID,
+		ActorRoles:     access.EffectiveRoles,
+		ActorBootstrap: access.BootstrapAdmin,
+		OrganizationID: organizationID,
+		DocumentID:     documentID,
+		TargetStatus:   input.Body.TargetStatus,
+		ReviewNote:     input.Body.ReviewNote,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.LegalDocumentReviewResponse{Status: http.StatusOK}
+	out.Body = organizationReviewLegalDocumentDTO(*result)
+	return out, nil
+}
+
 func (h *Handler) ForceVerifyUserEmail(ctx context.Context, input *platformdto.ForceVerifyUserEmailInput) (*platformdto.ForceVerifyUserEmailResponse, error) {
 	access := platformAccessFromContext(ctx)
 	if access == nil {
@@ -230,6 +338,183 @@ func autoGrantRuleDTO(rule platformdomain.AutoGrantRule) platformdto.AutoGrantRu
 		CreatedAt:          rule.CreatedAt,
 		UpdatedAt:          rule.UpdatedAt,
 	}
+}
+
+func organizationReviewQueueItemDTO(item platformdomain.OrganizationReviewQueueItem) platformdto.OrganizationReviewQueueItem {
+	return platformdto.OrganizationReviewQueueItem{
+		OrganizationID:           item.OrganizationID,
+		OrganizationName:         item.OrganizationName,
+		OrganizationSlug:         item.OrganizationSlug,
+		OrganizationIsActive:     item.OrganizationIsActive,
+		CooperationApplicationID: item.CooperationApplicationID,
+		CooperationStatus:        item.CooperationStatus,
+		CompanyName:              item.CompanyName,
+		ConfirmationEmail:        item.ConfirmationEmail,
+		ReviewerAccountID:        item.ReviewerAccountID,
+		SubmittedAt:              item.SubmittedAt,
+		ReviewedAt:               item.ReviewedAt,
+		CreatedAt:                item.CreatedAt,
+		UpdatedAt:                item.UpdatedAt,
+	}
+}
+
+func organizationReviewOrganizationDTO(item platformdomain.OrganizationReviewOrganization) platformdto.OrganizationReviewOrganization {
+	return platformdto.OrganizationReviewOrganization{
+		ID:           item.ID,
+		Name:         item.Name,
+		Slug:         item.Slug,
+		LogoObjectID: item.LogoObjectID,
+		Description:  item.Description,
+		Website:      item.Website,
+		PrimaryEmail: item.PrimaryEmail,
+		Phone:        item.Phone,
+		Address:      item.Address,
+		Industry:     item.Industry,
+		IsActive:     item.IsActive,
+		CreatedAt:    item.CreatedAt,
+		UpdatedAt:    item.UpdatedAt,
+	}
+}
+
+func organizationReviewDomainDTO(item platformdomain.OrganizationReviewDomain) platformdto.OrganizationReviewDomain {
+	return platformdto.OrganizationReviewDomain{
+		ID:         item.ID,
+		Hostname:   item.Hostname,
+		Kind:       item.Kind,
+		IsPrimary:  item.IsPrimary,
+		IsVerified: item.IsVerified,
+		VerifiedAt: item.VerifiedAt,
+		CreatedAt:  item.CreatedAt,
+		UpdatedAt:  item.UpdatedAt,
+	}
+}
+
+func organizationReviewCooperationApplicationDTO(item *platformdomain.OrganizationReviewCooperationApplication) *platformdto.OrganizationReviewCooperationApplication {
+	if item == nil {
+		return nil
+	}
+	return &platformdto.OrganizationReviewCooperationApplication{
+		ID:                    item.ID,
+		OrganizationID:        item.OrganizationID,
+		Status:                item.Status,
+		ConfirmationEmail:     item.ConfirmationEmail,
+		CompanyName:           item.CompanyName,
+		RepresentedCategories: item.RepresentedCategories,
+		MinimumOrderAmount:    item.MinimumOrderAmount,
+		DeliveryGeography:     item.DeliveryGeography,
+		SalesChannels:         append([]string{}, item.SalesChannels...),
+		StorefrontURL:         item.StorefrontURL,
+		ContactFirstName:      item.ContactFirstName,
+		ContactLastName:       item.ContactLastName,
+		ContactJobTitle:       item.ContactJobTitle,
+		PriceListObjectID:     item.PriceListObjectID,
+		ContactEmail:          item.ContactEmail,
+		ContactPhone:          item.ContactPhone,
+		PartnerCode:           item.PartnerCode,
+		ReviewNote:            item.ReviewNote,
+		ReviewerAccountID:     item.ReviewerAccountID,
+		SubmittedAt:           item.SubmittedAt,
+		ReviewedAt:            item.ReviewedAt,
+		CreatedAt:             item.CreatedAt,
+		UpdatedAt:             item.UpdatedAt,
+	}
+}
+
+func organizationReviewLegalDocumentDTO(item platformdomain.OrganizationReviewLegalDocument) platformdto.OrganizationReviewLegalDocument {
+	out := platformdto.OrganizationReviewLegalDocument{
+		ID:                  item.ID,
+		OrganizationID:      item.OrganizationID,
+		DocumentType:        item.DocumentType,
+		Status:              item.Status,
+		ObjectID:            item.ObjectID,
+		Title:               item.Title,
+		UploadedByAccountID: item.UploadedByAccountID,
+		ReviewerAccountID:   item.ReviewerAccountID,
+		ReviewNote:          item.ReviewNote,
+		CreatedAt:           item.CreatedAt,
+		UpdatedAt:           item.UpdatedAt,
+		ReviewedAt:          item.ReviewedAt,
+	}
+	if item.Analysis != nil {
+		out.Analysis = &platformdto.OrganizationReviewLegalDocumentAnalysis{
+			ID:                   item.Analysis.ID,
+			DocumentID:           item.Analysis.DocumentID,
+			OrganizationID:       item.Analysis.OrganizationID,
+			Status:               item.Analysis.Status,
+			Provider:             item.Analysis.Provider,
+			Summary:              item.Analysis.Summary,
+			DetectedDocumentType: item.Analysis.DetectedDocumentType,
+			ConfidenceScore:      item.Analysis.ConfidenceScore,
+			RequestedAt:          item.Analysis.RequestedAt,
+			StartedAt:            item.Analysis.StartedAt,
+			CompletedAt:          item.Analysis.CompletedAt,
+			UpdatedAt:            item.Analysis.UpdatedAt,
+			LastError:            item.Analysis.LastError,
+		}
+	}
+	if item.Verification != nil {
+		out.Verification = &platformdto.OrganizationReviewLegalDocumentVerification{
+			DocumentID:           item.Verification.DocumentID,
+			OrganizationID:       item.Verification.OrganizationID,
+			DocumentType:         item.Verification.DocumentType,
+			DocumentStatus:       item.Verification.DocumentStatus,
+			AnalysisStatus:       item.Verification.AnalysisStatus,
+			Verdict:              item.Verification.Verdict,
+			Summary:              item.Verification.Summary,
+			DetectedDocumentType: item.Verification.DetectedDocumentType,
+			ConfidenceScore:      item.Verification.ConfidenceScore,
+			RequiredFields:       append([]string{}, item.Verification.RequiredFields...),
+			MissingFields:        append([]string{}, item.Verification.MissingFields...),
+			CheckedAt:            item.Verification.CheckedAt,
+		}
+		out.Verification.Issues = make([]platformdto.OrganizationReviewLegalDocumentVerificationIssue, 0, len(item.Verification.Issues))
+		for _, issue := range item.Verification.Issues {
+			out.Verification.Issues = append(out.Verification.Issues, platformdto.OrganizationReviewLegalDocumentVerificationIssue{
+				Code:     issue.Code,
+				Severity: issue.Severity,
+				Message:  issue.Message,
+				Field:    issue.Field,
+			})
+		}
+	}
+	return out
+}
+
+func organizationReviewKYCDTO(item *platformdomain.OrganizationReviewKYCRequirements) *platformdto.OrganizationReviewKYCRequirements {
+	if item == nil {
+		return nil
+	}
+	out := &platformdto.OrganizationReviewKYCRequirements{
+		OrganizationID: item.OrganizationID,
+		Status:         item.Status,
+		DisabledReason: item.DisabledReason,
+		CheckedAt:      item.CheckedAt,
+	}
+	out.CurrentlyDue = organizationReviewKYCItemsDTO(item.CurrentlyDue)
+	out.PendingVerification = organizationReviewKYCItemsDTO(item.PendingVerification)
+	out.EventuallyDue = organizationReviewKYCItemsDTO(item.EventuallyDue)
+	out.Errors = organizationReviewKYCItemsDTO(item.Errors)
+	return out
+}
+
+func organizationReviewKYCItemsDTO(items []platformdomain.OrganizationReviewKYCRequirementItem) []platformdto.OrganizationReviewKYCRequirementItem {
+	if len(items) == 0 {
+		return []platformdto.OrganizationReviewKYCRequirementItem{}
+	}
+	out := make([]platformdto.OrganizationReviewKYCRequirementItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, platformdto.OrganizationReviewKYCRequirementItem{
+			Code:         item.Code,
+			Category:     item.Category,
+			Title:        item.Title,
+			Description:  item.Description,
+			Field:        item.Field,
+			DocumentID:   item.DocumentID,
+			DocumentType: item.DocumentType,
+			Reason:       item.Reason,
+		})
+	}
+	return out
 }
 
 func parseOptionalUUID(raw string, field string) (*uuid.UUID, error) {

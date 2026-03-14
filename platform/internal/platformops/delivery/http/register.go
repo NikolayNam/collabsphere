@@ -10,6 +10,7 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	anyPlatformRole := huma.Middlewares{authmw.HumaAuthOptional(verifier), h.roleGuard(api, platformdomain.RolePlatformAdmin, platformdomain.RoleSupportOperator, platformdomain.RoleReviewOperator)}
 	adminOnly := huma.Middlewares{authmw.HumaAuthOptional(verifier), h.roleGuard(api, platformdomain.RolePlatformAdmin)}
 	supportOrAdmin := huma.Middlewares{authmw.HumaAuthOptional(verifier), h.roleGuard(api, platformdomain.RolePlatformAdmin, platformdomain.RoleSupportOperator)}
+	reviewOrAdmin := huma.Middlewares{authmw.HumaAuthOptional(verifier), h.roleGuard(api, platformdomain.RolePlatformAdmin, platformdomain.RoleReviewOperator)}
 
 	getMyAccess := getMyAccessOp
 	getMyAccess.Middlewares = anyPlatformRole
@@ -42,6 +43,22 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	listUploads := listUploadsOp
 	listUploads.Middlewares = supportOrAdmin
 	huma.Register(api, listUploads, h.ListUploads)
+
+	listReviews := listOrganizationReviewsOp
+	listReviews.Middlewares = anyPlatformRole
+	huma.Register(api, listReviews, h.ListOrganizationReviews)
+
+	getReview := getOrganizationReviewOp
+	getReview.Middlewares = anyPlatformRole
+	huma.Register(api, getReview, h.GetOrganizationReview)
+
+	transitionReview := transitionCooperationApplicationReviewOp
+	transitionReview.Middlewares = reviewOrAdmin
+	huma.Register(api, transitionReview, h.TransitionCooperationApplicationReview)
+
+	transitionLegalDocument := transitionLegalDocumentReviewOp
+	transitionLegalDocument.Middlewares = reviewOrAdmin
+	huma.Register(api, transitionLegalDocument, h.TransitionLegalDocumentReview)
 
 	forceVerify := forceVerifyUserEmailOp
 	forceVerify.Middlewares = adminOnly

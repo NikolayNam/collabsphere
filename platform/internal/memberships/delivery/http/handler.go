@@ -102,6 +102,68 @@ func (h *Handler) ListMembers(ctx context.Context, input *dto.ListMembersInput) 
 	return out, nil
 }
 
+func (h *Handler) CreateInvitation(ctx context.Context, input *dto.CreateInvitationInput) (*dto.InvitationResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	res, err := h.svc.CreateInvitation(ctx, application.CreateInvitationCmd{
+		OrganizationID: orgID,
+		ActorAccountID: actorID,
+		Email:          input.Body.Email,
+		Role:           input.Body.Role,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	body := toInvitationPayload(res.Invitation)
+	body.Token = &res.Token
+	return &dto.InvitationResponse{Status: http.StatusCreated, Body: body}, nil
+}
+
+func (h *Handler) ListInvitations(ctx context.Context, input *dto.ListInvitationsInput) (*dto.InvitationsListResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	invitations, err := h.svc.ListInvitations(ctx, actorID, orgID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.InvitationsListResponse{Status: http.StatusOK}
+	out.Body.Invitations = make([]dto.InvitationPayload, 0, len(invitations))
+	for _, invitation := range invitations {
+		out.Body.Invitations = append(out.Body.Invitations, toInvitationPayload(invitation))
+	}
+	return out, nil
+}
+
+func (h *Handler) AcceptInvitation(ctx context.Context, input *dto.AcceptInvitationInput) (*dto.AcceptInvitationResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	res, err := h.svc.AcceptInvitation(ctx, application.AcceptInvitationCmd{
+		Token:          input.Token,
+		ActorAccountID: actorID,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.AcceptInvitationResponse{Status: http.StatusOK}
+	out.Body.Invitation = toInvitationPayload(res.Invitation)
+	out.Body.Member = toMemberPayload(res.Member)
+	return out, nil
+}
+
 func principalMembershipActor(ctx context.Context) (uuid.UUID, error) {
 	principal := authmw.PrincipalFromContext(ctx)
 	if !principal.IsAccount() {
@@ -136,5 +198,21 @@ func toMemberPayload(member memberDomain.MemberView) dto.MemberPayload {
 		CreatedAt:      member.CreatedAt,
 		UpdatedAt:      member.UpdatedAt,
 		DeletedAt:      member.DeletedAt,
+	}
+}
+
+func toInvitationPayload(invitation memberDomain.InvitationView) dto.InvitationPayload {
+	return dto.InvitationPayload{
+		ID:                  invitation.ID,
+		OrganizationID:      invitation.OrganizationID,
+		Email:               invitation.Email,
+		Role:                invitation.Role,
+		Status:              invitation.Status,
+		InviterAccountID:    invitation.InviterAccountID,
+		AcceptedByAccountID: invitation.AcceptedByAccountID,
+		AcceptedAt:          invitation.AcceptedAt,
+		ExpiresAt:           invitation.ExpiresAt,
+		CreatedAt:           invitation.CreatedAt,
+		UpdatedAt:           invitation.UpdatedAt,
 	}
 }

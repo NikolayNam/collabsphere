@@ -27,8 +27,15 @@ import (
 )
 
 func main() {
-	conf := config.New()
-	rootLog := logger.New(logger.Config{Level: slog.LevelInfo, Format: "json"})
+	conf := config.NewFor(config.ProfileWorker)
+	rootLog := logger.New(logger.Config{
+		Level:  slog.LevelInfo,
+		Format: "json",
+		Fields: []any{
+			"service", "worker",
+			"env", conf.APP.NormalizedEnvironment(),
+		},
+	})
 	slog.SetDefault(rootLog)
 	db := bootstrap.MustOpenGormDB(conf, rootLog.With("component", "db"))
 	bootstrap.RegisterDBHooks(db)

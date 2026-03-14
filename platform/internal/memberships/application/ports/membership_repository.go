@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	accDomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	memberDomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
@@ -16,4 +17,9 @@ type MembershipRepository interface {
 	GetMemberByID(ctx context.Context, orgID orgDomain.OrganizationID, membershipID uuid.UUID) (*memberDomain.Membership, error)
 	CountActiveMembersByRole(ctx context.Context, orgID orgDomain.OrganizationID, role memberDomain.MembershipRole) (int64, error)
 	ListMembers(ctx context.Context, orgID orgDomain.OrganizationID) ([]memberDomain.MemberView, error)
+	CreateInvitation(ctx context.Context, invitation *memberDomain.OrganizationInvitation) error
+	SaveInvitation(ctx context.Context, invitation *memberDomain.OrganizationInvitation) error
+	GetInvitationByTokenHash(ctx context.Context, tokenHash string) (*memberDomain.OrganizationInvitation, error)
+	ListInvitations(ctx context.Context, orgID orgDomain.OrganizationID) ([]memberDomain.OrganizationInvitation, error)
+	RevokeExpiredPendingInvitations(ctx context.Context, orgID orgDomain.OrganizationID, email accDomain.Email, actorAccountID uuid.UUID, now time.Time) error
 }

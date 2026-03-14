@@ -38,4 +38,11 @@ type UploadQueueReader interface {
 	ListUploadQueue(ctx context.Context, query domain.UploadQueueQuery) ([]domain.UploadQueueItem, int, error)
 }
 
+type OrganizationReviewRepository interface {
+	ListOrganizationReviewQueue(ctx context.Context, query domain.OrganizationReviewQueueQuery) ([]domain.OrganizationReviewQueueItem, int, error)
+	GetOrganizationReview(ctx context.Context, organizationID uuid.UUID) (*domain.OrganizationReviewDetail, error)
+	UpdateCooperationApplicationReview(ctx context.Context, organizationID uuid.UUID, patch domain.CooperationApplicationReviewPatch) (*domain.OrganizationReviewCooperationApplication, error)
+	UpdateLegalDocumentReview(ctx context.Context, organizationID, documentID uuid.UUID, patch domain.LegalDocumentReviewPatch) (*domain.OrganizationReviewLegalDocument, error)
+}
+
 type ZitadelAdminClient = authports.ZitadelAdminClient

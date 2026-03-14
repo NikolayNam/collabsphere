@@ -47,7 +47,7 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*Result, error) {
 	}
 
 	hash := h.random.Hash(rt.String())
-	session, err := h.sessions.GetByTokenHash(ctx, hash)
+	session, err := h.sessions.FindByTokenHash(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -79,8 +79,12 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*Result, error) {
 	}
 	newRefreshHash := h.random.Hash(newRefreshRaw)
 
-	if err := h.sessions.ReplaceToken(ctx, session.ID(), newRefreshHash); err != nil {
+	session, err = h.sessions.RotateByRefreshToken(ctx, hash, newRefreshHash, now)
+	if err != nil {
 		return nil, err
+	}
+	if session == nil {
+		return nil, autherrors.RefreshTokenInvalid()
 	}
 
 	accessExpiresAt := now.Add(h.tokens.AccessTTL())

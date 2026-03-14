@@ -124,6 +124,12 @@ func (p *Provider) BuildAuthorizationURL(ctx context.Context, req ports.OIDCAuth
 	if p == nil {
 		return "", errors.New("oidc provider is nil")
 	}
+	if strings.TrimSpace(req.CodeChallenge) == "" {
+		return "", errors.New("oidc code challenge is required")
+	}
+	if strings.TrimSpace(req.CodeChallengeMethod) == "" {
+		return "", errors.New("oidc code challenge method is required")
+	}
 	discovery, err := p.fetchDiscovery(ctx)
 	if err != nil {
 		return "", err
@@ -139,6 +145,8 @@ func (p *Provider) BuildAuthorizationURL(ctx context.Context, req ports.OIDCAuth
 	query.Set("scope", strings.Join(p.scopes, " "))
 	query.Set("state", req.State)
 	query.Set("nonce", req.Nonce)
+	query.Set("code_challenge", req.CodeChallenge)
+	query.Set("code_challenge_method", req.CodeChallengeMethod)
 	if prompt := strings.TrimSpace(req.Prompt); prompt != "" {
 		query.Set("prompt", prompt)
 	}
@@ -146,9 +154,15 @@ func (p *Provider) BuildAuthorizationURL(ctx context.Context, req ports.OIDCAuth
 	return authURL.String(), nil
 }
 
-func (p *Provider) ExchangeCode(ctx context.Context, code string) (*ports.OIDCIdentity, error) {
+func (p *Provider) ExchangeCode(ctx context.Context, req ports.OIDCCodeExchangeRequest) (*ports.OIDCIdentity, error) {
 	if p == nil {
 		return nil, errors.New("oidc provider is nil")
+	}
+	if strings.TrimSpace(req.Code) == "" {
+		return nil, errors.New("oidc code is required")
+	}
+	if strings.TrimSpace(req.CodeVerifier) == "" {
+		return nil, errors.New("oidc code verifier is required")
 	}
 	discovery, err := p.fetchDiscovery(ctx)
 	if err != nil {
@@ -156,18 +170,19 @@ func (p *Provider) ExchangeCode(ctx context.Context, code string) (*ports.OIDCId
 	}
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
-	form.Set("code", strings.TrimSpace(code))
+	form.Set("code", strings.TrimSpace(req.Code))
 	form.Set("redirect_uri", p.redirectURL)
+	form.Set("code_verifier", strings.TrimSpace(req.CodeVerifier))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, discovery.TokenEndpoint, strings.NewReader(form.Encode()))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, discovery.TokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("build token request: %w", err)
 	}
-	req.SetBasicAuth(p.clientID, p.clientSecret)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
+	httpReq.SetBasicAuth(p.clientID, p.clientSecret)
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	httpReq.Header.Set("Accept", "application/json")
 
-	resp, err := p.httpClient.Do(req)
+	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("exchange code: %w", err)
 	}

@@ -41,3 +41,33 @@ var removeMemberOp = huma.Operation{
 	Description: "Removes an account membership from the organization. This route will reject operations that would remove the last active owner.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var createInvitationOp = huma.Operation{
+	OperationID: "create-organization-invitation",
+	Method:      "POST",
+	Path:        "/organizations/{organization_id}/invitations",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Create an organization invitation",
+	Description: "Creates a time-limited organization invitation token for an email address and target role. Only organization owners or admins can issue invitations.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var listInvitationsOp = huma.Operation{
+	OperationID: "list-organization-invitations",
+	Method:      "GET",
+	Path:        "/organizations/{organization_id}/invitations",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "List organization invitations",
+	Description: "Returns current and historical organization invitations with their lifecycle status.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var acceptInvitationOp = huma.Operation{
+	OperationID: "accept-organization-invitation",
+	Method:      "POST",
+	Path:        "/invitations/{token}/accept",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Accept an organization invitation",
+	Description: "Accepts an organization invitation for the authenticated account. The invitation email must match the authenticated account email.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

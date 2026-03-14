@@ -226,6 +226,55 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
         line-height: 1.65;
         font-size: 0.95rem;
       }
+      .tokens {
+        margin-top: 18px;
+        padding: 16px 18px 18px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: rgba(255,255,255,0.03);
+      }
+      .tokens-head strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+      .tokens-head p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .token-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+      .token-card {
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: rgba(255,255,255,0.025);
+      }
+      .token-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .token-top strong {
+        display: block;
+      }
+      .token-card textarea {
+        width: 100%;
+        min-height: 168px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(0,0,0,0.22);
+        color: var(--text);
+        font: 0.9rem/1.45 "Cascadia Code", "JetBrains Mono", monospace;
+      }
       .aside {
         padding: 24px;
       }
@@ -277,6 +326,9 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
         .meta dl {
           grid-template-columns: 1fr;
         }
+        .token-grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -309,10 +361,32 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
               </dl>
             </div>
             <div class="actions">
-              <a class="button" href="/v1/auth/zitadel/login?return_to=/auth/callback">Войти через ZITADEL</a>
-              <a class="button secondary" href="/v1/auth/zitadel/signup?return_to=/auth/callback">Зарегистрироваться</a>
+              <a id="login-zitadel" class="button" href="/v1/auth/zitadel/login?return_to=/auth/callback">Войти через ZITADEL</a>
+              <a id="signup-zitadel" class="button secondary" href="/v1/auth/zitadel/signup?return_to=/auth/callback">Зарегистрироваться</a>
               <button id="me" class="secondary" type="button">Проверить <code>/auth/me</code></button>
               <button id="clear" class="secondary" type="button">Очистить токены</button>
+            </div>
+            <div id="tokens" class="tokens" hidden>
+              <div class="tokens-head">
+                <strong>Локальные токены</strong>
+                <p>Dev-only представление результата <code>/v1/auth/exchange</code>. Отсюда можно сразу взять готовый <code>accessToken</code> для ручных запросов к backend.</p>
+              </div>
+              <div class="token-grid">
+                <div class="token-card">
+                  <div class="token-top">
+                    <strong>Access token</strong>
+                    <button id="copy-access" class="secondary" type="button">Скопировать</button>
+                  </div>
+                  <textarea id="access-token" readonly spellcheck="false" placeholder="Появится после успешного /v1/auth/exchange"></textarea>
+                </div>
+                <div class="token-card">
+                  <div class="token-top">
+                    <strong>Refresh token</strong>
+                    <button id="copy-refresh" class="secondary" type="button">Скопировать</button>
+                  </div>
+                  <textarea id="refresh-token" readonly spellcheck="false" placeholder="Появится после успешного /v1/auth/exchange"></textarea>
+                </div>
+              </div>
             </div>
             <p class="footnote">Используемые ключи: <code>collabsphere.auth</code>, <code>collabsphere.accessToken</code>, <code>collabsphere.refreshToken</code>.</p>
           </div>
@@ -346,6 +420,11 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
       const metaListEl = document.getElementById('meta-list');
       const meButton = document.getElementById('me');
       const clearButton = document.getElementById('clear');
+      const tokensEl = document.getElementById('tokens');
+      const accessTokenEl = document.getElementById('access-token');
+      const refreshTokenEl = document.getElementById('refresh-token');
+      const copyAccessButton = document.getElementById('copy-access');
+      const copyRefreshButton = document.getElementById('copy-refresh');
       const params = new URLSearchParams(window.location.search);
 
       function escapeHtml(value) {
@@ -389,6 +468,46 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
         localStorage.removeItem('collabsphere.auth');
         localStorage.removeItem('collabsphere.accessToken');
         localStorage.removeItem('collabsphere.refreshToken');
+      }
+
+      function readStoredAuth() {
+        const raw = localStorage.getItem('collabsphere.auth');
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              return parsed;
+            }
+          } catch (_) {}
+        }
+        const accessToken = localStorage.getItem('collabsphere.accessToken');
+        const refreshToken = localStorage.getItem('collabsphere.refreshToken');
+        if (!accessToken && !refreshToken) {
+          return null;
+        }
+        return {
+          accessToken: accessToken || '',
+          refreshToken: refreshToken || '',
+        };
+      }
+
+      function setTokens(payload) {
+        const accessToken = payload && typeof payload.accessToken === 'string' ? payload.accessToken : '';
+        const refreshToken = payload && typeof payload.refreshToken === 'string' ? payload.refreshToken : '';
+        accessTokenEl.value = accessToken;
+        refreshTokenEl.value = refreshToken;
+        copyAccessButton.disabled = accessToken === '';
+        copyRefreshButton.disabled = refreshToken === '';
+        tokensEl.hidden = accessToken === '' && refreshToken === '';
+      }
+
+      async function copyToken(value, label) {
+        if (!value) {
+          setStatus('error', label + ' отсутствует', 'Сначала завершите browser auth flow, чтобы получить токен.');
+          return;
+        }
+        await navigator.clipboard.writeText(value);
+        setStatus('ok', label + ' скопирован', 'Токен уже в буфере обмена. Теперь его можно вставить в Authorization: Bearer <token>.');
       }
 
       async function exchangeTicket(ticket) {
@@ -445,9 +564,26 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
       async function boot() {
         clearButton.addEventListener('click', () => {
           clearAuth();
+          setTokens(null);
           setStatus('', 'Токены очищены', 'Сохранённые access/refresh токены удалены из localStorage.');
           setMeta([]);
           history.replaceState({}, '', '/auth/callback');
+        });
+
+        copyAccessButton.addEventListener('click', async () => {
+          try {
+            await copyToken(accessTokenEl.value, 'Access token');
+          } catch (error) {
+            setStatus('error', 'Не удалось скопировать access token', error instanceof Error ? error.message : 'Unknown error');
+          }
+        });
+
+        copyRefreshButton.addEventListener('click', async () => {
+          try {
+            await copyToken(refreshTokenEl.value, 'Refresh token');
+          } catch (error) {
+            setStatus('error', 'Не удалось скопировать refresh token', error instanceof Error ? error.message : 'Unknown error');
+          }
         });
 
         meButton.addEventListener('click', async () => {
@@ -467,7 +603,8 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
 
         const ticket = params.get('ticket');
         if (!ticket) {
-          const stored = localStorage.getItem('collabsphere.auth');
+          const stored = readStoredAuth();
+          setTokens(stored);
           if (stored) {
             setStatus('ok', 'Токены уже сохранены', 'Можно проверить текущего пользователя через /auth/me или повторно запустить вход.');
           }
@@ -479,6 +616,7 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
         try {
           const payload = await exchangeTicket(ticket);
           storeAuth(payload);
+          setTokens(payload);
           history.replaceState({}, '', '/auth/callback');
           setStatus('ok', 'Вход выполнен', 'Токены сохранены в localStorage. Теперь можно вызывать backend API от имени текущего пользователя.');
           setMeta([
@@ -489,6 +627,7 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
             ['Expires In', String(payload.expiresIn || '')],
           ]);
         } catch (error) {
+          setTokens(readStoredAuth());
           setStatus('error', 'Обмен ticket не удался', error instanceof Error ? error.message : 'Unknown error');
           setMeta([]);
         }

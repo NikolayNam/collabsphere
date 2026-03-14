@@ -89,6 +89,61 @@ type OrganizationLegalDocumentAnalysisResponse struct {
 	Body   OrganizationLegalDocumentAnalysisBody `json:"body"`
 }
 
+type OrganizationLegalDocumentVerificationIssueBody struct {
+	Code     string  `json:"code"`
+	Severity string  `json:"severity"`
+	Message  string  `json:"message"`
+	Field    *string `json:"field,omitempty"`
+}
+
+type OrganizationLegalDocumentVerificationBody struct {
+	DocumentID           uuid.UUID                                        `json:"documentId"`
+	OrganizationID       uuid.UUID                                        `json:"organizationId"`
+	DocumentType         string                                           `json:"documentType"`
+	DocumentStatus       string                                           `json:"documentStatus"`
+	AnalysisStatus       *string                                          `json:"analysisStatus,omitempty"`
+	Verdict              string                                           `json:"verdict"`
+	Summary              string                                           `json:"summary"`
+	DetectedDocumentType *string                                          `json:"detectedDocumentType,omitempty"`
+	ConfidenceScore      *float64                                         `json:"confidenceScore,omitempty"`
+	RequiredFields       []string                                         `json:"requiredFields"`
+	MissingFields        []string                                         `json:"missingFields"`
+	Issues               []OrganizationLegalDocumentVerificationIssueBody `json:"issues"`
+	CheckedAt            time.Time                                        `json:"checkedAt"`
+}
+
+type OrganizationLegalDocumentVerificationResponse struct {
+	Status int                                       `json:"-"`
+	Body   OrganizationLegalDocumentVerificationBody `json:"body"`
+}
+
+type OrganizationKYCRequirementItemBody struct {
+	Code         string     `json:"code"`
+	Category     string     `json:"category"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description"`
+	Field        *string    `json:"field,omitempty"`
+	DocumentID   *uuid.UUID `json:"documentId,omitempty"`
+	DocumentType *string    `json:"documentType,omitempty"`
+	Reason       *string    `json:"reason,omitempty"`
+}
+
+type OrganizationKYCRequirementsBody struct {
+	OrganizationID      uuid.UUID                            `json:"organizationId"`
+	Status              string                               `json:"status"`
+	DisabledReason      *string                              `json:"disabledReason,omitempty"`
+	CurrentlyDue        []OrganizationKYCRequirementItemBody `json:"currentlyDue"`
+	PendingVerification []OrganizationKYCRequirementItemBody `json:"pendingVerification"`
+	EventuallyDue       []OrganizationKYCRequirementItemBody `json:"eventuallyDue"`
+	Errors              []OrganizationKYCRequirementItemBody `json:"errors"`
+	CheckedAt           time.Time                            `json:"checkedAt"`
+}
+
+type OrganizationKYCRequirementsResponse struct {
+	Status int                             `json:"-"`
+	Body   OrganizationKYCRequirementsBody `json:"body"`
+}
+
 type GetCooperationApplicationInput struct {
 	ID string `path:"id" format:"uuid" doc:"Organization ID"`
 }
@@ -139,6 +194,15 @@ type GetOrganizationLegalDocumentAnalysisInput struct {
 type ReprocessOrganizationLegalDocumentAnalysisInput struct {
 	ID         string `path:"id" format:"uuid" doc:"Organization ID"`
 	DocumentID string `path:"document_id" format:"uuid" doc:"Legal document ID"`
+}
+
+type GetOrganizationLegalDocumentVerificationInput struct {
+	ID         string `path:"id" format:"uuid" doc:"Organization ID"`
+	DocumentID string `path:"document_id" format:"uuid" doc:"Legal document ID"`
+}
+
+type GetOrganizationKYCRequirementsInput struct {
+	ID string `path:"id" format:"uuid" doc:"Organization ID"`
 }
 
 type UploadOrganizationLegalDocumentForm struct {

@@ -9,9 +9,9 @@ services:
     networks:
       - internal.network
     env_file:
-      - .env.dev
+      - env/.env.dev
     secrets:
-      - dev_password
+      - dev_postgres_password
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d collabsphere" ]
       interval: 3s
@@ -25,6 +25,8 @@ services:
 volumes:
   postgres.data:
     name: "postgres.data"
+  postgres.data_test:
+    name: "postgres.data_test"
 
 networks:
   internal.network:
@@ -33,5 +35,5 @@ networks:
     external: false
 
 secrets:
-  dev_password:
+  dev_postgres_password:
     file: secrets/postgres/dev/db_password

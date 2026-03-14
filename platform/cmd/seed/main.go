@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	conf := config.New()
+	conf := config.NewFor(config.ProfileSeed)
 
 	dsn, err := conf.DB.DSN()
 	if err != nil {

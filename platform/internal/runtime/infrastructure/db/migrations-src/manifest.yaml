@@ -83,6 +83,10 @@ migrations:
   - iam/platform_role_bindings.sql
   - iam/platform_audit_events.sql
   - iam/platform_auto_grant_rules.sql
+  - auth/refresh_session_tokens.sql
+  - auth/oauth_states_pkce.sql
+  - iam/organization_invitations.sql
+  - iam/organization_access_audit_events.sql
 
 
 

@@ -63,6 +63,7 @@ func TestClientForceVerifyUserEmailAlreadyVerified(t *testing.T) {
 
 func TestClientForceVerifyUserEmailResendsAndVerifies(t *testing.T) {
 	var resendCalls int
+	var sendCalls int
 	var verifyCalls int
 	var verifyBody struct {
 		VerificationCode string `json:"verificationCode"`
@@ -91,6 +92,9 @@ func TestClientForceVerifyUserEmailResendsAndVerifies(t *testing.T) {
 				t.Fatalf("resend body %q does not contain returnCode", body)
 			}
 			writeJSON(t, w, map[string]any{"verificationCode": "abc-123"})
+		case "/v2/users/user-2/email/send":
+			sendCalls++
+			writeJSON(t, w, map[string]any{"verificationCode": "unexpected"})
 		case "/v2/users/user-2/email/verify":
 			verifyCalls++
 			if err := json.NewDecoder(r.Body).Decode(&verifyBody); err != nil {
@@ -117,11 +121,89 @@ func TestClientForceVerifyUserEmailResendsAndVerifies(t *testing.T) {
 	if resendCalls != 1 {
 		t.Fatalf("resendCalls = %d, want 1", resendCalls)
 	}
+	if sendCalls != 0 {
+		t.Fatalf("sendCalls = %d, want 0", sendCalls)
+	}
 	if verifyCalls != 1 {
 		t.Fatalf("verifyCalls = %d, want 1", verifyCalls)
 	}
 	if verifyBody.VerificationCode != "abc-123" {
 		t.Fatalf("verificationCode = %q, want %q", verifyBody.VerificationCode, "abc-123")
+	}
+}
+
+func TestClientForceVerifyUserEmailFallsBackToSendWhenResendHasNoCode(t *testing.T) {
+	var resendCalls int
+	var sendCalls int
+	var verifyCalls int
+	var verifyBody struct {
+		VerificationCode string `json:"verificationCode"`
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer pat-token" {
+			t.Fatalf("Authorization header = %q", got)
+		}
+		switch r.URL.Path {
+		case "/v2/users/user-3":
+			writeJSON(t, w, map[string]any{
+				"user": map[string]any{
+					"human": map[string]any{
+						"email": map[string]any{
+							"email":      "user3@example.com",
+							"isVerified": false,
+						},
+					},
+				},
+			})
+		case "/v2/users/user-3/email/resend":
+			resendCalls++
+			w.WriteHeader(http.StatusBadRequest)
+			writeJSON(t, w, map[string]any{
+				"message": "Code is empty",
+				"code":    "EMAIL-5w5ilin4yt",
+			})
+		case "/v2/users/user-3/email/send":
+			sendCalls++
+			body := readBody(t, r)
+			if !strings.Contains(body, "returnCode") {
+				t.Fatalf("send body %q does not contain returnCode", body)
+			}
+			writeJSON(t, w, map[string]any{"verificationCode": "fresh-code"})
+		case "/v2/users/user-3/email/verify":
+			verifyCalls++
+			if err := json.NewDecoder(r.Body).Decode(&verifyBody); err != nil {
+				t.Fatalf("decode verify body: %v", err)
+			}
+			writeJSON(t, w, map[string]any{"details": map[string]any{}})
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	client := &Client{baseURL: srv.URL, token: "pat-token", httpClient: srv.Client()}
+	res, err := client.ForceVerifyUserEmail(context.Background(), "user-3")
+	if err != nil {
+		t.Fatalf("ForceVerifyUserEmail() error = %v", err)
+	}
+	if res == nil {
+		t.Fatal("ForceVerifyUserEmail() result is nil")
+	}
+	if res.AlreadyVerified {
+		t.Fatal("expected AlreadyVerified = false")
+	}
+	if resendCalls != 1 {
+		t.Fatalf("resendCalls = %d, want 1", resendCalls)
+	}
+	if sendCalls != 1 {
+		t.Fatalf("sendCalls = %d, want 1", sendCalls)
+	}
+	if verifyCalls != 1 {
+		t.Fatalf("verifyCalls = %d, want 1", verifyCalls)
+	}
+	if verifyBody.VerificationCode != "fresh-code" {
+		t.Fatalf("verificationCode = %q, want %q", verifyBody.VerificationCode, "fresh-code")
 	}
 }
 

@@ -42,6 +42,14 @@ func (r Role) CanViewDashboardSummary() bool {
 	return r.IsValid()
 }
 
+func (r Role) CanViewOrganizationReviews() bool {
+	return r.IsValid()
+}
+
+func (r Role) CanTransitionOrganizationReviews() bool {
+	return r == RolePlatformAdmin || r == RoleReviewOperator
+}
+
 func RoleStrings(roles []Role) []string {
 	out := make([]string, 0, len(roles))
 	for _, role := range UniqueSortedRoles(roles) {

@@ -33,15 +33,16 @@ func (r *OIDCStateRepo) CreateState(ctx context.Context, record *ports.OAuthStat
 		return autherrors.InvalidInput("OAuth state is required")
 	}
 	model := &dbmodel.OAuthState{
-		ID:        record.ID,
-		Provider:  record.Provider,
-		StateHash: record.StateHash,
-		ReturnTo:  record.ReturnTo,
-		Intent:    record.Intent,
-		ExpiresAt: record.ExpiresAt,
-		UsedAt:    record.UsedAt,
-		CreatedAt: record.CreatedAt,
-		UpdatedAt: record.UpdatedAt,
+		ID:           record.ID,
+		Provider:     record.Provider,
+		StateHash:    record.StateHash,
+		CodeVerifier: record.CodeVerifier,
+		ReturnTo:     record.ReturnTo,
+		Intent:       record.Intent,
+		ExpiresAt:    record.ExpiresAt,
+		UsedAt:       record.UsedAt,
+		CreatedAt:    record.CreatedAt,
+		UpdatedAt:    record.UpdatedAt,
 	}
 	return r.dbFrom(ctx).WithContext(ctx).Create(model).Error
 }
@@ -75,15 +76,16 @@ func (r *OIDCStateRepo) GetStateByHash(ctx context.Context, provider, stateHash 
 		return nil, err
 	}
 	return &ports.OAuthStateRecord{
-		ID:        model.ID,
-		Provider:  model.Provider,
-		StateHash: model.StateHash,
-		ReturnTo:  model.ReturnTo,
-		Intent:    model.Intent,
-		ExpiresAt: model.ExpiresAt,
-		UsedAt:    model.UsedAt,
-		CreatedAt: model.CreatedAt,
-		UpdatedAt: model.UpdatedAt,
+		ID:           model.ID,
+		Provider:     model.Provider,
+		StateHash:    model.StateHash,
+		CodeVerifier: model.CodeVerifier,
+		ReturnTo:     model.ReturnTo,
+		Intent:       model.Intent,
+		ExpiresAt:    model.ExpiresAt,
+		UsedAt:       model.UsedAt,
+		CreatedAt:    model.CreatedAt,
+		UpdatedAt:    model.UpdatedAt,
 	}, nil
 }
 

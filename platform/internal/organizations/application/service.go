@@ -8,6 +8,7 @@ import (
 	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
+	accesspolicy "github.com/NikolayNam/collabsphere/internal/iam/access"
 	memberPorts "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application/create_organization"
 	create_with_owner "github.com/NikolayNam/collabsphere/internal/organizations/application/create_organization_with_owner"
@@ -183,6 +184,17 @@ type GetOrganizationLegalDocumentAnalysisQuery struct {
 	OrganizationID domain.OrganizationID
 	ActorAccountID uuid.UUID
 	DocumentID     uuid.UUID
+}
+
+type GetOrganizationLegalDocumentVerificationQuery struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+	DocumentID     uuid.UUID
+}
+
+type GetOrganizationKYCRequirementsQuery struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
 }
 
 type ReprocessOrganizationLegalDocumentAnalysisCmd struct {
@@ -699,7 +711,7 @@ func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID 
 	if membership == nil || !membership.IsActive() || membership.IsRemoved() {
 		return fault.Forbidden("Organization access denied")
 	}
-	if requireOwner && !membership.Role().CanManageOrganizationProfile() {
+	if requireOwner && !accesspolicy.HasOrganizationPermission(membership.Role(), accesspolicy.PermissionOrganizationManageProfile) {
 		return fault.Forbidden("Only organization owners or admins can manage organization profile")
 	}
 	return nil

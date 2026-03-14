@@ -1,0 +1,82 @@
+discovery.docker "api" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "api" {
+  targets = discovery.docker.api.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "collabsphere"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "api"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  rule {
+    target_label = "service"
+    replacement  = "api"
+  }
+}
+
+loki.source.docker "api" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.api.output
+  forward_to = [loki.process.api.receiver]
+}
+
+loki.process "api" {
+  stage.json {
+    expressions = {
+      time            = "time"
+      level           = "level"
+      component       = "component"
+      event           = "event"
+      service         = "service"
+      env             = "env"
+      request_id      = "request_id"
+      method          = "method"
+      route           = "route"
+      path            = "path"
+      status          = "status"
+      duration_ms     = "duration_ms"
+      account_id      = "account_id"
+      organization_id = "organization_id"
+    }
+  }
+
+  stage.labels {
+    values = {
+      service   = "service"
+      env       = "env"
+      component = "component"
+      level     = "level"
+      event     = "event"
+      method    = "method"
+      status    = "status"
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+
+  external_labels = {
+    stack = "collabsphere"
+  }
+}

@@ -8,6 +8,7 @@ const (
 	SubjectTypeUnknown SubjectType = ""
 	SubjectTypeAccount SubjectType = "account"
 	SubjectTypeGuest   SubjectType = "guest"
+	SubjectTypeService SubjectType = "service"
 )
 
 type Principal struct {
@@ -15,6 +16,7 @@ type Principal struct {
 	SubjectID     uuid.UUID
 	AccountID     uuid.UUID
 	GuestID       uuid.UUID
+	ServiceID     uuid.UUID
 	SessionID     uuid.UUID
 	ChannelID     uuid.UUID
 	Authenticated bool
@@ -49,10 +51,24 @@ func NewGuestPrincipal(guestID, sessionID, channelID uuid.UUID) Principal {
 	}
 }
 
+func NewServicePrincipal(serviceID, sessionID uuid.UUID) Principal {
+	return Principal{
+		SubjectType:   SubjectTypeService,
+		SubjectID:     serviceID,
+		ServiceID:     serviceID,
+		SessionID:     sessionID,
+		Authenticated: serviceID != uuid.Nil,
+	}
+}
+
 func (p Principal) IsAccount() bool {
 	return p.Authenticated && p.SubjectType == SubjectTypeAccount && p.AccountID != uuid.Nil
 }
 
 func (p Principal) IsGuest() bool {
 	return p.Authenticated && p.SubjectType == SubjectTypeGuest && p.GuestID != uuid.Nil
+}
+
+func (p Principal) IsService() bool {
+	return p.Authenticated && p.SubjectType == SubjectTypeService && p.ServiceID != uuid.Nil
 }

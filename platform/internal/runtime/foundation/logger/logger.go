@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -11,6 +12,7 @@ type Config struct {
 	AddSource bool
 	Format    string // "json" | "text"
 	Output    io.Writer
+	Fields    []any
 }
 
 func New(cfg Config) *slog.Logger {
@@ -32,5 +34,22 @@ func New(cfg Config) *slog.Logger {
 		h = slog.NewJSONHandler(out, opts)
 	}
 
-	return slog.New(h)
+	log := slog.New(h)
+	if len(cfg.Fields) > 0 {
+		log = log.With(cfg.Fields...)
+	}
+	return log
+}
+
+func ParseLevel(raw string) slog.Level {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "DEBUG":
+		return slog.LevelDebug
+	case "WARN", "WARNING":
+		return slog.LevelWarn
+	case "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }

@@ -23,4 +23,16 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	removeMember := removeMemberOp
 	removeMember.Middlewares = secured
 	huma.Register(api, removeMember, h.RemoveMember)
+
+	createInvitation := createInvitationOp
+	createInvitation.Middlewares = secured
+	huma.Register(api, createInvitation, h.CreateInvitation)
+
+	listInvitations := listInvitationsOp
+	listInvitations.Middlewares = secured
+	huma.Register(api, listInvitations, h.ListInvitations)
+
+	acceptInvitation := acceptInvitationOp
+	acceptInvitation.Middlewares = secured
+	huma.Register(api, acceptInvitation, h.AcceptInvitation)
 }

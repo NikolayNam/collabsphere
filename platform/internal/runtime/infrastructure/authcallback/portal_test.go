@@ -25,8 +25,14 @@ func TestRegisterServesCallbackPage(t *testing.T) {
 	if !strings.Contains(body, "/v1/auth/exchange") {
 		t.Fatalf("expected callback page to include exchange endpoint")
 	}
+	if !strings.Contains(body, "Access token") {
+		t.Fatalf("expected callback page to include access token panel")
+	}
 	if !strings.Contains(body, "/v1/auth/zitadel/login?return_to=/auth/callback") {
 		t.Fatalf("expected callback page to include login link")
+	}
+	if !strings.Contains(body, `id="login-zitadel"`) {
+		t.Fatalf("expected callback page to include stable login hook")
 	}
 	if !strings.Contains(body, "Готово к входу") {
 		t.Fatalf("expected default status to be rendered server-side")

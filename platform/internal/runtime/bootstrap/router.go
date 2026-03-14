@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"log/slog"
+	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -10,18 +11,27 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/middleware"
 )
 
-func NewRouter(httpLog *slog.Logger) chi.Router {
+type RouterOptions struct {
+	AccessLogQuietPaths []string
+	HTTPMetrics         func(http.Handler) http.Handler
+}
+
+func NewRouter(httpLog *slog.Logger, options RouterOptions) chi.Router {
 	humaerr.Install()
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
+	r.Use(middleware.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
 
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.RateLimit)
 	r.Use(middleware.Actor)
-	r.Use(middleware.AccessLog(httpLog))
+	if options.HTTPMetrics != nil {
+		r.Use(options.HTTPMetrics)
+	}
+	r.Use(middleware.AccessLog(httpLog, middleware.AccessLogOptions{QuietPaths: options.AccessLogQuietPaths}))
 
 	return r
 }

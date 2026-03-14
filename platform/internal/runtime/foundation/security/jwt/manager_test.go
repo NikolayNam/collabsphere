@@ -66,6 +66,33 @@ func TestManagerGenerateAndVerifyGuestAccessToken(t *testing.T) {
 	}
 }
 
+func TestManagerGenerateAndVerifyServiceAccessToken(t *testing.T) {
+	t.Parallel()
+
+	manager := NewManager("test-secret", 15*time.Minute, 24*time.Hour)
+	principal := authdomain.NewServicePrincipal(uuid.New(), uuid.New())
+
+	token, err := manager.GenerateAccessToken(context.Background(), principal, time.Now().Add(15*time.Minute))
+	if err != nil {
+		t.Fatalf("GenerateAccessToken() error = %v", err)
+	}
+
+	got, err := manager.VerifyAccessToken(context.Background(), token)
+	if err != nil {
+		t.Fatalf("VerifyAccessToken() error = %v", err)
+	}
+
+	if got.SubjectType != authdomain.SubjectTypeService {
+		t.Fatalf("SubjectType = %v, want %v", got.SubjectType, authdomain.SubjectTypeService)
+	}
+	if got.ServiceID != principal.ServiceID {
+		t.Fatalf("ServiceID = %v, want %v", got.ServiceID, principal.ServiceID)
+	}
+	if got.SessionID != principal.SessionID {
+		t.Fatalf("SessionID = %v, want %v", got.SessionID, principal.SessionID)
+	}
+}
+
 func TestManagerVerifyAccessTokenRejectsInvalidSignature(t *testing.T) {
 	t.Parallel()
 

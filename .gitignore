@@ -12,6 +12,7 @@ docs/
 
 # logs
 logs/
+output/
 
 
 # Binaries for programs and plugins

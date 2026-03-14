@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"time"
@@ -138,16 +139,25 @@ func (f *oidcFlow) BeginLogin(ctx context.Context, cmd BeginOIDCLoginCmd) (*Begi
 	if err != nil {
 		return nil, autherrors.Internal("generate oidc nonce failed", err)
 	}
+	codeVerifier, err := f.random.Generate()
+	if err != nil {
+		return nil, autherrors.Internal("generate oidc pkce verifier failed", err)
+	}
+	codeChallenge, err := pkceChallengeS256(codeVerifier)
+	if err != nil {
+		return nil, autherrors.Internal("build oidc pkce challenge failed", err)
+	}
 
 	now := f.clock.Now()
 	stateRecord := &ports.OAuthStateRecord{
-		ID:        uuid.New(),
-		Provider:  f.provider.Name(),
-		StateHash: f.random.Hash(stateRaw),
-		ReturnTo:  returnTo,
-		Intent:    intent,
-		ExpiresAt: now.Add(f.stateTTL),
-		CreatedAt: now,
+		ID:           uuid.New(),
+		Provider:     f.provider.Name(),
+		StateHash:    f.random.Hash(stateRaw),
+		CodeVerifier: codeVerifier,
+		ReturnTo:     returnTo,
+		Intent:       intent,
+		ExpiresAt:    now.Add(f.stateTTL),
+		CreatedAt:    now,
 	}
 	nonceRecord := &ports.OIDCNonceRecord{
 		ID:           uuid.New(),
@@ -168,9 +178,11 @@ func (f *oidcFlow) BeginLogin(ctx context.Context, cmd BeginOIDCLoginCmd) (*Begi
 	}
 
 	authorizationURL, err := f.provider.BuildAuthorizationURL(ctx, ports.OIDCAuthorizationRequest{
-		State:  stateRaw,
-		Nonce:  nonceRaw,
-		Prompt: oidcPromptForIntent(intent),
+		State:               stateRaw,
+		Nonce:               nonceRaw,
+		Prompt:              oidcPromptForIntent(intent),
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: "S256",
 	})
 	if err != nil {
 		return nil, autherrors.Internal("build oidc authorization url failed", err)
@@ -213,7 +225,14 @@ func (f *oidcFlow) CompleteCallback(ctx context.Context, cmd CompleteOIDCCallbac
 		return nil, autherrors.Unauthorized("OIDC callback is invalid or expired")
 	}
 
-	identity, err := f.provider.ExchangeCode(ctx, cmd.Code)
+	if strings.TrimSpace(state.CodeVerifier) == "" {
+		return nil, autherrors.Internal("oidc pkce verifier is missing", errors.New("oauth state code verifier is empty"))
+	}
+
+	identity, err := f.provider.ExchangeCode(ctx, ports.OIDCCodeExchangeRequest{
+		Code:         cmd.Code,
+		CodeVerifier: state.CodeVerifier,
+	})
 	if err != nil {
 		return nil, autherrors.Unauthorized("OIDC code exchange failed")
 	}
@@ -499,4 +518,3 @@ func oidcPromptForIntent(intent string) string {
 	}
 	return ""
 }
-

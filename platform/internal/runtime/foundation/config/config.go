@@ -27,6 +27,16 @@ type Config struct {
 	DocumentAnalysis DocumentAnalysis
 }
 
+type RuntimeProfile string
+
+const (
+	ProfileAPI       RuntimeProfile = "api"
+	ProfileWorker    RuntimeProfile = "worker"
+	ProfileContracts RuntimeProfile = "contracts"
+	ProfileMigrate   RuntimeProfile = "migrate"
+	ProfileSeed      RuntimeProfile = "seed"
+)
+
 type Auth struct {
 	JWTSecret             string        `env:"AUTH_JWT_SECRET"`
 	JWTSecretFile         string        `env:"AUTH_JWT_SECRET_FILE"`
@@ -78,18 +88,20 @@ type S3 struct {
 }
 
 type App struct {
-	Title         string        `env:"APPLICATION_TITLE,required"`
-	Version       string        `env:"APPLICATION_VERSION,required"`
-	Address       string        `env:"APPLICATION_ADDRESS"`
-	Host          string        `env:"APPLICATION_HOST" envDefault:"0.0.0.0"`
-	Port          string        `env:"APPLICATION_PORT" envDefault:"8080"`
-	PublicBaseURL string        `env:"APPLICATION_PUBLIC_BASE_URL"`
-	TimeoutRead   time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
-	TimeoutWrite  time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
-	TimeoutIdle   time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
-	Debug         bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
-	Environment   string        `env:"APPLICATION_ENVIRONMENT" envDefault:"dev"`
-	LogLevel      string        `env:"APPLICATION_LOG_LEVEL" envDefault:"INFO"`
+	Title          string        `env:"APPLICATION_TITLE"`
+	Version        string        `env:"APPLICATION_VERSION"`
+	Address        string        `env:"APPLICATION_ADDRESS"`
+	Host           string        `env:"APPLICATION_HOST" envDefault:"0.0.0.0"`
+	Port           string        `env:"APPLICATION_PORT" envDefault:"8080"`
+	PublicBaseURL  string        `env:"APPLICATION_PUBLIC_BASE_URL"`
+	TimeoutRead    time.Duration `env:"APPLICATION_TIMEOUT_READ" envDefault:"15s"`
+	TimeoutWrite   time.Duration `env:"APPLICATION_TIMEOUT_WRITE" envDefault:"15s"`
+	TimeoutIdle    time.Duration `env:"APPLICATION_TIMEOUT_IDLE" envDefault:"60s"`
+	MetricsEnabled bool          `env:"APPLICATION_METRICS_ENABLED" envDefault:"false"`
+	MetricsPath    string        `env:"APPLICATION_METRICS_PATH" envDefault:"/metrics"`
+	Debug          bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
+	Environment    string        `env:"APPLICATION_ENVIRONMENT" envDefault:"dev"`
+	LogLevel       string        `env:"APPLICATION_LOG_LEVEL" envDefault:"INFO"`
 }
 
 type DB struct {
@@ -97,7 +109,7 @@ type DB struct {
 	Port int    `env:"POSTGRES_PORT" envDefault:"5432"`
 
 	DBName   string `env:"POSTGRES_DB" envDefault:"postgres"`
-	DBSchema string `env:"POSTGRES_SCHEMA,required"`
+	DBSchema string `env:"POSTGRES_SCHEMA"`
 
 	Username string `env:"POSTGRES_USER" envDefault:"postgres"`
 
@@ -152,6 +164,10 @@ type DocumentAnalysis struct {
 }
 
 func New() *Config {
+	return NewFor(ProfileAPI)
+}
+
+func NewFor(profile RuntimeProfile) *Config {
 	var c Config
 
 	if err := env.Parse(&c); err != nil {
@@ -161,22 +177,142 @@ func New() *Config {
 	if strings.TrimSpace(c.APP.Address) == "" {
 		c.APP.Address = c.APP.ListenAddress()
 	}
+	c.applyProfileDefaults(profile)
 
 	if err := applyTZ(c.TZ); err != nil {
 		log.Fatalf("invalid TZ: %s", err)
 	}
-	if _, err := c.Auth.PlatformBootstrapAccountUUIDs(); err != nil {
-		log.Fatalf("invalid AUTH_PLATFORM_BOOTSTRAP_ACCOUNT_IDS: %s", err)
-	}
-	if _, err := c.Auth.PlatformAutoGrantRules(); err != nil {
-		log.Fatalf("invalid AUTH_PLATFORM_AUTO_GRANT_FILE: %s", err)
+	if err := c.ValidateFor(profile); err != nil {
+		log.Fatalf("invalid %s configuration: %s", normalizeProfile(profile), err)
 	}
 
 	return &c
 }
 
+func (c Config) Validate() error {
+	return c.ValidateFor(ProfileAPI)
+}
+
+func (c Config) ValidateFor(profile RuntimeProfile) error {
+	switch normalizeProfile(profile) {
+	case ProfileAPI:
+		if err := c.APP.Validate(); err != nil {
+			return err
+		}
+		if err := c.DB.Validate(); err != nil {
+			return err
+		}
+		if err := c.Auth.Validate(c.APP); err != nil {
+			return err
+		}
+		if err := c.validatePlatformAuthConfig(); err != nil {
+			return err
+		}
+		if err := c.Storage.S3.Validate(); err != nil {
+			return err
+		}
+		if err := c.Realtime.Redis.Validate(); err != nil {
+			return err
+		}
+		if err := c.Conference.Validate(); err != nil {
+			return err
+		}
+		if err := c.Transcription.Validate(); err != nil {
+			return err
+		}
+		if err := c.DocumentAnalysis.Validate(); err != nil {
+			return err
+		}
+		return nil
+	case ProfileWorker:
+		if err := c.DB.Validate(); err != nil {
+			return err
+		}
+		if err := c.Auth.ValidateJWT(); err != nil {
+			return err
+		}
+		if err := c.Storage.S3.Validate(); err != nil {
+			return err
+		}
+		if err := c.Conference.Validate(); err != nil {
+			return err
+		}
+		if err := c.Transcription.Validate(); err != nil {
+			return err
+		}
+		if err := c.DocumentAnalysis.Validate(); err != nil {
+			return err
+		}
+		return nil
+	case ProfileContracts:
+		return c.APP.ValidateContracts()
+	case ProfileMigrate, ProfileSeed:
+		return c.DB.Validate()
+	default:
+		return fmt.Errorf("unknown runtime profile %q", profile)
+	}
+}
+
 func (d DB) PasswordValue() (string, error) {
 	return readRequiredSecret("postgres password", d.Password, d.PasswordFile)
+}
+
+func (a App) MetricsRoutePath() string {
+	path := strings.TrimSpace(a.MetricsPath)
+	if path == "" {
+		return "/metrics"
+	}
+	if !strings.HasPrefix(path, "/") {
+		return "/" + path
+	}
+	return path
+}
+
+func (a App) NormalizedEnvironment() string {
+	value := strings.ToLower(strings.TrimSpace(a.Environment))
+	if value == "" {
+		return "dev"
+	}
+	return value
+}
+
+func (a App) Validate() error {
+	if strings.TrimSpace(a.Title) == "" {
+		return errors.New("application title is empty")
+	}
+	if strings.TrimSpace(a.Version) == "" {
+		return errors.New("application version is empty")
+	}
+	return a.ValidateServerRuntime()
+}
+
+func (a App) ValidateContracts() error {
+	if strings.TrimSpace(a.Title) == "" {
+		return errors.New("application title is empty")
+	}
+	if strings.TrimSpace(a.Version) == "" {
+		return errors.New("application version is empty")
+	}
+	return nil
+}
+
+func (a App) ValidateServerRuntime() error {
+	if strings.TrimSpace(a.ListenAddress()) == "" {
+		return errors.New("application listen address is empty")
+	}
+	if a.TimeoutRead <= 0 {
+		return errors.New("application read timeout must be positive")
+	}
+	if a.TimeoutWrite <= 0 {
+		return errors.New("application write timeout must be positive")
+	}
+	if a.TimeoutIdle <= 0 {
+		return errors.New("application idle timeout must be positive")
+	}
+	if _, err := validatePublicBaseURL(a.PublicBaseURL); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a Auth) JWTSecretValue() (string, error) {
@@ -185,6 +321,87 @@ func (a Auth) JWTSecretValue() (string, error) {
 
 func (a Auth) BrowserRedirectOriginList() []string {
 	return splitList(a.BrowserRedirects)
+}
+
+func (a Auth) Validate(app App) error {
+	if err := a.ValidateJWT(); err != nil {
+		return err
+	}
+	if err := a.ValidateBrowser(app); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a Auth) ValidateJWT() error {
+	if _, err := a.JWTSecretValue(); err != nil {
+		return err
+	}
+	switch {
+	case a.AccessTTL <= 0:
+		return errors.New("auth access ttl must be positive")
+	case a.RefreshSessionTTL <= 0:
+		return errors.New("auth refresh ttl must be positive")
+	case a.GuestAccessTTL <= 0:
+		return errors.New("auth guest access ttl must be positive")
+	default:
+		return nil
+	}
+}
+
+func (a Auth) ValidateBrowser(app App) error {
+	switch {
+	case a.BrowserTicketTTL <= 0:
+		return errors.New("auth browser ticket ttl must be positive")
+	}
+	if err := validateBrowserReturnURL(a.BrowserDefaultReturn); err != nil {
+		return err
+	}
+	if err := validateBrowserRedirectOrigins(a.BrowserRedirectOriginList()); err != nil {
+		return err
+	}
+	if _, err := validatePublicBaseURL(app.PublicBaseURL); err != nil {
+		return err
+	}
+	if err := a.Zitadel.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c Config) validatePlatformAuthConfig() error {
+	if _, err := c.Auth.PlatformBootstrapAccountUUIDs(); err != nil {
+		return fmt.Errorf("auth platform bootstrap ids: %w", err)
+	}
+	if _, err := c.Auth.PlatformAutoGrantRules(); err != nil {
+		return fmt.Errorf("auth platform auto grant rules: %w", err)
+	}
+	return nil
+}
+
+func (c *Config) applyProfileDefaults(profile RuntimeProfile) {
+	if normalizeProfile(profile) != ProfileContracts {
+		return
+	}
+
+	c.Auth.JWTSecret = "contracts-placeholder-secret"
+	c.Auth.JWTSecretFile = ""
+	c.Auth.PlatformBootstrapIDs = ""
+	c.Auth.PlatformAutoGrantFile = ""
+	c.Auth.Zitadel = Zitadel{}
+	c.Storage.S3 = S3{}
+	c.Realtime.Redis = Redis{}
+	c.Conference = Conference{}
+	c.Transcription = Transcription{}
+	c.DocumentAnalysis = DocumentAnalysis{}
+}
+
+func normalizeProfile(profile RuntimeProfile) RuntimeProfile {
+	value := strings.ToLower(strings.TrimSpace(string(profile)))
+	if value == "" {
+		return ProfileAPI
+	}
+	return RuntimeProfile(value)
 }
 
 func (a Auth) PlatformBootstrapAccountUUIDs() ([]uuid.UUID, error) {
@@ -424,6 +641,97 @@ func (a App) ListenAddress() string {
 		return fmt.Sprintf("%s:%s", host, port)
 	}
 	return fmt.Sprintf("%s:%s", host, port)
+}
+
+func (d DB) Validate() error {
+	if strings.TrimSpace(d.Host) == "" {
+		return errors.New("postgres host is empty")
+	}
+	if d.Port <= 0 {
+		return errors.New("postgres port must be positive")
+	}
+	if strings.TrimSpace(d.DBName) == "" {
+		return errors.New("postgres database name is empty")
+	}
+	if strings.TrimSpace(d.DBSchema) == "" {
+		return errors.New("postgres schema is empty")
+	}
+	if strings.TrimSpace(d.Username) == "" {
+		return errors.New("postgres username is empty")
+	}
+	if _, err := d.PasswordValue(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validatePublicBaseURL(raw string) (*url.URL, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("application public base url is invalid: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, errors.New("application public base url must be absolute")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, errors.New("application public base url scheme is invalid")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, errors.New("application public base url must not contain query or fragment")
+	}
+	path := strings.TrimSpace(parsed.EscapedPath())
+	if path != "" && path != "/" {
+		return nil, errors.New("application public base url must not contain a path")
+	}
+	return parsed, nil
+}
+
+func validateBrowserReturnURL(raw string) error {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil
+	}
+	if strings.HasPrefix(value, "/") {
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("auth browser default return url is invalid: %w", err)
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return errors.New("auth browser default return url must be absolute or start with '/'")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("auth browser default return url scheme is invalid")
+	}
+	return nil
+}
+
+func validateBrowserRedirectOrigins(origins []string) error {
+	for _, origin := range origins {
+		parsed, err := url.Parse(origin)
+		if err != nil {
+			return fmt.Errorf("auth browser redirect origin %q is invalid: %w", origin, err)
+		}
+		if parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("auth browser redirect origin %q must be absolute", origin)
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return fmt.Errorf("auth browser redirect origin %q scheme is invalid", origin)
+		}
+		if parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("auth browser redirect origin %q must not contain query or fragment", origin)
+		}
+		path := strings.TrimSpace(parsed.EscapedPath())
+		if path != "" && path != "/" {
+			return fmt.Errorf("auth browser redirect origin %q must not contain a path", origin)
+		}
+	}
+	return nil
 }
 
 func readRequiredSecret(label, value, file string) (string, error) {

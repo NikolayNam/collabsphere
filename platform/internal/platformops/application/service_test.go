@@ -2,12 +2,14 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	stderrors "errors"
 	"testing"
 	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	authports "github.com/NikolayNam/collabsphere/internal/auth/application/ports"
+	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	"github.com/NikolayNam/collabsphere/internal/platformops/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
 	"github.com/google/uuid"
@@ -116,6 +118,42 @@ func (fakeUploadReader) ListUploadQueue(ctx context.Context, query domain.Upload
 	return nil, 0, nil
 }
 
+type fakeReviewRepo struct {
+	queue                  []domain.OrganizationReviewQueueItem
+	total                  int
+	detail                 *domain.OrganizationReviewDetail
+	updated                *domain.OrganizationReviewCooperationApplication
+	updatedLegalDocument   *domain.OrganizationReviewLegalDocument
+	lastQueueQuery         domain.OrganizationReviewQueueQuery
+	lastPatch              domain.CooperationApplicationReviewPatch
+	lastLegalDocumentPatch domain.LegalDocumentReviewPatch
+	lastOrganization       uuid.UUID
+	lastDocumentID         uuid.UUID
+}
+
+func (f *fakeReviewRepo) ListOrganizationReviewQueue(ctx context.Context, query domain.OrganizationReviewQueueQuery) ([]domain.OrganizationReviewQueueItem, int, error) {
+	f.lastQueueQuery = query
+	return append([]domain.OrganizationReviewQueueItem{}, f.queue...), f.total, nil
+}
+
+func (f *fakeReviewRepo) GetOrganizationReview(ctx context.Context, organizationID uuid.UUID) (*domain.OrganizationReviewDetail, error) {
+	f.lastOrganization = organizationID
+	return f.detail, nil
+}
+
+func (f *fakeReviewRepo) UpdateCooperationApplicationReview(ctx context.Context, organizationID uuid.UUID, patch domain.CooperationApplicationReviewPatch) (*domain.OrganizationReviewCooperationApplication, error) {
+	f.lastOrganization = organizationID
+	f.lastPatch = patch
+	return f.updated, nil
+}
+
+func (f *fakeReviewRepo) UpdateLegalDocumentReview(ctx context.Context, organizationID, documentID uuid.UUID, patch domain.LegalDocumentReviewPatch) (*domain.OrganizationReviewLegalDocument, error) {
+	f.lastOrganization = organizationID
+	f.lastDocumentID = documentID
+	f.lastLegalDocumentPatch = patch
+	return f.updatedLegalDocument, nil
+}
+
 type fakeZitadelAdminClient struct {
 	result *authports.ZitadelUserEmailVerificationResult
 	err    error
@@ -134,8 +172,8 @@ func (c *nilAwareZitadelAdminClient) ForceVerifyUserEmail(ctx context.Context, u
 	return nil, nil
 }
 
-func newTestService(roleRepo *fakeRoleRepo, autoGrantRepo *fakeAutoGrantRepo, auditRepo *fakeAuditRepo, accountReader *fakeAccountReader, zitadel authports.ZitadelAdminClient, bootstrap []uuid.UUID) *Service {
-	return New(roleRepo, autoGrantRepo, auditRepo, accountReader, fakeDashboardReader{}, fakeUploadReader{}, fakeClock{now: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)}, fakeTxManager{}, zitadel, bootstrap)
+func newTestService(roleRepo *fakeRoleRepo, autoGrantRepo *fakeAutoGrantRepo, auditRepo *fakeAuditRepo, accountReader *fakeAccountReader, reviewRepo *fakeReviewRepo, zitadel authports.ZitadelAdminClient, bootstrap []uuid.UUID) *Service {
+	return New(roleRepo, autoGrantRepo, auditRepo, accountReader, fakeDashboardReader{}, fakeUploadReader{}, reviewRepo, fakeClock{now: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)}, fakeTxManager{}, zitadel, bootstrap)
 }
 
 func mustAccount(t *testing.T, id uuid.UUID, email string) *accdomain.Account {
@@ -168,7 +206,7 @@ func TestResolveAccessIncludesBootstrapAdmin(t *testing.T) {
 	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{accountID: mustAccount(t, accountID, "bootstrap@example.com")}}
 
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, []uuid.UUID{accountID})
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil, []uuid.UUID{accountID})
 
 	access, err := svc.ResolveAccess(context.Background(), accountID)
 	if err != nil {
@@ -197,7 +235,7 @@ func TestReplaceAccountRolesRejectsRemovingLastAdmin(t *testing.T) {
 		actorID:  mustAccount(t, actorID, "actor@example.com"),
 		targetID: mustAccount(t, targetID, "target@example.com"),
 	}}
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil, nil)
 
 	_, err := svc.ReplaceAccountRoles(context.Background(), ReplaceAccountRolesCmd{
 		ActorAccountID:  actorID,
@@ -223,7 +261,7 @@ func TestReplaceAccountRolesWritesAuditAndStoredRoles(t *testing.T) {
 		actorID:  mustAccount(t, actorID, "actor@example.com"),
 		targetID: mustAccount(t, targetID, "target@example.com"),
 	}}
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil, nil)
 
 	access, err := svc.ReplaceAccountRoles(context.Background(), ReplaceAccountRolesCmd{
 		ActorAccountID:  actorID,
@@ -258,7 +296,7 @@ func TestAddAutoGrantRuleRejectsBootstrapDuplicate(t *testing.T) {
 		Source:     domain.AutoGrantSourceBootstrap,
 	}}}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil, nil)
 
 	_, err := svc.AddAutoGrantRule(context.Background(), AddAutoGrantRuleCmd{
 		ActorAccountID: actorID,
@@ -281,7 +319,7 @@ func TestAddAutoGrantRuleCreatesDatabaseRule(t *testing.T) {
 	auditRepo := &fakeAuditRepo{}
 	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, nil, nil)
 
 	rule, err := svc.AddAutoGrantRule(context.Background(), AddAutoGrantRuleCmd{
 		ActorAccountID: actorID,
@@ -308,7 +346,7 @@ func TestForceVerifyUserEmailWithTypedNilClientReturnsDisabled(t *testing.T) {
 	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
 	var client *nilAwareZitadelAdminClient
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, client, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, client, nil)
 
 	_, err := svc.ForceVerifyUserEmail(context.Background(), ForceVerifyUserEmailCmd{
 		ActorAccountID: actorID,
@@ -333,7 +371,7 @@ func TestForceVerifyUserEmailWritesAudit(t *testing.T) {
 	auditRepo := &fakeAuditRepo{}
 	autoGrantRepo := &fakeAutoGrantRepo{}
 	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "actor@example.com")}}
-	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, fakeZitadelAdminClient{result: &authports.ZitadelUserEmailVerificationResult{UserID: "123", Email: "user@example.com", AlreadyVerified: false}}, nil)
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, nil, fakeZitadelAdminClient{result: &authports.ZitadelUserEmailVerificationResult{UserID: "123", Email: "user@example.com", AlreadyVerified: false}}, nil)
 
 	res, err := svc.ForceVerifyUserEmail(context.Background(), ForceVerifyUserEmailCmd{
 		ActorAccountID: actorID,
@@ -354,3 +392,390 @@ func TestForceVerifyUserEmailWritesAudit(t *testing.T) {
 	}
 }
 
+func TestTransitionCooperationApplicationReviewSubmittedToUnderReview(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleReviewOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "reviewer@example.com")}}
+	reviewRepo := &fakeReviewRepo{
+		detail: &domain.OrganizationReviewDetail{
+			CooperationApplication: &domain.OrganizationReviewCooperationApplication{
+				ID:             uuid.New(),
+				OrganizationID: organizationID,
+				Status:         string(orgdomain.CooperationApplicationStatusSubmitted),
+			},
+		},
+		updated: &domain.OrganizationReviewCooperationApplication{
+			ID:                uuid.New(),
+			OrganizationID:    organizationID,
+			Status:            string(orgdomain.CooperationApplicationStatusUnderReview),
+			ReviewerAccountID: &actorID,
+		},
+	}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	result, err := svc.TransitionCooperationApplicationReview(context.Background(), TransitionCooperationApplicationReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RoleReviewOperator},
+		OrganizationID: organizationID,
+		TargetStatus:   "under_review",
+	})
+	if err != nil {
+		t.Fatalf("TransitionCooperationApplicationReview() error = %v", err)
+	}
+	if result == nil || result.Status != string(orgdomain.CooperationApplicationStatusUnderReview) {
+		t.Fatalf("TransitionCooperationApplicationReview() result = %+v", result)
+	}
+	if reviewRepo.lastPatch.Status != string(orgdomain.CooperationApplicationStatusUnderReview) {
+		t.Fatalf("last patch status = %q", reviewRepo.lastPatch.Status)
+	}
+	if reviewRepo.lastPatch.ReviewerAccountID == nil || *reviewRepo.lastPatch.ReviewerAccountID != actorID {
+		t.Fatalf("last patch reviewer = %v, want %s", reviewRepo.lastPatch.ReviewerAccountID, actorID)
+	}
+	if reviewRepo.lastPatch.ReviewedAt != nil {
+		t.Fatalf("ReviewedAt = %v, want nil for under_review", reviewRepo.lastPatch.ReviewedAt)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Action != "platform.organization.review.transition" || auditRepo.events[0].Status != domain.AuditStatusSuccess {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestTransitionCooperationApplicationReviewRequiresNoteForRejected(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleReviewOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "reviewer@example.com")}}
+	reviewRepo := &fakeReviewRepo{}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	_, err := svc.TransitionCooperationApplicationReview(context.Background(), TransitionCooperationApplicationReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RoleReviewOperator},
+		OrganizationID: organizationID,
+		TargetStatus:   "rejected",
+	})
+	if err == nil {
+		t.Fatal("TransitionCooperationApplicationReview() error = nil, want validation")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil || appErr.Kind != fault.KindValidation {
+		t.Fatalf("TransitionCooperationApplicationReview() error = %v, want validation fault", err)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Status != domain.AuditStatusFailed {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestTransitionCooperationApplicationReviewRejectsSupportOperator(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleSupportOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "support@example.com")}}
+	reviewRepo := &fakeReviewRepo{}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	_, err := svc.TransitionCooperationApplicationReview(context.Background(), TransitionCooperationApplicationReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RoleSupportOperator},
+		OrganizationID: organizationID,
+		TargetStatus:   "under_review",
+	})
+	if err == nil {
+		t.Fatal("TransitionCooperationApplicationReview() error = nil, want forbidden")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil || appErr.Kind != fault.KindForbidden {
+		t.Fatalf("TransitionCooperationApplicationReview() error = %v, want forbidden fault", err)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Status != domain.AuditStatusDenied {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestTransitionCooperationApplicationReviewRejectsInvalidTransition(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RolePlatformAdmin}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "admin@example.com")}}
+	reviewRepo := &fakeReviewRepo{
+		detail: &domain.OrganizationReviewDetail{
+			CooperationApplication: &domain.OrganizationReviewCooperationApplication{
+				ID:             uuid.New(),
+				OrganizationID: organizationID,
+				Status:         string(orgdomain.CooperationApplicationStatusDraft),
+			},
+		},
+	}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	_, err := svc.TransitionCooperationApplicationReview(context.Background(), TransitionCooperationApplicationReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RolePlatformAdmin},
+		OrganizationID: organizationID,
+		TargetStatus:   "approved",
+	})
+	if err == nil {
+		t.Fatal("TransitionCooperationApplicationReview() error = nil, want conflict")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil || appErr.Kind != fault.KindConflict || appErr.Code != "PLATFORM_REVIEW_TRANSITION_INVALID" {
+		t.Fatalf("TransitionCooperationApplicationReview() error = %v, want conflict/PLATFORM_REVIEW_TRANSITION_INVALID", err)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Status != domain.AuditStatusFailed {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestGetOrganizationReviewEnrichesLegalDocumentVerification(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	documentID := uuid.New()
+	now := time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleReviewOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "reviewer@example.com")}}
+	reviewRepo := &fakeReviewRepo{
+		detail: &domain.OrganizationReviewDetail{
+			Organization: domain.OrganizationReviewOrganization{
+				ID: organizationID,
+			},
+			CooperationApplication: &domain.OrganizationReviewCooperationApplication{
+				ID:                    uuid.New(),
+				OrganizationID:        organizationID,
+				Status:                "submitted",
+				ConfirmationEmail:     strPtr("confirm@example.com"),
+				CompanyName:           strPtr("Acme"),
+				RepresentedCategories: strPtr("Food"),
+				MinimumOrderAmount:    strPtr("1000"),
+				DeliveryGeography:     strPtr("Moscow"),
+				SalesChannels:         []string{"Retail"},
+				PriceListObjectID:     uuidPtr(uuid.New()),
+				ContactFirstName:      strPtr("Ivan"),
+				ContactLastName:       strPtr("Petrov"),
+				ContactJobTitle:       strPtr("Manager"),
+				ContactEmail:          strPtr("sales@example.com"),
+				ContactPhone:          strPtr("+79990000000"),
+			},
+			LegalDocuments: []domain.OrganizationReviewLegalDocument{{
+				ID:             documentID,
+				OrganizationID: organizationID,
+				DocumentType:   "charter",
+				Status:         "pending",
+				Analysis: &domain.OrganizationReviewLegalDocumentAnalysis{
+					ID:                   uuid.New(),
+					DocumentID:           documentID,
+					OrganizationID:       organizationID,
+					Status:               "completed",
+					ExtractedFieldsJSON:  json.RawMessage(`{"companyName":"Acme"}`),
+					DetectedDocumentType: strPtr("charter"),
+					ConfidenceScore:      floatPtr(0.99),
+					RequestedAt:          now,
+					UpdatedAt:            timePtr(now),
+				},
+			}},
+		},
+	}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	detail, err := svc.GetOrganizationReview(context.Background(), organizationID)
+	if err != nil {
+		t.Fatalf("GetOrganizationReview() error = %v", err)
+	}
+	if detail == nil || len(detail.LegalDocuments) != 1 {
+		t.Fatalf("GetOrganizationReview() detail = %+v", detail)
+	}
+	verification := detail.LegalDocuments[0].Verification
+	if verification == nil {
+		t.Fatal("verification = nil, want shared verifier output")
+	}
+	if verification.Verdict != "approved" {
+		t.Fatalf("verification verdict = %q, want approved", verification.Verdict)
+	}
+	if len(verification.MissingFields) != 0 {
+		t.Fatalf("verification missing fields = %v, want empty", verification.MissingFields)
+	}
+	if detail.KYC == nil {
+		t.Fatal("KYC = nil, want aggregated snapshot")
+	}
+	if detail.KYC.Status != "pending_verification" {
+		t.Fatalf("KYC status = %q, want pending_verification", detail.KYC.Status)
+	}
+}
+
+func TestTransitionLegalDocumentReviewPendingToApproved(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	documentID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleReviewOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "reviewer@example.com")}}
+	reviewRepo := &fakeReviewRepo{
+		detail: &domain.OrganizationReviewDetail{
+			LegalDocuments: []domain.OrganizationReviewLegalDocument{{
+				ID:             documentID,
+				OrganizationID: organizationID,
+				Status:         string(orgdomain.OrganizationLegalDocumentStatusPending),
+			}},
+		},
+		updatedLegalDocument: &domain.OrganizationReviewLegalDocument{
+			ID:                documentID,
+			OrganizationID:    organizationID,
+			Status:            string(orgdomain.OrganizationLegalDocumentStatusApproved),
+			ReviewerAccountID: &actorID,
+		},
+	}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	result, err := svc.TransitionLegalDocumentReview(context.Background(), TransitionLegalDocumentReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RoleReviewOperator},
+		OrganizationID: organizationID,
+		DocumentID:     documentID,
+		TargetStatus:   "approved",
+	})
+	if err != nil {
+		t.Fatalf("TransitionLegalDocumentReview() error = %v", err)
+	}
+	if result == nil || result.Status != string(orgdomain.OrganizationLegalDocumentStatusApproved) {
+		t.Fatalf("TransitionLegalDocumentReview() result = %+v", result)
+	}
+	if reviewRepo.lastDocumentID != documentID {
+		t.Fatalf("last document id = %s, want %s", reviewRepo.lastDocumentID, documentID)
+	}
+	if reviewRepo.lastLegalDocumentPatch.Status != string(orgdomain.OrganizationLegalDocumentStatusApproved) {
+		t.Fatalf("last legal patch status = %q", reviewRepo.lastLegalDocumentPatch.Status)
+	}
+	if reviewRepo.lastLegalDocumentPatch.ReviewerAccountID == nil || *reviewRepo.lastLegalDocumentPatch.ReviewerAccountID != actorID {
+		t.Fatalf("last legal patch reviewer = %v, want %s", reviewRepo.lastLegalDocumentPatch.ReviewerAccountID, actorID)
+	}
+	if reviewRepo.lastLegalDocumentPatch.ReviewedAt == nil || reviewRepo.lastLegalDocumentPatch.ReviewedAt.IsZero() {
+		t.Fatalf("ReviewedAt = %v, want timestamp", reviewRepo.lastLegalDocumentPatch.ReviewedAt)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Action != "platform.organization.legal_document.review.transition" || auditRepo.events[0].Status != domain.AuditStatusSuccess {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestTransitionLegalDocumentReviewRequiresNoteForRejected(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	documentID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleReviewOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "reviewer@example.com")}}
+	reviewRepo := &fakeReviewRepo{}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	_, err := svc.TransitionLegalDocumentReview(context.Background(), TransitionLegalDocumentReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RoleReviewOperator},
+		OrganizationID: organizationID,
+		DocumentID:     documentID,
+		TargetStatus:   "rejected",
+	})
+	if err == nil {
+		t.Fatal("TransitionLegalDocumentReview() error = nil, want validation")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil || appErr.Kind != fault.KindValidation {
+		t.Fatalf("TransitionLegalDocumentReview() error = %v, want validation fault", err)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Status != domain.AuditStatusFailed {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestTransitionLegalDocumentReviewRejectsSupportOperator(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	documentID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RoleSupportOperator}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "support@example.com")}}
+	reviewRepo := &fakeReviewRepo{}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	_, err := svc.TransitionLegalDocumentReview(context.Background(), TransitionLegalDocumentReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RoleSupportOperator},
+		OrganizationID: organizationID,
+		DocumentID:     documentID,
+		TargetStatus:   "approved",
+	})
+	if err == nil {
+		t.Fatal("TransitionLegalDocumentReview() error = nil, want forbidden")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil || appErr.Kind != fault.KindForbidden {
+		t.Fatalf("TransitionLegalDocumentReview() error = %v, want forbidden fault", err)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Status != domain.AuditStatusDenied {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func TestTransitionLegalDocumentReviewRejectsNoOpTransition(t *testing.T) {
+	actorID := uuid.New()
+	organizationID := uuid.New()
+	documentID := uuid.New()
+	roleRepo := &fakeRoleRepo{rolesByAccount: map[uuid.UUID][]domain.Role{actorID: {domain.RolePlatformAdmin}}}
+	auditRepo := &fakeAuditRepo{}
+	autoGrantRepo := &fakeAutoGrantRepo{}
+	accounts := &fakeAccountReader{accounts: map[uuid.UUID]*accdomain.Account{actorID: mustAccount(t, actorID, "admin@example.com")}}
+	reviewRepo := &fakeReviewRepo{
+		detail: &domain.OrganizationReviewDetail{
+			LegalDocuments: []domain.OrganizationReviewLegalDocument{{
+				ID:             documentID,
+				OrganizationID: organizationID,
+				Status:         string(orgdomain.OrganizationLegalDocumentStatusApproved),
+			}},
+		},
+	}
+	svc := newTestService(roleRepo, autoGrantRepo, auditRepo, accounts, reviewRepo, nil, nil)
+
+	_, err := svc.TransitionLegalDocumentReview(context.Background(), TransitionLegalDocumentReviewCmd{
+		ActorAccountID: actorID,
+		ActorRoles:     []domain.Role{domain.RolePlatformAdmin},
+		OrganizationID: organizationID,
+		DocumentID:     documentID,
+		TargetStatus:   "approved",
+	})
+	if err == nil {
+		t.Fatal("TransitionLegalDocumentReview() error = nil, want conflict")
+	}
+	appErr, ok := fault.As(err)
+	if !ok || appErr == nil || appErr.Kind != fault.KindConflict || appErr.Code != "PLATFORM_REVIEW_TRANSITION_INVALID" {
+		t.Fatalf("TransitionLegalDocumentReview() error = %v, want conflict/PLATFORM_REVIEW_TRANSITION_INVALID", err)
+	}
+	if len(auditRepo.events) != 1 || auditRepo.events[0].Status != domain.AuditStatusFailed {
+		t.Fatalf("audit events = %+v", auditRepo.events)
+	}
+}
+
+func floatPtr(value float64) *float64 {
+	return &value
+}
+
+func strPtr(value string) *string {
+	return &value
+}
+
+func timePtr(value time.Time) *time.Time {
+	return &value
+}
+
+func uuidPtr(value uuid.UUID) *uuid.UUID {
+	return &value
+}

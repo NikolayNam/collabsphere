@@ -7,8 +7,8 @@ var loginOp = huma.Operation{
 	Method:      "POST",
 	Path:        "/auth/login",
 	Tags:        []string{"Auth"},
-	Summary:     "Create a session",
-	Description: "Authenticates an account using email and password credentials and returns access and refresh tokens.",
+	Summary:     "Create a legacy password session",
+	Description: "Authenticates an account using legacy email/password credentials and returns local access and refresh tokens. This route can be disabled by configuration when ZITADEL browser login is the primary path.",
 }
 
 var zitadelLoginOp = huma.Operation{
@@ -54,7 +54,7 @@ var exchangeOp = huma.Operation{
 	Path:        "/auth/exchange",
 	Tags:        []string{"Auth"},
 	Summary:     "Exchange a browser auth ticket",
-	Description: "Consumes a short-lived one-time browser authentication ticket and returns local access and refresh tokens.",
+	Description: "Consumes a short-lived one-time browser authentication ticket created by the ZITADEL browser callback and returns local access and refresh tokens.",
 }
 
 var refreshOp = huma.Operation{
@@ -63,7 +63,7 @@ var refreshOp = huma.Operation{
 	Path:        "/auth/refresh",
 	Tags:        []string{"Auth"},
 	Summary:     "Refresh the current session",
-	Description: "Exchanges a valid refresh token for a fresh access token and refresh token pair.",
+	Description: "Exchanges a valid opaque refresh token for a fresh access token and refresh token pair. Refresh token rotation is one-time and detects reuse of older rotated tokens.",
 }
 
 var logoutOp = huma.Operation{
@@ -72,7 +72,7 @@ var logoutOp = huma.Operation{
 	Path:        "/auth/logout",
 	Tags:        []string{"Auth"},
 	Summary:     "Revoke the current session",
-	Description: "Revokes the current refresh session so the client can no longer use the associated refresh token.",
+	Description: "Revokes the current refresh session so the client can no longer use the current or previously rotated refresh tokens from that session.",
 }
 
 var meOp = huma.Operation{

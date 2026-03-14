@@ -84,6 +84,79 @@ func ToOrganizationLegalDocumentAnalysisResponse(analysis *domain.OrganizationLe
 	}
 }
 
+func ToOrganizationLegalDocumentVerificationResponse(verification *domain.OrganizationLegalDocumentVerification, status int) *dto.OrganizationLegalDocumentVerificationResponse {
+	if verification == nil {
+		return nil
+	}
+	response := &dto.OrganizationLegalDocumentVerificationResponse{
+		Status: status,
+		Body: dto.OrganizationLegalDocumentVerificationBody{
+			DocumentID:           verification.DocumentID,
+			OrganizationID:       verification.OrganizationID,
+			DocumentType:         verification.DocumentType,
+			DocumentStatus:       verification.DocumentStatus,
+			AnalysisStatus:       verification.AnalysisStatus,
+			Verdict:              string(verification.Verdict),
+			Summary:              verification.Summary,
+			DetectedDocumentType: verification.DetectedDocumentType,
+			ConfidenceScore:      verification.ConfidenceScore,
+			RequiredFields:       append([]string{}, verification.RequiredFields...),
+			MissingFields:        append([]string{}, verification.MissingFields...),
+			CheckedAt:            verification.CheckedAt,
+		},
+	}
+	response.Body.Issues = make([]dto.OrganizationLegalDocumentVerificationIssueBody, 0, len(verification.Issues))
+	for _, issue := range verification.Issues {
+		response.Body.Issues = append(response.Body.Issues, dto.OrganizationLegalDocumentVerificationIssueBody{
+			Code:     issue.Code,
+			Severity: string(issue.Severity),
+			Message:  issue.Message,
+			Field:    issue.Field,
+		})
+	}
+	return response
+}
+
+func ToOrganizationKYCRequirementsResponse(requirements *domain.OrganizationKYCRequirements, status int) *dto.OrganizationKYCRequirementsResponse {
+	if requirements == nil {
+		return nil
+	}
+	response := &dto.OrganizationKYCRequirementsResponse{
+		Status: status,
+		Body: dto.OrganizationKYCRequirementsBody{
+			OrganizationID: requirements.OrganizationID,
+			Status:         string(requirements.Status),
+			DisabledReason: requirements.DisabledReason,
+			CheckedAt:      requirements.CheckedAt,
+		},
+	}
+	response.Body.CurrentlyDue = toOrganizationKYCRequirementItemBodies(requirements.CurrentlyDue)
+	response.Body.PendingVerification = toOrganizationKYCRequirementItemBodies(requirements.PendingVerification)
+	response.Body.EventuallyDue = toOrganizationKYCRequirementItemBodies(requirements.EventuallyDue)
+	response.Body.Errors = toOrganizationKYCRequirementItemBodies(requirements.Errors)
+	return response
+}
+
+func toOrganizationKYCRequirementItemBodies(items []domain.OrganizationKYCRequirementItem) []dto.OrganizationKYCRequirementItemBody {
+	if len(items) == 0 {
+		return []dto.OrganizationKYCRequirementItemBody{}
+	}
+	out := make([]dto.OrganizationKYCRequirementItemBody, 0, len(items))
+	for _, item := range items {
+		out = append(out, dto.OrganizationKYCRequirementItemBody{
+			Code:         item.Code,
+			Category:     string(item.Category),
+			Title:        item.Title,
+			Description:  item.Description,
+			Field:        item.Field,
+			DocumentID:   item.DocumentID,
+			DocumentType: item.DocumentType,
+			Reason:       item.Reason,
+		})
+	}
+	return out
+}
+
 func toOrganizationLegalDocumentBody(document *domain.OrganizationLegalDocument) dto.OrganizationLegalDocumentBody {
 	return dto.OrganizationLegalDocumentBody{
 		ID:                  document.ID(),

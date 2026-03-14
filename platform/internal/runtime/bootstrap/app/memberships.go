@@ -2,7 +2,9 @@ package app
 
 import (
 	"fmt"
+	"time"
 
+	accpg "github.com/NikolayNam/collabsphere/internal/accounts/repository/postgres"
 	membershipsApp "github.com/NikolayNam/collabsphere/internal/memberships/application"
 	membershipsHTTP "github.com/NikolayNam/collabsphere/internal/memberships/delivery/http"
 	membershipsPG "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
@@ -10,6 +12,8 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/clock"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/config"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/jwt"
+	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/security/tokens"
+	dbtx "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/db/tx"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"
 )
@@ -17,9 +21,13 @@ import (
 func registerMembershipsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	membershipRepo := membershipsPG.NewMembershipRepo(db)
 	organizationRepo := orgPG.NewOrganizationRepo(db)
+	accountRepo := accpg.NewAccountRepo(db)
+	auditRepo := membershipsPG.NewAccessAuditRepo(db)
+	txManager := dbtx.New(db)
 	clk := clock.NewSystemClock()
+	tokenGenerator := tokens.NewGenerator()
 
-	membershipService := membershipsApp.New(membershipRepo, organizationRepo, clk)
+	membershipService := membershipsApp.New(membershipRepo, organizationRepo, accountRepo, txManager, tokenGenerator, auditRepo, clk, 7*24*time.Hour)
 	membershipHandler := membershipsHTTP.NewHandler(membershipService)
 
 	secret, err := conf.Auth.JWTSecretValue()

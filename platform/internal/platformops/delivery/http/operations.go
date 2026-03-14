@@ -84,6 +84,46 @@ var listUploadsOp = huma.Operation{
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
+var listOrganizationReviewsOp = huma.Operation{
+	OperationID: "platform-list-organization-reviews",
+	Method:      "GET",
+	Path:        "/platform/reviews/organizations/cooperation-applications",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "List organization cooperation review queue",
+	Description: "Returns the global cooperation application review queue for platform reviewers, admins, and support operators.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var getOrganizationReviewOp = huma.Operation{
+	OperationID: "platform-get-organization-review",
+	Method:      "GET",
+	Path:        "/platform/reviews/organizations/{organizationId}",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Get organization review card",
+	Description: "Returns the control-plane review card for one organization, including cooperation application data, active domains, and legal document summaries.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var transitionCooperationApplicationReviewOp = huma.Operation{
+	OperationID: "platform-transition-cooperation-application-review",
+	Method:      "POST",
+	Path:        "/platform/reviews/organizations/{organizationId}/cooperation-application/transition",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Transition cooperation application review status",
+	Description: "Moves a cooperation application between allowed control-plane review states and records the acting reviewer in platform audit logs.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var transitionLegalDocumentReviewOp = huma.Operation{
+	OperationID: "platform-transition-legal-document-review",
+	Method:      "POST",
+	Path:        "/platform/reviews/organizations/{organizationId}/legal-documents/{documentId}/transition",
+	Tags:        []string{"Platform / Reviews"},
+	Summary:     "Transition legal document review status",
+	Description: "Approves or rejects a legal document from the control-plane review card and records the acting reviewer in platform audit logs.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
 var forceVerifyUserEmailOp = huma.Operation{
 	OperationID: "platform-force-verify-zitadel-user-email",
 	Method:      "POST",

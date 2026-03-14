@@ -4,10 +4,16 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 )
+
+type AccessLogOptions struct {
+	QuietPaths []string
+}
 
 type statusWriter struct {
 	http.ResponseWriter
@@ -29,12 +35,20 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	return n, err
 }
 
-func AccessLog(base *slog.Logger) func(http.Handler) http.Handler {
+func AccessLog(base *slog.Logger, options AccessLogOptions) func(http.Handler) http.Handler {
 	if base == nil {
 		panic("base logger is nil")
 	}
 
 	log := base.With("event", "request.completed")
+	quietPaths := make(map[string]struct{}, len(options.QuietPaths))
+	for _, path := range options.QuietPaths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		quietPaths[trimmed] = struct{}{}
+	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +56,10 @@ func AccessLog(base *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 
 			next.ServeHTTP(sw, r)
+
+			if _, quiet := quietPaths[r.URL.Path]; quiet {
+				return
+			}
 
 			if sw.status == 0 {
 				sw.status = http.StatusOK
@@ -57,6 +75,7 @@ func AccessLog(base *slog.Logger) func(http.Handler) http.Handler {
 			log.Log(r.Context(), level, "request completed",
 				"request_id", chimw.GetReqID(r.Context()),
 				"method", r.Method,
+				"route", routePattern(r),
 				"path", r.URL.Path,
 				"status", sw.status,
 				"bytes", sw.bytes,
@@ -74,4 +93,15 @@ func clientIP(remoteAddr string) string {
 		return remoteAddr
 	}
 	return host
+}
+
+func routePattern(r *http.Request) string {
+	routeCtx := chi.RouteContext(r.Context())
+	if routeCtx != nil {
+		pattern := strings.TrimSpace(routeCtx.RoutePattern())
+		if pattern != "" {
+			return pattern
+		}
+	}
+	return "unmatched"
 }

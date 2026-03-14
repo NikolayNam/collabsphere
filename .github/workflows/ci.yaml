@@ -1,0 +1,191 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+  workflow_dispatch:
+
+env:
+  APPLICATION_TITLE: CollabSphere
+  APPLICATION_VERSION: ci
+  APPLICATION_HOST: 127.0.0.1
+  APPLICATION_PORT: "8080"
+  APPLICATION_PUBLIC_BASE_URL: http://127.0.0.1:8080
+  APPLICATION_ENVIRONMENT: ci
+  APPLICATION_METRICS_ENABLED: "true"
+  APPLICATION_METRICS_PATH: /metrics
+  POSTGRES_HOST: 127.0.0.1
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: postgres
+  POSTGRES_SCHEMA: db
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  AUTH_JWT_SECRET: collabsphere-ci-secret
+  AUTH_ACCESS_TTL: 15m
+  AUTH_REFRESH_TTL: 720h
+  AUTH_GUEST_ACCESS_TTL: 24h
+  AUTH_BROWSER_TICKET_TTL: 1m
+  AUTH_BROWSER_DEFAULT_RETURN_URL: /auth/callback
+  AUTH_BROWSER_REDIRECT_ORIGINS: http://127.0.0.1:3000
+  AUTH_PASSWORD_LOGIN_ENABLED: "true"
+  AUTH_LOCAL_SIGNUP_ENABLED: "true"
+  COLLABSPHERE_TEST_POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.3-trixie
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.0"
+      - name: Wait for postgres
+        run: |
+          for i in $(seq 1 30); do
+            if (echo >/dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: Core unit and compile checks
+        run: go -C platform test ./internal/auth/... ./internal/accounts/... ./internal/organizations/... ./internal/memberships/... ./internal/platformops/... ./internal/runtime/... ./internal/catalog/... ./cmd/...
+      - name: Build bundled migrations
+        run: go -C platform run ./internal/runtime/infrastructure/db/cmd/build-migrations
+      - name: Check bundled migrations parity
+        run: git diff --exit-code -- platform/internal/runtime/infrastructure/db/migrations
+      - name: Check route and OpenAPI parity
+        env:
+          APPLICATION_LOG_LEVEL: ERROR
+        run: go -C platform run ./cmd/contracts check-parity
+      - name: Refresh contract snapshots
+        env:
+          APPLICATION_LOG_LEVEL: ERROR
+        run: |
+          mkdir -p docs/openapi
+          go -C platform run ./cmd/contracts openapi-json > docs/openapi/openapi.json
+          go -C platform run ./cmd/contracts openapi-yaml > docs/openapi/openapi.yaml
+          go -C platform run ./cmd/contracts routes > docs/openapi/routes.txt
+      - name: Check committed contract snapshots
+        run: git diff --exit-code -- docs/openapi
+      - name: Apply source migrations for smoke runtime
+        env:
+          MIGRATIONS_DIR: ${{ github.workspace }}/platform/internal/runtime/infrastructure/db/migrations-src
+        run: go -C platform run ./cmd/migrate
+      - name: Bootstrap and auth smokes
+        run: |
+          set -euo pipefail
+          go -C platform run ./cmd/api > /tmp/collabsphere-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/v1/ready >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/v1/ready >/dev/null
+          bash ./scripts/smoke-bootstrap.sh
+          bash ./scripts/smoke-auth-legacy.sh
+      - name: Print API log on failure
+        if: failure()
+        run: cat /tmp/collabsphere-api.log
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: core
+    services:
+      postgres:
+        image: postgres:18.3-trixie
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.0"
+      - name: Wait for postgres
+        run: |
+          for i in $(seq 1 30); do
+            if (echo >/dev/tcp/127.0.0.1/5432) >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - name: DB-backed integration suites
+        run: go -C platform test -tags=integration ./internal/auth/delivery/http ./internal/accounts/delivery/http ./internal/organizations/delivery/http ./internal/memberships/delivery/http ./internal/platformops/delivery/http -v
+
+  zitadel-e2e:
+    runs-on: ubuntu-latest
+    needs: integration
+    # Live ZITADEL browser E2E currently depends on an already provisioned local OIDC app
+    # and admin PAT files. On checkouts without those files, skip this job instead of
+    # pretending that the gate is runnable from a bare repository clone.
+    if: ${{ hashFiles('deploy/secrets/identity/zitadel_client_secret', 'deploy/secrets/identity/zitadel_admin_token') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Ensure localhost hostnames resolve for browser flow
+        run: |
+          echo "127.0.0.1 api.localhost auth.localhost" | sudo tee -a /etc/hosts
+      - name: Bring up local Docker stack
+        run: |
+          make up-dev
+          make migrate-up
+      - name: Run live ZITADEL browser smoke
+        run: make smoke-auth-zitadel-e2e
+      - name: Print API log on failure
+        if: failure()
+        run: docker logs collabsphere-api-1 --tail 200 || true
+      - name: Print ZITADEL log on failure
+        if: failure()
+        run: docker logs collabsphere-zitadel-1 --tail 200 || true
+      - name: Print ZITADEL Login log on failure
+        if: failure()
+        run: docker logs collabsphere-zitadel-login-1 --tail 200 || true
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zitadel-e2e-playwright
+          path: output/playwright
+          if-no-files-found: ignore
+      - name: Tear down local Docker stack
+        if: always()
+        run: |
+          docker compose \
+            --env-file deploy/env/.env.dev \
+            -f deploy/docker-compose.postgres.yaml \
+            -f deploy/docker-compose.platform.yaml \
+            -f deploy/docker-compose.storage.seaweedfs.yaml \
+            -f deploy/docker-compose.zitadel.yaml \
+            --profile local down -v || true

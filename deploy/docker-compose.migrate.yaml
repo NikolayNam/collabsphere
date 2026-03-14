@@ -5,12 +5,12 @@ services:
     profiles: [ "migrate" ]
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
-      - .env.dev
+      - env/.env.dev
     volumes:
       - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
     secrets:
-      - dev_password
-      - neon_password
+      - dev_postgres_password
+      - neon_postgres_password
       - platform_auto_grant_yaml
     networks:
       - internal.network
@@ -20,12 +20,12 @@ services:
     profiles: [ "seed" ]
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
-      - .env.dev
+      - env/.env.dev
     volumes:
       - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
     secrets:
-      - dev_password
-      - neon_password
+      - dev_postgres_password
+      - neon_postgres_password
       - platform_auto_grant_yaml
     networks:
       - internal.network
@@ -38,9 +38,9 @@ networks:
     external: true
 
 secrets:
-  dev_password:
+  dev_postgres_password:
     file: secrets/postgres/dev/db_password
-  neon_password:
+  neon_postgres_password:
     file: secrets/postgres/prod/db_password
   platform_auto_grant_yaml:
     file: secrets/identity/platform_auto_grant.yaml

@@ -10,12 +10,15 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *SessionRepo) GetByTokenHash(ctx context.Context, tokenHash string) (*domain.RefreshSession, error) {
-	var m dbmodel.RefreshSession
+func (r *SessionRepo) FindByTokenHash(ctx context.Context, tokenHash string) (*domain.RefreshSession, error) {
+	var model dbmodel.RefreshSession
 
 	err := r.dbFrom(ctx).WithContext(ctx).
-		Where("token_hash = ?", tokenHash).
-		Take(&m).Error
+		Table("auth.refresh_sessions AS s").
+		Select("s.*").
+		Joins("JOIN auth.refresh_session_tokens AS t ON t.session_id = s.id").
+		Where("t.token_hash = ?", tokenHash).
+		Take(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -23,5 +26,5 @@ func (r *SessionRepo) GetByTokenHash(ctx context.Context, tokenHash string) (*do
 		return nil, err
 	}
 
-	return mapper.ToDomainRefreshSession(&m)
+	return mapper.ToDomainRefreshSession(&model)
 }

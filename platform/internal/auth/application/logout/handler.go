@@ -24,7 +24,7 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) error {
 	}
 
 	hash := h.random.Hash(rt.String())
-	session, err := h.sessions.GetByTokenHash(ctx, hash)
+	session, err := h.sessions.FindByTokenHash(ctx, hash)
 	if err != nil {
 		return err
 	}

@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// 1) config (env + secrets + TZ)
-	conf := config.New()
+	conf := config.NewFor(config.ProfileAPI)
 
 	// 2) build bootstrap (router + huma + module registration)
 	application := app.New(conf)

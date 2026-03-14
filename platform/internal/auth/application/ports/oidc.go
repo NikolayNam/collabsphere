@@ -8,15 +8,22 @@ import (
 )
 
 type OIDCAuthorizationRequest struct {
-	State  string
-	Nonce  string
-	Prompt string
+	State               string
+	Nonce               string
+	Prompt              string
+	CodeChallenge       string
+	CodeChallengeMethod string
+}
+
+type OIDCCodeExchangeRequest struct {
+	Code         string
+	CodeVerifier string
 }
 
 type OIDCProvider interface {
 	Name() string
 	BuildAuthorizationURL(ctx context.Context, req OIDCAuthorizationRequest) (string, error)
-	ExchangeCode(ctx context.Context, code string) (*OIDCIdentity, error)
+	ExchangeCode(ctx context.Context, req OIDCCodeExchangeRequest) (*OIDCIdentity, error)
 }
 
 type OIDCIdentity struct {
@@ -44,15 +51,16 @@ type ExternalIdentityRecord struct {
 }
 
 type OAuthStateRecord struct {
-	ID        uuid.UUID
-	Provider  string
-	StateHash string
-	ReturnTo  string
-	Intent    string
-	ExpiresAt time.Time
-	UsedAt    *time.Time
-	CreatedAt time.Time
-	UpdatedAt *time.Time
+	ID           uuid.UUID
+	Provider     string
+	StateHash    string
+	CodeVerifier string
+	ReturnTo     string
+	Intent       string
+	ExpiresAt    time.Time
+	UsedAt       *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    *time.Time
 }
 
 type OIDCNonceRecord struct {
