@@ -2,36 +2,37 @@ name: collabsphere
 
 services:
   migrate:
-    profiles: [ "migrate" ]
+    profiles: ["migrate"]
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
-      - env/.env.dev
-      - env/.env.postgres.dev
+      - ../env/.env.dev
+      - ../env/.env.postgres.dev
     volumes:
-      - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
+      - ../../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
     secrets:
       - dev_postgres_password
       - neon_postgres_password
       - platform_auto_grant_yaml
     networks:
       - internal.network
-    command: [ "/migrate" ]
+    command: ["/migrate"]
     restart: "no"
+
   seed:
-    profiles: [ "seed" ]
+    profiles: ["seed"]
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
-      - env/.env.dev
-      - env/.env.postgres.dev
+      - ../env/.env.dev
+      - ../env/.env.postgres.dev
     volumes:
-      - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
+      - ../../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
     secrets:
       - dev_postgres_password
       - neon_postgres_password
       - platform_auto_grant_yaml
     networks:
       - internal.network
-    command: [ "/seed" ]
+    command: ["/seed"]
     restart: "no"
 
 networks:
@@ -41,8 +42,8 @@ networks:
 
 secrets:
   dev_postgres_password:
-    file: secrets/postgres/dev/db_password
+    file: ../secrets/postgres/dev/db_password
   neon_postgres_password:
-    file: secrets/postgres/prod/db_password
+    file: ../secrets/postgres/prod/db_password
   platform_auto_grant_yaml:
-    file: secrets/identity/platform_auto_grant.yaml
+    file: ../secrets/identity/platform_auto_grant.yaml

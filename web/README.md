@@ -74,17 +74,15 @@ docker compose \
   --env-file deploy/env/.env.redis.dev \
   --env-file deploy/env/.env.zitadel.dev \
   --env-file deploy/env/.env.web.dev \
-  -f deploy/docker-compose.postgres.yaml \
-  -f deploy/docker-compose.platform.yaml \
-  -f deploy/docker-compose.storage.seaweedfs.yaml \
-  -f deploy/docker-compose.zitadel.yaml \
-  -f deploy/docker-compose.web.yaml \
-  --profile local up -d --build --force-recreate
+  -f deploy/compose/core.yaml \
+  -f deploy/compose/storage.yaml \
+  -f deploy/compose/auth.yaml \
+  --profile local --profile web up -d --build --force-recreate
 ```
 
 По умолчанию containerized frontend слушает `http://localhost:3002`, а для browser auth flow использует внешний origin `http://collabsphere.localhost:3002`. Если у вас `collabsphere.localhost` не резолвится в loopback, можно временно переопределить `WEB_NEXT_PUBLIC_APP_BASE_URL=http://localhost:3002` и синхронно обновить `WEB_AUTH_BROWSER_REDIRECT_ORIGINS`.
 
-Важно: `deploy/docker-compose.web.yaml` также дополняет `api`-конфиг значением `AUTH_BROWSER_REDIRECT_ORIGINS`, чтобы combined stack принимал frontend callback origin без ручного редактирования backend env.
+Важно: `deploy/compose/core.yaml` содержит web-профиль и дополняет `api`-конфиг значением `AUTH_BROWSER_REDIRECT_ORIGINS`, чтобы combined stack принимал frontend callback origin без ручного редактирования backend env.
 
 ## Переменные окружения
 

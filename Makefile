@@ -8,6 +8,7 @@ IMAGE_TAG ?= dev
 
 PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
+COMPOSE_DIR := $(DEPLOY_DIR)/compose
 BASE_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.dev
 POSTGRES_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.postgres.dev
 STORAGE_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.storage.dev
@@ -16,12 +17,10 @@ ZITADEL_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.zitadel.dev
 WEB_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.web.dev
 WEB_LOGIN_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.web.login.dev
 
-POSTGRES_FILE := docker-compose.postgres.yaml
-PLATFORM_FILE := docker-compose.platform.yaml
-STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
-ZITADEL_FILE := docker-compose.zitadel.yaml
-MIGRATE_FILE := docker-compose.migrate.yaml
-WEB_FILE := docker-compose.web.yaml
+CORE_FILE := core.yaml
+STORAGE_FILE := storage.yaml
+AUTH_FILE := auth.yaml
+JOBS_FILE := jobs.yaml
 
 # посмотри в .env какой EXTERNAL_NETWORK_NAME
 NETWORK_NAME := external.network
@@ -42,10 +41,9 @@ COMPOSE_ARGS = \
 	$(STORAGE_ENV_FILE) \
 	$(REDIS_ENV_FILE) \
 	$(ZITADEL_ENV_FILE) \
-	-f $(DEPLOY_DIR)/$(POSTGRES_FILE) \
-	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
-	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
-	-f $(DEPLOY_DIR)/$(ZITADEL_FILE) \
+	-f $(COMPOSE_DIR)/$(CORE_FILE) \
+	-f $(COMPOSE_DIR)/$(STORAGE_FILE) \
+	-f $(COMPOSE_DIR)/$(AUTH_FILE) \
 	--profile local
 
 COMPOSE_ARGS_WITH_WEB = \
@@ -56,12 +54,11 @@ COMPOSE_ARGS_WITH_WEB = \
 	$(ZITADEL_ENV_FILE) \
 	$(WEB_ENV_FILE) \
 	$(WEB_LOGIN_ENV_FILE) \
-	-f $(DEPLOY_DIR)/$(POSTGRES_FILE) \
-	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
-	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
-	-f $(DEPLOY_DIR)/$(ZITADEL_FILE) \
-	-f $(DEPLOY_DIR)/$(WEB_FILE) \
-	--profile local
+	-f $(COMPOSE_DIR)/$(CORE_FILE) \
+	-f $(COMPOSE_DIR)/$(STORAGE_FILE) \
+	-f $(COMPOSE_DIR)/$(AUTH_FILE) \
+	--profile local \
+	--profile web
 
 SHELL := /bin/bash
 .ONESHELL:
@@ -76,14 +73,14 @@ MIGRATE_COMPOSE_ARGS = \
 	$(BASE_ENV_FILE) \
 	$(POSTGRES_ENV_FILE) \
 	-p collabsphere-migrate \
-	-f deploy/docker-compose.migrate.yaml \
+	-f $(COMPOSE_DIR)/$(JOBS_FILE) \
 	--profile migrate
 
 SEED_COMPOSE_ARGS = \
 	$(BASE_ENV_FILE) \
 	$(POSTGRES_ENV_FILE) \
 	-p collabsphere-seed \
-	-f deploy/docker-compose.migrate.yaml \
+	-f $(COMPOSE_DIR)/$(JOBS_FILE) \
 	--profile seed
 
 CONTRACTS_ENV = \
@@ -92,11 +89,7 @@ CONTRACTS_ENV = \
 	APPLICATION_ENVIRONMENT=dev \
 	APPLICATION_LOG_LEVEL=ERROR
 
-<<<<<<< Current (Your changes)
 .PHONY: collabsphere-init network up-app up-dev up-dev-web up-prod down logs sync migrate seed clean-logs migrations-build check-migrations check-contracts contracts-openapi-json contracts-openapi-yaml contracts-routes contracts-snapshot seed-reset-demo test-accounts-integration test-organizations-integration test-platform-reviews-integration smoke-account-signup-login smoke-bootstrap smoke-auth-legacy smoke-auth-zitadel-e2e platform-image-build web-image-build
-=======
-.PHONY: collabsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations check-contracts contracts-openapi-json contracts-openapi-yaml contracts-routes contracts-snapshot seed-reset-demo test-accounts-integration test-organizations-integration test-platform-reviews-integration smoke-account-signup-login smoke-bootstrap smoke-auth-legacy smoke-auth-zitadel-e2e platform-image-build baseline-metrics
->>>>>>> Incoming (Background Agent changes)
 
 collabsphere-init: network up-dev migrate
 

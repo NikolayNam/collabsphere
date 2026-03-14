@@ -2,7 +2,7 @@ name: collabsphere
 
 services:
   zitadel-db:
-    profiles: [ "local" ]
+    profiles: ["local"]
     image: postgres:18.3-trixie
     restart: unless-stopped
     secrets:
@@ -12,7 +12,7 @@ services:
       POSTGRES_DB: zitadel
       POSTGRES_PASSWORD_FILE: /run/secrets/zitadel_postgres_admin_password
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -d zitadel -U postgres" ]
+      test: ["CMD-SHELL", "pg_isready -d zitadel -U postgres"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -25,7 +25,7 @@ services:
       - zitadel.network
 
   zitadel:
-    profiles: [ "local" ]
+    profiles: ["local"]
     image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION}
     restart: unless-stopped
     secrets:
@@ -60,7 +60,7 @@ services:
       ZITADEL_OIDC_DEFAULTLOGOUTURLV2: ${ZITADEL_OIDC_DEFAULTLOGOUTURLV2}
       ZITADEL_SAML_DEFAULTLOGINURLV2: ${ZITADEL_SAML_DEFAULTLOGINURLV2}
     healthcheck:
-      test: [ "CMD", "/app/zitadel", "ready" ]
+      test: ["CMD", "/app/zitadel", "ready"]
       interval: 10s
       timeout: 60s
       retries: 5
@@ -97,14 +97,14 @@ networks:
 
 secrets:
   zitadel_postgres_admin_password:
-    file: secrets/identity/zitadel_postgres_admin_password
+    file: ../secrets/identity/zitadel_postgres_admin_password
   zitadel_postgres_admin_token:
-    file: secrets/identity/zitadel_postgres_admin_token
+    file: ../secrets/identity/zitadel_postgres_admin_token
   zitadel_master_key:
-    file: secrets/identity/zitadel_master_key
+    file: ../secrets/identity/zitadel_master_key
   zitadel_runtime_secrets_yaml:
-    file: secrets/identity/zitadel_runtime_secrets.yaml
+    file: ../secrets/identity/zitadel_runtime_secrets.yaml
   zitadel_init_steps_yaml:
-    file: secrets/identity/zitadel_init_steps.yaml
+    file: ../secrets/identity/zitadel_init_steps.yaml
   zitadel_admin_token:
-    file: secrets/identity/zitadel_admin_token
+    file: ../secrets/identity/zitadel_admin_token

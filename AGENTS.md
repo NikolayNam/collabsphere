@@ -43,5 +43,5 @@
 
 ## Осторожность с окружением
 
-- compose/env/secrets чувствительны; не меняйте `deploy/docker-compose*.yaml`, `deploy/.env*` и secret wiring без явного запроса пользователя
+- compose/env/secrets чувствительны; не меняйте `deploy/compose/*.yaml`, `deploy/.env*` и secret wiring без явного запроса пользователя
 - не выдавайте неподтверждённые claims о production-ready статусе, если flow зависит от внешнего окружения или секретов

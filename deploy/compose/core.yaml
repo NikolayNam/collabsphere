@@ -1,0 +1,174 @@
+name: collabsphere
+
+services:
+  postgres:
+    profiles: ["local"]
+    image: postgres:18.3-trixie
+    restart: unless-stopped
+    hostname: "${POSTGRES_HOST}"
+    networks:
+      - internal.network
+    env_file:
+      - ../env/.env.dev
+      - ../env/.env.postgres.dev
+    secrets:
+      - dev_postgres_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d collabsphere"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres.data:/var/lib/postgresql
+
+  api:
+    profiles: ["local", "prod"]
+    image: colabsphere-api:${IMAGE_TAG}
+    restart: unless-stopped
+    build:
+      context: ../../platform
+      dockerfile: ../../platform/Dockerfile
+    env_file:
+      - ../env/.env.dev
+      - ../env/.env.postgres.dev
+      - ../env/.env.storage.dev
+      - ../env/.env.redis.dev
+      - ../env/.env.zitadel.dev
+    environment:
+      AUTH_BROWSER_REDIRECT_ORIGINS: ${WEB_AUTH_BROWSER_REDIRECT_ORIGINS:-}
+    secrets:
+      - dev_postgres_password
+      - neon_postgres_password
+      - jwt_secret_key
+      - s3_access_key
+      - s3_secret_key
+      - zitadel_client_secret
+      - zitadel_admin_token
+      - platform_auto_grant_yaml
+    networks:
+      - internal.network
+      - external.network
+    extra_hosts:
+      - "${AUTH_ZITADEL_DOCKER_HOST_ALIAS:-auth.localhost}:host-gateway"
+    ports:
+      - "${APPLICATION_PORT}:${APPLICATION_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSL http://localhost:8080/health"]
+      interval: 5s
+      timeout: 30s
+      retries: 10
+      start_period: 15s
+    command: ["/api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    profiles: ["web"]
+    image: collabsphere-web:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.web.dev
+    build:
+      context: ../../web
+      dockerfile: ../../web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${WEB_NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_APP_BASE_URL: ${WEB_NEXT_PUBLIC_APP_BASE_URL}
+        NEXT_INTERNAL_API_BASE_URL: ${WEB_NEXT_INTERNAL_API_BASE_URL}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${WEB_HOST_PORT}:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - external.network
+      - internal.network
+
+  web-login:
+    profiles: ["web"]
+    image: collabsphere-web:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.web.dev
+      - ../env/.env.web.login.dev
+    build:
+      context: ../../web
+      dockerfile: ../../web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${WEB_NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_APP_BASE_URL: ${WEB_NEXT_PUBLIC_APP_BASE_URL}
+        NEXT_INTERNAL_API_BASE_URL: ${WEB_NEXT_INTERNAL_API_BASE_URL}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${WEB_LOGIN_HOST_PORT}:3000"
+    volumes:
+      - zitadel.shared:/zitadel:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/ui/v2/login/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    depends_on:
+      zitadel:
+        condition: service_healthy
+    networks:
+      - external.network
+      - internal.network
+
+networks:
+  internal.network:
+    name: ${INTERNAL_NETWORK_NAME}
+    driver: bridge
+    external: false
+  external.network:
+    name: ${EXTERNAL_NETWORK_NAME}
+    external: true
+
+volumes:
+  postgres.data:
+    name: "postgres.data"
+  zitadel.shared:
+    name: zitadel.shared
+
+secrets:
+  dev_postgres_password:
+    file: ../secrets/postgres/dev/db_password
+  neon_postgres_password:
+    file: ../secrets/postgres/prod/db_password
+  jwt_secret_key:
+    file: ../secrets/jwt/jwt_secret_key
+  s3_access_key:
+    file: ../secrets/s3/s3_access_key
+  s3_secret_key:
+    file: ../secrets/s3/s3_secret_key
+  zitadel_client_secret:
+    file: ../secrets/identity/zitadel_client_secret
+  zitadel_admin_token:
+    file: ${AUTH_ZITADEL_ADMIN_TOKEN_SOURCE_FILE:-../fixtures/zitadel_admin_token.disabled}
+  platform_auto_grant_yaml:
+    file: ../secrets/identity/platform_auto_grant.yaml

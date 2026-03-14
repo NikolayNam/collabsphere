@@ -190,9 +190,7 @@ jobs:
             --env-file deploy/env/.env.zitadel.dev \
             --env-file deploy/env/.env.web.dev \
             --env-file deploy/env/.env.web.login.dev \
-            -f deploy/docker-compose.postgres.yaml \
-            -f deploy/docker-compose.platform.yaml \
-            -f deploy/docker-compose.storage.seaweedfs.yaml \
-            -f deploy/docker-compose.zitadel.yaml \
-            -f deploy/docker-compose.web.yaml \
-            --profile local down -v || true
+            -f deploy/compose/core.yaml \
+            -f deploy/compose/storage.yaml \
+            -f deploy/compose/auth.yaml \
+            --profile local --profile web down -v || true

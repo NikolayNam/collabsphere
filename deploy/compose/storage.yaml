@@ -4,11 +4,11 @@ services:
   master:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
-      - env/.env.dev
-      - env/.env.storage.dev
+      - ../env/.env.dev
+      - ../env/.env.storage.dev
     volumes:
-      - ./scripts/seaweedfs:/bootstrap:ro
-    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-master.sh" ]
+      - ../scripts/seaweedfs:/bootstrap:ro
+    entrypoint: ["/bin/sh", "/bootstrap/seaweedfs-master.sh"]
     restart: unless-stopped
     networks:
       - internal.network
@@ -20,12 +20,12 @@ services:
   volume:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
-      - env/.env.dev
-      - env/.env.storage.dev
+      - ../env/.env.dev
+      - ../env/.env.storage.dev
     volumes:
-      - ./scripts/seaweedfs:/bootstrap:ro
+      - ../scripts/seaweedfs:/bootstrap:ro
       - storage.volume.data:/data
-    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-volume.sh" ]
+    entrypoint: ["/bin/sh", "/bootstrap/seaweedfs-volume.sh"]
     restart: unless-stopped
     networks:
       - internal.network
@@ -39,12 +39,12 @@ services:
   filer:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
-      - env/.env.dev
-      - env/.env.storage.dev
+      - ../env/.env.dev
+      - ../env/.env.storage.dev
     volumes:
-      - ./scripts/seaweedfs:/bootstrap:ro
+      - ../scripts/seaweedfs:/bootstrap:ro
       - storage.filer.data:/data
-    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-filer.sh" ]
+    entrypoint: ["/bin/sh", "/bootstrap/seaweedfs-filer.sh"]
     restart: unless-stopped
     networks:
       - internal.network
@@ -59,11 +59,11 @@ services:
   s3:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
-      - env/.env.dev
-      - env/.env.storage.dev
+      - ../env/.env.dev
+      - ../env/.env.storage.dev
     volumes:
-      - ./scripts/seaweedfs:/bootstrap:ro
-    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-s3.sh" ]
+      - ../scripts/seaweedfs:/bootstrap:ro
+    entrypoint: ["/bin/sh", "/bootstrap/seaweedfs-s3.sh"]
     restart: unless-stopped
     secrets:
       - s3_access_key
@@ -81,11 +81,11 @@ services:
   bucket-init:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
-      - env/.env.dev
-      - env/.env.storage.dev
+      - ../env/.env.dev
+      - ../env/.env.storage.dev
     volumes:
-      - ./scripts/seaweedfs:/bootstrap:ro
-    entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-bucket-init.sh" ]
+      - ../scripts/seaweedfs:/bootstrap:ro
+    entrypoint: ["/bin/sh", "/bootstrap/seaweedfs-bucket-init.sh"]
     networks:
       - internal.network
     depends_on:
@@ -93,7 +93,6 @@ services:
       - filer
       - s3
     restart: "no"
-
 
 volumes:
   storage.volume.data:
@@ -109,6 +108,6 @@ networks:
 
 secrets:
   s3_access_key:
-    file: secrets/s3/s3_access_key
+    file: ../secrets/s3/s3_access_key
   s3_secret_key:
-    file: secrets/s3/s3_secret_key
+    file: ../secrets/s3/s3_secret_key

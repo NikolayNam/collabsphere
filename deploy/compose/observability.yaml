@@ -1,6 +1,20 @@
 name: collabsphere-observability
 
 services:
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v2.21.0
+    restart: unless-stopped
+    ports:
+      - "9000:9090"
+    volumes:
+      - ../observability/prometheus:/etc/prometheus:ro
+    command:
+      - --web.enable-lifecycle
+      - --config.file=/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   loki:
     profiles: ["observability"]
     image: grafana/loki:3.0.0
@@ -8,7 +22,7 @@ services:
     command:
       - -config.file=/etc/loki/config.yaml
     volumes:
-      - ./observability/loki/loki-config.yaml:/etc/loki/config.yaml:ro
+      - ../observability/loki/loki-config.yaml:/etc/loki/config.yaml:ro
       - loki_data:/loki
 
   alloy:
@@ -21,7 +35,7 @@ services:
       - --storage.path=/var/lib/alloy/data
       - /etc/alloy/config.alloy
     volumes:
-      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ../observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
@@ -40,8 +54,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     depends_on:
       - loki
