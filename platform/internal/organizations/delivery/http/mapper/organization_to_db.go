@@ -1,6 +1,7 @@
 package mapper
 
 import (
+	"github.com/NikolayNam/collabsphere/internal/organizations/application"
 	"github.com/NikolayNam/collabsphere/internal/organizations/delivery/http/dto"
 	"github.com/NikolayNam/collabsphere/internal/organizations/domain"
 )
@@ -28,4 +29,25 @@ func ToOrganizationResponse(t *domain.Organization, status int) *dto.Organizatio
 			UpdatedAt:    t.UpdatedAt(),
 		},
 	}
+}
+
+func ToMyOrganizationsResponse(items []application.MyOrganizationView, status int) *dto.MyOrganizationsResponse {
+	resp := &dto.MyOrganizationsResponse{Status: status}
+	if len(items) == 0 {
+		return resp
+	}
+	resp.Body.Data = make([]dto.MyOrganizationBody, 0, len(items))
+	for _, item := range items {
+		resp.Body.Data = append(resp.Body.Data, dto.MyOrganizationBody{
+			ID:             item.ID,
+			Name:           item.Name,
+			Slug:           item.Slug,
+			LogoObjectID:   item.LogoObjectID,
+			IsActive:       item.IsActive,
+			CreatedAt:      item.CreatedAt,
+			UpdatedAt:      item.UpdatedAt,
+			MembershipRole: item.MembershipRole,
+		})
+	}
+	return resp
 }

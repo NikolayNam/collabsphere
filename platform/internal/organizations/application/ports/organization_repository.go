@@ -32,6 +32,17 @@ type OrganizationVideoRecord struct {
 	SortOrder      int64
 }
 
+type OrganizationMembershipView struct {
+	ID             uuid.UUID
+	Name           string
+	Slug           string
+	LogoObjectID   *uuid.UUID
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      *time.Time
+	MembershipRole string
+}
+
 type LegalDocumentAnalysisLease struct {
 	JobID          uuid.UUID
 	DocumentID     uuid.UUID
@@ -48,6 +59,7 @@ type LegalDocumentAnalysisLease struct {
 type OrganizationRepository interface {
 	Create(ctx context.Context, t *domain.Organization) error
 	GetByID(ctx context.Context, id domain.OrganizationID) (*domain.Organization, error)
+	ListByAccount(ctx context.Context, accountID uuid.UUID) ([]OrganizationMembershipView, error)
 	GetByHostname(ctx context.Context, hostname string) (*domain.Organization, error)
 	ListDomains(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationDomain, error)
 	ReplaceDomains(ctx context.Context, organizationID domain.OrganizationID, domains []domain.OrganizationDomain, now time.Time) ([]domain.OrganizationDomain, error)

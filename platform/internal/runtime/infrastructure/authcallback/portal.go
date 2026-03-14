@@ -396,7 +396,7 @@ var callbackTemplate = template.Must(template.New("auth-callback").Parse(`<!doct
           <div class="steps">
             <div class="step">
               <strong>1. Старт</strong>
-              <p>Кнопка входа отправляет браузер в <code>/v1/auth/zitadel/login</code> и дальше в hosted UI ZITADEL.</p>
+              <p>Кнопка входа отправляет браузер в <code>/v1/auth/zitadel/login</code> и дальше в self-hosted login UI на домене <code>auth.localhost</code>.</p>
             </div>
             <div class="step">
               <strong>2. Callback</strong>

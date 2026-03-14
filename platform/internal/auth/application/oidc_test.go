@@ -181,7 +181,7 @@ func TestBeginOIDCLoginStoresCodeVerifierAndPassesPKCEChallenge(t *testing.T) {
 	)
 
 	res, err := flow.BeginLogin(context.Background(), BeginOIDCLoginCmd{
-		ReturnTo: "http://app.localhost:3000/auth/callback",
+		ReturnTo: "http://collabsphere.localhost:3002/auth/callback",
 		Intent:   "login",
 	})
 	if err != nil {

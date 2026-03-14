@@ -10,6 +10,10 @@ services:
       dockerfile: ../platform/Dockerfile
     env_file:
       - env/.env.dev
+      - env/.env.postgres.dev
+      - env/.env.storage.dev
+      - env/.env.redis.dev
+      - env/.env.zitadel.dev
     secrets:
       - dev_postgres_password
       - neon_postgres_password

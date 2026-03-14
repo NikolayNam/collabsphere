@@ -197,6 +197,17 @@ type GetOrganizationKYCRequirementsQuery struct {
 	ActorAccountID uuid.UUID
 }
 
+type MyOrganizationView struct {
+	ID             uuid.UUID
+	Name           string
+	Slug           string
+	LogoObjectID   *uuid.UUID
+	IsActive       bool
+	CreatedAt      time.Time
+	UpdatedAt      *time.Time
+	MembershipRole string
+}
+
 type ReprocessOrganizationLegalDocumentAnalysisCmd struct {
 	OrganizationID domain.OrganizationID
 	ActorAccountID uuid.UUID
@@ -249,6 +260,30 @@ func (s *Service) GetOrganizationByHost(ctx context.Context, rawHost string) (*d
 		return nil, apperrors.InvalidInput(err.Error())
 	}
 	return s.repo.GetByHostname(ctx, host)
+}
+
+func (s *Service) ListMyOrganizations(ctx context.Context, actorAccountID uuid.UUID) ([]MyOrganizationView, error) {
+	if actorAccountID == uuid.Nil {
+		return nil, fault.Unauthorized("Authentication required")
+	}
+	items, err := s.repo.ListByAccount(ctx, actorAccountID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]MyOrganizationView, 0, len(items))
+	for _, item := range items {
+		out = append(out, MyOrganizationView{
+			ID:             item.ID,
+			Name:           item.Name,
+			Slug:           item.Slug,
+			LogoObjectID:   item.LogoObjectID,
+			IsActive:       item.IsActive,
+			CreatedAt:      item.CreatedAt,
+			UpdatedAt:      item.UpdatedAt,
+			MembershipRole: item.MembershipRole,
+		})
+	}
+	return out, nil
 }
 
 func (s *Service) ListOrganizationDomains(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationDomain, error) {

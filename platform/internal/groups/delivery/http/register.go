@@ -12,6 +12,10 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	create.Middlewares = secured
 	huma.Register(api, create, h.CreateGroup)
 
+	listMy := listMyGroupsOp
+	listMy.Middlewares = secured
+	huma.Register(api, listMy, h.ListMyGroups)
+
 	get := getGroupByIDOp
 	get.Middlewares = secured
 	huma.Register(api, get, h.GetGroupByID)

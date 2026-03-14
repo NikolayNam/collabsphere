@@ -88,3 +88,10 @@ func ToMembersResponse(members *domain.MembersView) *dto.GroupMembersResponse {
 	}
 	return response
 }
+
+func ToMyGroupsResponse(items []dto.MyGroupBody) *dto.MyGroupsResponse {
+	response := &dto.MyGroupsResponse{Status: http.StatusOK}
+	response.Body.Data = make([]dto.MyGroupBody, 0, len(items))
+	response.Body.Data = append(response.Body.Data, items...)
+	return response
+}

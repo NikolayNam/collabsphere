@@ -6,6 +6,7 @@ services:
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
       - env/.env.dev
+      - env/.env.postgres.dev
     volumes:
       - ../platform/internal/runtime/infrastructure/db/migrations:/app/migrations:ro
     secrets:
@@ -21,6 +22,7 @@ services:
     image: colabsphere-api:${IMAGE_TAG}
     env_file:
       - env/.env.dev
+      - env/.env.postgres.dev
     volumes:
       - ../platform/internal/runtime/infrastructure/db/seeds:/app/seeds:ro
     secrets:

@@ -10,6 +10,10 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 	create.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
 	huma.Register(api, create, h.CreateOrganization)
 
+	listMine := listMyOrganizationsOp
+	listMine.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, listMine, h.ListMyOrganizations)
+
 	huma.Register(api, getOrganizationByIdOp, h.GetOrganizationById)
 	huma.Register(api, resolveOrganizationByHostOp, h.ResolveOrganizationByHost)
 

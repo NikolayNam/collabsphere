@@ -8,13 +8,20 @@ IMAGE_TAG ?= dev
 
 PROJECT_NAME := collabsphere
 DEPLOY_DIR := deploy
-ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.dev
+BASE_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.dev
+POSTGRES_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.postgres.dev
+STORAGE_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.storage.dev
+REDIS_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.redis.dev
+ZITADEL_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.zitadel.dev
+WEB_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.web.dev
+WEB_LOGIN_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.web.login.dev
 
 POSTGRES_FILE := docker-compose.postgres.yaml
 PLATFORM_FILE := docker-compose.platform.yaml
 STORAGE_FILE := docker-compose.storage.$(STORAGE_PROVIDER).yaml
 ZITADEL_FILE := docker-compose.zitadel.yaml
 MIGRATE_FILE := docker-compose.migrate.yaml
+WEB_FILE := docker-compose.web.yaml
 
 # посмотри в .env какой EXTERNAL_NETWORK_NAME
 NETWORK_NAME := external.network
@@ -30,11 +37,30 @@ CODEBASE_OUTPUT := ./docs/codebase_actual.md
 APPLICATION_PORT :=
 
 COMPOSE_ARGS = \
-	$(ENV_FILE) \
+	$(BASE_ENV_FILE) \
+	$(POSTGRES_ENV_FILE) \
+	$(STORAGE_ENV_FILE) \
+	$(REDIS_ENV_FILE) \
+	$(ZITADEL_ENV_FILE) \
 	-f $(DEPLOY_DIR)/$(POSTGRES_FILE) \
 	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
 	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
 	-f $(DEPLOY_DIR)/$(ZITADEL_FILE) \
+	--profile local
+
+COMPOSE_ARGS_WITH_WEB = \
+	$(BASE_ENV_FILE) \
+	$(POSTGRES_ENV_FILE) \
+	$(STORAGE_ENV_FILE) \
+	$(REDIS_ENV_FILE) \
+	$(ZITADEL_ENV_FILE) \
+	$(WEB_ENV_FILE) \
+	$(WEB_LOGIN_ENV_FILE) \
+	-f $(DEPLOY_DIR)/$(POSTGRES_FILE) \
+	-f $(DEPLOY_DIR)/$(PLATFORM_FILE) \
+	-f $(DEPLOY_DIR)/$(STORAGE_FILE) \
+	-f $(DEPLOY_DIR)/$(ZITADEL_FILE) \
+	-f $(DEPLOY_DIR)/$(WEB_FILE) \
 	--profile local
 
 SHELL := /bin/bash
@@ -42,16 +68,20 @@ SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 API_HEALTH_URL ?= http://localhost:8080/health
+WEB_HEALTH_URL ?= http://localhost:3002/
+WEB_LOGIN_HEALTH_URL ?= http://localhost:3000/ui/v2/login/login
 WAIT_TIMEOUT_SEC ?= 60
 
 MIGRATE_COMPOSE_ARGS = \
-	$(ENV_FILE) \
+	$(BASE_ENV_FILE) \
+	$(POSTGRES_ENV_FILE) \
 	-p collabsphere-migrate \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile migrate
 
 SEED_COMPOSE_ARGS = \
-	$(ENV_FILE) \
+	$(BASE_ENV_FILE) \
+	$(POSTGRES_ENV_FILE) \
 	-p collabsphere-seed \
 	-f deploy/docker-compose.migrate.yaml \
 	--profile seed
@@ -62,7 +92,7 @@ CONTRACTS_ENV = \
 	APPLICATION_ENVIRONMENT=dev \
 	APPLICATION_LOG_LEVEL=ERROR
 
-.PHONY: collabsphere-init network up-app up-dev up-prod down logs sync migrate seed clean-logs migrations-build check-migrations check-contracts contracts-openapi-json contracts-openapi-yaml contracts-routes contracts-snapshot seed-reset-demo test-accounts-integration test-organizations-integration test-platform-reviews-integration smoke-account-signup-login smoke-bootstrap smoke-auth-legacy smoke-auth-zitadel-e2e platform-image-build
+.PHONY: collabsphere-init network up-app up-dev up-dev-web up-prod down logs sync migrate seed clean-logs migrations-build check-migrations check-contracts contracts-openapi-json contracts-openapi-yaml contracts-routes contracts-snapshot seed-reset-demo test-accounts-integration test-organizations-integration test-platform-reviews-integration smoke-account-signup-login smoke-bootstrap smoke-auth-legacy smoke-auth-zitadel-e2e platform-image-build web-image-build
 
 collabsphere-init: network up-dev migrate
 
@@ -103,8 +133,81 @@ up-dev: clean-logs
 	@echo "✓ Started"
 	@$(COMPOSE) $(COMPOSE_ARGS) ps
 
+up-dev-web: clean-logs
+	@mkdir -p $(dir $(APP_LOG))
+	@echo "Running full platform with web surfaces... (log: $(APP_LOG))"
+	@echo "Deploy progress:"
+	@$(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) up -d --build --force-recreate --remove-orphans 2>&1 | tee "$(APP_LOG)" \
+	|| (echo "compose up failed. Current service states:"; $(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) ps || true; exit 1)
+
+	@if [ -n "$(API_HEALTH_URL)" ]; then \
+		if command -v gum >/dev/null 2>&1; then \
+			gum spin --spinner dot --title "waiting for API $(API_HEALTH_URL)..." -- \
+				bash -lc '\
+					deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+					while [ $$SECONDS -lt $$deadline ]; do \
+						if command -v curl >/dev/null 2>&1 && curl -fsS "$(API_HEALTH_URL)" >/dev/null; then exit 0; fi; \
+						sleep 0.5; \
+					done; \
+					exit 1'; \
+		else \
+			deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+			while [ $$SECONDS -lt $$deadline ]; do \
+				if command -v curl >/dev/null 2>&1 && curl -fsS "$(API_HEALTH_URL)" >/dev/null; then break; fi; \
+				sleep 0.5; \
+			done; \
+		fi; \
+	fi \
+	|| (echo "API not ready. Current service states:"; $(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) ps || true; echo "Last log lines:"; tail -n 160 "$(APP_LOG)" || true; exit 1)
+
+	@if [ -n "$(WEB_HEALTH_URL)" ]; then \
+		if command -v gum >/dev/null 2>&1; then \
+			gum spin --spinner dot --title "waiting for web $(WEB_HEALTH_URL)..." -- \
+				bash -lc '\
+					deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+					while [ $$SECONDS -lt $$deadline ]; do \
+						if command -v curl >/dev/null 2>&1 && curl -fsS "$(WEB_HEALTH_URL)" >/dev/null; then exit 0; fi; \
+						sleep 0.5; \
+					done; \
+					exit 1'; \
+		else \
+			deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+			while [ $$SECONDS -lt $$deadline ]; do \
+				if command -v curl >/dev/null 2>&1 && curl -fsS "$(WEB_HEALTH_URL)" >/dev/null; then break; fi; \
+				sleep 0.5; \
+			done; \
+		fi; \
+	fi \
+	|| (echo "Web not ready. Current service states:"; $(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) ps || true; exit 1)
+
+	@if [ -n "$(WEB_LOGIN_HEALTH_URL)" ]; then \
+		if command -v gum >/dev/null 2>&1; then \
+			gum spin --spinner dot --title "waiting for web-login $(WEB_LOGIN_HEALTH_URL)..." -- \
+				bash -lc '\
+					deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+					while [ $$SECONDS -lt $$deadline ]; do \
+						if command -v curl >/dev/null 2>&1 && curl -fsS "$(WEB_LOGIN_HEALTH_URL)" >/dev/null; then exit 0; fi; \
+						sleep 0.5; \
+					done; \
+					exit 1'; \
+		else \
+			deadline=$$((SECONDS+$(WAIT_TIMEOUT_SEC))); \
+			while [ $$SECONDS -lt $$deadline ]; do \
+				if command -v curl >/dev/null 2>&1 && curl -fsS "$(WEB_LOGIN_HEALTH_URL)" >/dev/null; then break; fi; \
+				sleep 0.5; \
+			done; \
+		fi; \
+	fi \
+	|| (echo "Web-login not ready. Current service states:"; $(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) ps || true; exit 1)
+
+	@echo "✓ Web started"
+	@$(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) ps
+
 platform-image-build:
 	@docker build -t colabsphere-api:$(IMAGE_TAG) -f platform/Dockerfile platform
+
+web-image-build:
+	@docker build -t collabsphere-web:$(IMAGE_TAG) -f web/Dockerfile web
 
 migrate:
 	@$(MAKE) platform-image-build

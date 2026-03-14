@@ -5,6 +5,7 @@ services:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
       - env/.env.dev
+      - env/.env.storage.dev
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
     entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-master.sh" ]
@@ -20,6 +21,7 @@ services:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
       - env/.env.dev
+      - env/.env.storage.dev
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
       - storage.volume.data:/data
@@ -38,6 +40,7 @@ services:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
       - env/.env.dev
+      - env/.env.storage.dev
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
       - storage.filer.data:/data
@@ -57,6 +60,7 @@ services:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
       - env/.env.dev
+      - env/.env.storage.dev
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
     entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-s3.sh" ]
@@ -78,6 +82,7 @@ services:
     image: chrislusf/seaweedfs:${STORAGE_S3_IMAGE_VERSION}
     env_file:
       - env/.env.dev
+      - env/.env.storage.dev
     volumes:
       - ./scripts/seaweedfs:/bootstrap:ro
     entrypoint: [ "/bin/sh", "/bootstrap/seaweedfs-bucket-init.sh" ]

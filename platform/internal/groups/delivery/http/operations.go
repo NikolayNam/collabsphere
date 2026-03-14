@@ -12,6 +12,16 @@ var createGroupOp = huma.Operation{
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
+var listMyGroupsOp = huma.Operation{
+	OperationID: "list-my-groups",
+	Method:      "GET",
+	Path:        "/groups/my",
+	Tags:        []string{"Groups"},
+	Summary:     "List my groups",
+	Description: "Returns the collaboration groups accessible to the authenticated account, including direct and organization-derived membership paths.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
 var getGroupByIDOp = huma.Operation{
 	OperationID: "get-group",
 	Method:      "GET",

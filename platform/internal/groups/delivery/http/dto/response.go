@@ -58,3 +58,21 @@ type GroupMembersResponse struct {
 	Status int              `json:"-"`
 	Body   GroupMembersBody `json:"body"`
 }
+
+type MyGroupBody struct {
+	ID               string  `json:"id"`
+	Name             string  `json:"name"`
+	Slug             string  `json:"slug"`
+	Description      *string `json:"description,omitempty"`
+	IsActive         bool    `json:"isActive"`
+	CreatedAt        string  `json:"createdAt"`
+	MembershipSource string  `json:"membershipSource"`
+	MembershipRole   *string `json:"membershipRole,omitempty"`
+}
+
+type MyGroupsResponse struct {
+	Status int `json:"-"`
+	Body   struct {
+		Data []MyGroupBody `json:"data"`
+	} `json:"body"`
+}

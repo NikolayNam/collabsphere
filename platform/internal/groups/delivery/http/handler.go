@@ -59,6 +59,33 @@ func (h *Handler) GetGroupByID(ctx context.Context, input *dto.GetGroupByIDInput
 	return mapper.ToGroupResponse(group, http.StatusOK), nil
 }
 
+func (h *Handler) ListMyGroups(ctx context.Context, input *dto.ListMyGroupsInput) (*dto.MyGroupsResponse, error) {
+	actorID, err := currentActorAccountID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+
+	items, err := h.svc.ListMyGroups(ctx, actorID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+
+	payload := make([]dto.MyGroupBody, 0, len(items))
+	for _, item := range items {
+		payload = append(payload, dto.MyGroupBody{
+			ID:               item.ID,
+			Name:             item.Name,
+			Slug:             item.Slug,
+			Description:      item.Description,
+			IsActive:         item.IsActive,
+			CreatedAt:        item.CreatedAt,
+			MembershipSource: item.MembershipSource,
+			MembershipRole:   item.MembershipRole,
+		})
+	}
+	return mapper.ToMyGroupsResponse(payload), nil
+}
+
 func (h *Handler) AddAccountMember(ctx context.Context, input *dto.AddAccountMemberInput) (*dto.GroupAccountMemberResponse, error) {
 	actorID, err := currentActorAccountID(ctx)
 	if err != nil {

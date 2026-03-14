@@ -41,6 +41,18 @@ func (h *Handler) CreateOrganization(ctx context.Context, input *dto.CreateOrgan
 	return h.organizationResponse(ctx, organization, http.StatusCreated)
 }
 
+func (h *Handler) ListMyOrganizations(ctx context.Context, input *struct{}) (*dto.MyOrganizationsResponse, error) {
+	actorID, err := principalOrganizationActorUUID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	items, err := h.svc.ListMyOrganizations(ctx, actorID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return mapper.ToMyOrganizationsResponse(items, http.StatusOK), nil
+}
+
 func (h *Handler) GetOrganizationById(ctx context.Context, input *dto.GetOrganizationByIdInput) (*dto.OrganizationResponse, error) {
 	organization, err := h.svc.GetOrganizationById(ctx, application.GetOrganizationByIdQuery{ID: input.ID})
 	if err != nil {

@@ -9,7 +9,7 @@ services:
     networks:
       - internal.network
     env_file:
-      - env/.env.test
+      - env/.env.postgres.test
     environment:
       POSTGRES_DB: "${TEST_POSTGRES_DB}"
       POSTGRES_USER: "${TEST_POSTGRES_USER}"

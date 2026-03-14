@@ -40,6 +40,24 @@ type OrganizationResponse struct {
 	Body   OrganizationBody `json:"body"`
 }
 
+type MyOrganizationBody struct {
+	ID             uuid.UUID  `json:"id"`
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
+	LogoObjectID   *uuid.UUID `json:"logoObjectId,omitempty"`
+	IsActive       bool       `json:"isActive"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
+	MembershipRole string     `json:"membershipRole"`
+}
+
+type MyOrganizationsResponse struct {
+	Status int `json:"-"`
+	Body   struct {
+		Data []MyOrganizationBody `json:"data"`
+	} `json:"body"`
+}
+
 type OrganizationVideosResponse struct {
 	Status int `json:"-"`
 	Body   struct {

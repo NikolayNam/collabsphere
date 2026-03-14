@@ -10,6 +10,7 @@ services:
       - internal.network
     env_file:
       - env/.env.dev
+      - env/.env.postgres.dev
     secrets:
       - dev_postgres_password
     healthcheck:

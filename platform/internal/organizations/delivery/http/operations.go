@@ -12,6 +12,16 @@ var createOrganizationOp = huma.Operation{
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
 
+var listMyOrganizationsOp = huma.Operation{
+	OperationID: "list-my-organizations",
+	Method:      "GET",
+	Path:        "/organizations/my",
+	Tags:        []string{"Organizations"},
+	Summary:     "List my organizations",
+	Description: "Returns the organizations where the authenticated account currently has an active membership, including the current membership role for each item.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
 var getOrganizationByIdOp = huma.Operation{
 	OperationID: "get-organization",
 	Method:      "GET",

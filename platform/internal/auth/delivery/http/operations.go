@@ -17,7 +17,7 @@ var zitadelLoginOp = huma.Operation{
 	Path:        "/auth/zitadel/login",
 	Tags:        []string{"Auth"},
 	Summary:     "Start ZITADEL login",
-	Description: "Starts the browser-based ZITADEL login flow and responds with `303 See Other` to the hosted login UI. Use the optional `return_to` query parameter to control where the callback should redirect after authentication.",
+	Description: "Starts the browser-based ZITADEL login flow and responds with `303 See Other` to the self-hosted login UI on the login origin. Use the optional `return_to` query parameter to control where the callback should redirect after authentication.",
 }
 
 var zitadelSignupOp = huma.Operation{

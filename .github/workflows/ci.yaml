@@ -156,10 +156,10 @@ jobs:
           node-version: "22"
       - name: Ensure localhost hostnames resolve for browser flow
         run: |
-          echo "127.0.0.1 api.localhost auth.localhost" | sudo tee -a /etc/hosts
+          echo "127.0.0.1 api.localhost auth.localhost collabsphere.localhost" | sudo tee -a /etc/hosts
       - name: Bring up local Docker stack
         run: |
-          make up-dev
+          make up-dev-web
           make migrate-up
       - name: Run live ZITADEL browser smoke
         run: make smoke-auth-zitadel-e2e
@@ -169,9 +169,9 @@ jobs:
       - name: Print ZITADEL log on failure
         if: failure()
         run: docker logs collabsphere-zitadel-1 --tail 200 || true
-      - name: Print ZITADEL Login log on failure
+      - name: Print web-login log on failure
         if: failure()
-        run: docker logs collabsphere-zitadel-login-1 --tail 200 || true
+        run: docker logs collabsphere-web-login-1 --tail 200 || true
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -184,8 +184,15 @@ jobs:
         run: |
           docker compose \
             --env-file deploy/env/.env.dev \
+            --env-file deploy/env/.env.postgres.dev \
+            --env-file deploy/env/.env.storage.dev \
+            --env-file deploy/env/.env.redis.dev \
+            --env-file deploy/env/.env.zitadel.dev \
+            --env-file deploy/env/.env.web.dev \
+            --env-file deploy/env/.env.web.login.dev \
             -f deploy/docker-compose.postgres.yaml \
             -f deploy/docker-compose.platform.yaml \
             -f deploy/docker-compose.storage.seaweedfs.yaml \
             -f deploy/docker-compose.zitadel.yaml \
+            -f deploy/docker-compose.web.yaml \
             --profile local down -v || true
