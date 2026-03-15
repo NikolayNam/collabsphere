@@ -10,6 +10,7 @@ const (
 	PermissionOrganizationManageProfile    Permission = "organization.manage_profile"
 	PermissionOrganizationManageMembers    Permission = "organization.manage_members"
 	PermissionOrganizationManageCatalog    Permission = "organization.manage_catalog"
+	PermissionOrganizationManagePayments   Permission = "organization.manage_payments"
 	PermissionOrganizationManageOnboarding Permission = "organization.manage_onboarding"
 )
 
@@ -24,7 +25,7 @@ func HasOrganizationPermission(role memberdomain.MembershipRole, permission Perm
 			role == memberdomain.MembershipRoleMember
 	case PermissionOrganizationManageProfile, PermissionOrganizationManageMembers, PermissionOrganizationManageOnboarding:
 		return role == memberdomain.MembershipRoleOwner || role == memberdomain.MembershipRoleAdmin
-	case PermissionOrganizationManageCatalog:
+	case PermissionOrganizationManageCatalog, PermissionOrganizationManagePayments:
 		return role == memberdomain.MembershipRoleOwner ||
 			role == memberdomain.MembershipRoleAdmin ||
 			role == memberdomain.MembershipRoleManager

@@ -96,5 +96,11 @@ migrations:
   - catalog/catalog_statuses.sql
   - org/organization_roles.sql
 
+  - payments/schema.sql
+  - payments/payment_accounts.sql
+  - payments/payment_transactions.sql
+  - payments/payment_transaction_lines.sql
+  - payments/payment_imports.sql
+  - payments/payment_import_items.sql
 
 

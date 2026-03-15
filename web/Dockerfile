@@ -1,10 +1,10 @@
-FROM node:22-bookworm-slim AS deps
+FROM node:25.8-trixie-slim AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-FROM node:22-bookworm-slim AS builder
+FROM node:25.8-trixie-slim AS builder
 WORKDIR /app
 
 ARG NEXT_PUBLIC_API_BASE_URL=http://api.localhost:8080
@@ -20,7 +20,7 @@ COPY . .
 
 RUN npm run build
 
-FROM node:22-bookworm-slim AS runner
+FROM node:25.8-trixie-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

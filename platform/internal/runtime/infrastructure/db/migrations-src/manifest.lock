@@ -73,3 +73,9 @@
 0071 | sales/board.sql                                     | 0071_sales_board.sql
 0072 | catalog/catalog_statuses.sql                        | 0072_catalog_statuses.sql
 0073 | org/organization_roles.sql                          | 0073_organization_roles.sql
+0074 | payments/schema.sql                                 | 0074_schema.sql
+0075 | payments/payment_accounts.sql                       | 0075_payment_accounts.sql
+0076 | payments/payment_transactions.sql                   | 0076_payment_transactions.sql
+0077 | payments/payment_transaction_lines.sql              | 0077_payment_transaction_lines.sql
+0078 | payments/payment_imports.sql                        | 0078_payment_imports.sql
+0079 | payments/payment_import_items.sql                   | 0079_payment_import_items.sql

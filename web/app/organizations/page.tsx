@@ -1364,13 +1364,16 @@ export default function OrganizationsPage() {
         "productName",
         "description",
         "sku",
+        "barcodeEan13",
+        "barcodeCode128",
         "priceAmount",
         "currencyCode",
         "isActive",
       ],
       [
-        ["milk", "Молочная продукция", "", "10", "Молоко 1л", "Пастеризованное 3.2%", "MILK-1L-32", "120.00", "RUB", "true"],
-        ["cheese", "Сыры", "milk", "20", "Сыр Гауда 200г", "Полутвердый", "CHEESE-GOUDA-200", "290.00", "RUB", "true"],
+        ["milk", "Молочная продукция", "", "10", "Молоко 1л", "Пастеризованное 3.2%", "MILK-1L-32", "4601234567890", "", "120.00", "RUB", "true"],
+        ["cheese", "Сыры", "milk", "20", "Сыр Гауда 200г", "Полутвердый", "CHEESE-GOUDA-200", "", "C-MILK-001", "290.00", "RUB", "true"],
+        ["milk", "Молочная продукция", "", "12", "Творог 200г", "Обезжиренный", "COTTAGE-200", "", "", "95.00", "RUB", "true"],
       ]
     );
   }
@@ -2107,7 +2110,7 @@ export default function OrganizationsPage() {
                         </button>
                       </div>
                       <p className="muted">
-                        Колонки: <code>productName</code> (обязательно), <code>categoryCode</code> (рекомендуется), <code>sku</code>, <code>description</code>,{" "}
+                        Колонки: <code>productName</code> (обязательно), <code>categoryCode</code> (рекомендуется), <code>sku</code>, <code>barcodeEan13</code>, <code>barcodeCode128</code>, <code>description</code>,{" "}
                         <code>priceAmount</code>, <code>currencyCode</code>, <code>isActive</code>.
                       </p>
                       {productsUploadResult ? <textarea className="code-block" readOnly value={JSON.stringify(productsUploadResult, null, 2)} /> : null}
