@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,6 +28,18 @@ func (s *Service) CreateChannel(ctx context.Context, cmd CreateChannelCmd) (*col
 	if name == "" || slug == "" {
 		return nil, fault.Validation("Channel name and slug are required")
 	}
+	var orgIDs, accIDs []uuid.UUID
+	if cmd.OrganizationID != nil && *cmd.OrganizationID != uuid.Nil {
+		if cmd.AccountID != nil && *cmd.AccountID != uuid.Nil {
+			return nil, fault.Validation("Specify either organizationId or accountId, not both")
+		}
+		orgIDs = []uuid.UUID{*cmd.OrganizationID}
+	} else if cmd.AccountID != nil && *cmd.AccountID != uuid.Nil {
+		accIDs = []uuid.UUID{*cmd.AccountID}
+	}
+	if err := s.repo.ValidateChannelVisibilityInGroup(ctx, cmd.GroupID, orgIDs, accIDs); err != nil {
+		return nil, fault.Validation("Organization or account is not a member of the group")
+	}
 	now := s.now()
 	created, err := s.repo.CreateChannel(ctx, collabdomain.Channel{
 		ID:          uuid.New(),
@@ -37,7 +50,7 @@ func (s *Service) CreateChannel(ctx context.Context, cmd CreateChannelCmd) (*col
 		CreatedBy:   uuidPtr(cmd.Actor.AccountID),
 		UpdatedBy:   uuidPtr(cmd.Actor.AccountID),
 		CreatedAt:   now,
-	}, cmd.AdminAccountIDs)
+	}, cmd.AdminAccountIDs, orgIDs, accIDs)
 	if err != nil {
 		if collabpg.IsUnique(err) {
 			return nil, fault.Conflict("Channel already exists")
@@ -51,7 +64,7 @@ func (s *Service) ListChannels(ctx context.Context, q ListChannelsQuery) ([]coll
 	if _, err := s.requireGroupAccountAccess(ctx, q.GroupID, q.Actor); err != nil {
 		return nil, err
 	}
-	channels, err := s.repo.ListChannelsByGroup(ctx, q.GroupID)
+	channels, err := s.repo.ListChannelsByGroupForAccount(ctx, q.GroupID, q.Actor.AccountID)
 	if err != nil {
 		return nil, fault.Internal("List channels failed", fault.WithCause(err))
 	}
@@ -174,6 +187,9 @@ func (s *Service) CreateAttachmentUpload(ctx context.Context, cmd CreateAttachme
 	fileName := strings.TrimSpace(cmd.FileName)
 	if fileName == "" {
 		return nil, fault.Validation("fileName is required")
+	}
+	if err := s.validateAttachmentSize(ctx, cmd); err != nil {
+		return nil, err
 	}
 	orgID := cmd.OrganizationID
 	if orgID != nil && cmd.Actor.IsGuest() {
@@ -404,6 +420,47 @@ func (s *Service) canMutateMessage(access collabdomain.Access, principal authdom
 		return *message.AuthorGuestID == principal.GuestID
 	}
 	return false
+}
+
+func (s *Service) validateAttachmentSize(ctx context.Context, cmd CreateAttachmentUploadCmd) error {
+	ct := ""
+	if cmd.ContentType != nil {
+		ct = strings.ToLower(strings.TrimSpace(*cmd.ContentType))
+	}
+	docLimit, photoLimit, videoLimit, totalLimit, err := s.repo.GetEffectiveAttachmentLimits(ctx, cmd.Actor.AccountID, cmd.OrganizationID)
+	if err != nil {
+		return fault.Internal("Load attachment limits failed", fault.WithCause(err))
+	}
+	var perFileLimit int64
+	switch {
+	case strings.HasPrefix(ct, "image/"):
+		perFileLimit = photoLimit
+	case strings.HasPrefix(ct, "video/"):
+		perFileLimit = videoLimit
+	default:
+		perFileLimit = docLimit
+	}
+	if cmd.SizeBytes > perFileLimit {
+		return fault.Validation(
+			fmt.Sprintf("File size exceeds limit for this type (max %d bytes, got %d)", perFileLimit, cmd.SizeBytes),
+			fault.Field("sizeBytes", fmt.Sprintf("max %d bytes for this content type", perFileLimit)),
+		)
+	}
+	if cmd.Actor.IsAccount() {
+		var total int64
+		if cmd.OrganizationID != nil && *cmd.OrganizationID != uuid.Nil {
+			total, err = s.repo.GetOrganizationChatAttachmentTotalSize(ctx, *cmd.OrganizationID)
+		} else {
+			total, err = s.repo.GetAccountChatAttachmentTotalSize(ctx, cmd.Actor.AccountID)
+		}
+		if err != nil {
+			return fault.Internal("Check attachment quota failed", fault.WithCause(err))
+		}
+		if total+cmd.SizeBytes > totalLimit {
+			return fault.Validation("Attachment quota exceeded")
+		}
+	}
+	return nil
 }
 
 func buildAttachmentObjectKey(channelID, objectID uuid.UUID, fileName string, now time.Time) string {

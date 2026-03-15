@@ -18,7 +18,7 @@ func TestRegisterDoesNotPanic(t *testing.T) {
 			Version: "test",
 		},
 	})
-	handler := NewHandler(platformapp.New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
+	handler := NewHandler(platformapp.New(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 
 	defer func() {
 		if r := recover(); r != nil {

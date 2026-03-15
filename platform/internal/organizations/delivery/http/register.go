@@ -16,6 +16,9 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 
 	huma.Register(api, getOrganizationByIdOp, h.GetOrganizationById)
 	huma.Register(api, resolveOrganizationByHostOp, h.ResolveOrganizationByHost)
+	listOrganizations := listOrganizationsOp
+	listOrganizations.Middlewares = huma.Middlewares{authmw.HumaAuthOptional(verifier)}
+	huma.Register(api, listOrganizations, h.ListOrganizations)
 	huma.Register(api, listPublicKYCDirectoryOp, h.ListPublicKYCDirectory)
 
 	update := updateOrganizationOp

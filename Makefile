@@ -18,6 +18,7 @@ WEB_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.web.dev
 WEB_LOGIN_ENV_FILE := --env-file $(DEPLOY_DIR)/env/.env.web.login.dev
 
 CORE_FILE := core.yaml
+REDIS_FILE := redis.yaml
 STORAGE_FILE := storage.yaml
 AUTH_FILE := auth.yaml
 JOBS_FILE := jobs.yaml
@@ -42,6 +43,7 @@ COMPOSE_ARGS = \
 	$(REDIS_ENV_FILE) \
 	$(ZITADEL_ENV_FILE) \
 	-f $(COMPOSE_DIR)/$(CORE_FILE) \
+	-f $(COMPOSE_DIR)/$(REDIS_FILE) \
 	-f $(COMPOSE_DIR)/$(STORAGE_FILE) \
 	-f $(COMPOSE_DIR)/$(AUTH_FILE) \
 	--profile local
@@ -55,6 +57,7 @@ COMPOSE_ARGS_WITH_WEB = \
 	$(WEB_ENV_FILE) \
 	$(WEB_LOGIN_ENV_FILE) \
 	-f $(COMPOSE_DIR)/$(CORE_FILE) \
+	-f $(COMPOSE_DIR)/$(REDIS_FILE) \
 	-f $(COMPOSE_DIR)/$(STORAGE_FILE) \
 	-f $(COMPOSE_DIR)/$(AUTH_FILE) \
 	--profile local \

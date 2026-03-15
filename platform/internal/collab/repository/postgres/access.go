@@ -99,6 +99,22 @@ func (r *Repo) ResolveChannelAccessForAccount(ctx context.Context, channelID, ac
 		return access, nil
 	}
 
+	// Channel visibility: if channel has organization or account restrictions, user must pass them
+	hasOrgs, hasAccounts, err := r.channelHasVisibilityRestrictions(ctx, channelID)
+	if err != nil {
+		return collabdomain.Access{}, err
+	}
+	if hasOrgs || hasAccounts {
+		allowed, err := r.accountPassesChannelVisibility(ctx, channelID, accountID, access.OrganizationIDs)
+		if err != nil {
+			return collabdomain.Access{}, err
+		}
+		if !allowed {
+			access.Allowed = false
+			return access, nil
+		}
+	}
+
 	var admin channelAdminRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("collab.channel_admins").
@@ -111,6 +127,48 @@ func (r *Repo) ResolveChannelAccessForAccount(ctx context.Context, channelID, ac
 	}
 
 	return access, nil
+}
+
+func (r *Repo) channelHasVisibilityRestrictions(ctx context.Context, channelID uuid.UUID) (hasOrgs, hasAccounts bool, err error) {
+	var orgCount int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.channel_organizations").
+		Where("channel_id = ?", channelID).
+		Count(&orgCount).Error; err != nil {
+		return false, false, err
+	}
+	var accCount int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.channel_accounts").
+		Where("channel_id = ?", channelID).
+		Count(&accCount).Error; err != nil {
+		return false, false, err
+	}
+	return orgCount > 0, accCount > 0, nil
+}
+
+func (r *Repo) accountPassesChannelVisibility(ctx context.Context, channelID, accountID uuid.UUID, userOrgIDs []uuid.UUID) (bool, error) {
+	var directCount int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.channel_accounts").
+		Where("channel_id = ? AND account_id = ?", channelID, accountID).
+		Count(&directCount).Error; err != nil {
+		return false, err
+	}
+	if directCount > 0 {
+		return true, nil
+	}
+	if len(userOrgIDs) == 0 {
+		return false, nil
+	}
+	var orgMatchCount int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.channel_organizations").
+		Where("channel_id = ? AND organization_id IN ?", channelID, userOrgIDs).
+		Count(&orgMatchCount).Error; err != nil {
+		return false, err
+	}
+	return orgMatchCount > 0, nil
 }
 
 func (r *Repo) ResolveChannelAccessForGuest(ctx context.Context, channelID, guestID uuid.UUID) (collabdomain.Access, error) {

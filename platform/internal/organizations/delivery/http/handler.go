@@ -72,6 +72,23 @@ func (h *Handler) ResolveOrganizationByHost(ctx context.Context, input *dto.Reso
 	return h.organizationResponse(ctx, organization, http.StatusOK)
 }
 
+func (h *Handler) ListOrganizations(ctx context.Context, input *dto.ListOrganizationsInput) (*dto.ListOrganizationsResponse, error) {
+	items, err := h.svc.ListOrganizations(ctx, input.Limit)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.ListOrganizationsResponse{Status: http.StatusOK}
+	out.Body.Items = make([]dto.OrganizationListItemBody, 0, len(items))
+	for _, item := range items {
+		out.Body.Items = append(out.Body.Items, dto.OrganizationListItemBody{
+			ID:   item.ID.String(),
+			Name: item.Name,
+			Slug: item.Slug,
+		})
+	}
+	return out, nil
+}
+
 func (h *Handler) ListPublicKYCDirectory(ctx context.Context, input *dto.ListPublicKYCDirectoryInput) (*dto.PublicKYCDirectoryResponse, error) {
 	items, err := h.svc.ListPublicKYCDirectoryOrganizations(ctx, input.Limit)
 	if err != nil {

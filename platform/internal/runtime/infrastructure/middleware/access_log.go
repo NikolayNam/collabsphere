@@ -13,6 +13,7 @@ import (
 
 type AccessLogOptions struct {
 	QuietPaths []string
+	Disabled   bool
 }
 
 type statusWriter struct {
@@ -57,6 +58,9 @@ func AccessLog(base *slog.Logger, options AccessLogOptions) func(http.Handler) h
 
 			next.ServeHTTP(sw, r)
 
+			if options.Disabled {
+				return
+			}
 			if _, quiet := quietPaths[r.URL.Path]; quiet {
 				return
 			}

@@ -57,3 +57,24 @@ type OrganizationReviewRepository interface {
 }
 
 type ZitadelAdminClient = authports.ZitadelAdminClient
+
+type AttachmentLimit struct {
+	ID                   uuid.UUID
+	ScopeType            string
+	ScopeID              *uuid.UUID
+	DocumentLimitBytes   int64
+	PhotoLimitBytes      int64
+	VideoLimitBytes      int64
+	TotalLimitBytes      int64
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type AttachmentLimitsRepository interface {
+	List(ctx context.Context, scopeType *string, scopeID *uuid.UUID) ([]AttachmentLimit, error)
+	GetPlatform(ctx context.Context) (*AttachmentLimit, error)
+	GetByScope(ctx context.Context, scopeType string, scopeID uuid.UUID) (*AttachmentLimit, error)
+	UpsertPlatform(ctx context.Context, limit AttachmentLimit, now time.Time) (*AttachmentLimit, error)
+	UpsertByScope(ctx context.Context, scopeType string, scopeID uuid.UUID, limit AttachmentLimit, now time.Time) (*AttachmentLimit, error)
+	DeleteByScope(ctx context.Context, scopeType string, scopeID uuid.UUID) error
+}

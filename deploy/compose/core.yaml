@@ -46,6 +46,7 @@ services:
       - zitadel_client_secret
       - zitadel_admin_token
       - platform_auto_grant_yaml
+      - redis_password
     networks:
       - internal.network
       - external.network
@@ -168,3 +169,5 @@ secrets:
     file: ${AUTH_ZITADEL_ADMIN_TOKEN_SOURCE_FILE:-../fixtures/zitadel_admin_token.disabled}
   platform_auto_grant_yaml:
     file: ../secrets/identity/platform_auto_grant.yaml
+  redis_password:
+    file: ../secrets/redis/redis_password

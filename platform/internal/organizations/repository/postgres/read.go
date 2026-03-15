@@ -74,6 +74,28 @@ func (r *OrganizationRepo) ListByAccount(ctx context.Context, accountID uuid.UUI
 	return out, nil
 }
 
+func (r *OrganizationRepo) ListActiveOrganizations(ctx context.Context, limit int) ([]appports.OrganizationListItem, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	var rows []appports.OrganizationListItem
+	err := r.dbFrom(ctx).WithContext(ctx).
+		Table("org.organizations").
+		Select("id, name, slug").
+		Where("is_active = ?", true).
+		Order("updated_at DESC NULLS LAST, created_at DESC").
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func (r *OrganizationRepo) Exists(ctx context.Context, id domain.OrganizationID) (bool, error) {
 	if id.IsZero() {
 		return false, nil

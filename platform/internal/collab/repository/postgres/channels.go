@@ -40,14 +40,14 @@ func (r *Repo) ProvisionDefaultChannel(ctx context.Context, groupID, createdBy u
 		IsDefault: true,
 		CreatedBy: uuidPtr(createdBy),
 		CreatedAt: now,
-	}, nil)
+	}, nil, nil, nil)
 	if err != nil && isUniqueViolation(err) {
 		return nil
 	}
 	return err
 }
 
-func (r *Repo) CreateChannel(ctx context.Context, channel collabdomain.Channel, adminAccountIDs []uuid.UUID) (*collabdomain.Channel, error) {
+func (r *Repo) CreateChannel(ctx context.Context, channel collabdomain.Channel, adminAccountIDs []uuid.UUID, organizationIDs, accountIDs []uuid.UUID) (*collabdomain.Channel, error) {
 	if channel.ID == uuid.Nil {
 		channel.ID = uuid.New()
 	}
@@ -84,6 +84,30 @@ func (r *Repo) CreateChannel(ctx context.Context, channel collabdomain.Channel, 
 			return nil, err
 		}
 	}
+	for _, orgID := range uniqueUUIDs(organizationIDs) {
+		if orgID == uuid.Nil {
+			continue
+		}
+		if err := r.dbFrom(ctx).WithContext(ctx).Table("collab.channel_organizations").Create(map[string]any{
+			"channel_id":      channel.ID,
+			"organization_id": orgID,
+			"created_at":     channel.CreatedAt,
+		}).Error; err != nil {
+			return nil, err
+		}
+	}
+	for _, accID := range uniqueUUIDs(accountIDs) {
+		if accID == uuid.Nil {
+			continue
+		}
+		if err := r.dbFrom(ctx).WithContext(ctx).Table("collab.channel_accounts").Create(map[string]any{
+			"channel_id": channel.ID,
+			"account_id": accID,
+			"created_at": channel.CreatedAt,
+		}).Error; err != nil {
+			return nil, err
+		}
+	}
 	return r.GetChannelByID(ctx, channel.ID)
 }
 
@@ -102,7 +126,25 @@ func (r *Repo) GetChannelByID(ctx context.Context, channelID uuid.UUID) (*collab
 	return mapChannel(row), nil
 }
 
+func (r *Repo) ListAllChannelIDs(ctx context.Context) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.channels").
+		Select("id").
+		Where("deleted_at IS NULL").
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
 func (r *Repo) ListChannelsByGroup(ctx context.Context, groupID uuid.UUID) ([]collabdomain.Channel, error) {
+	return r.listChannelsByGroup(ctx, groupID, nil)
+}
+
+func (r *Repo) ListChannelsByGroupForAccount(ctx context.Context, groupID, accountID uuid.UUID) ([]collabdomain.Channel, error) {
+	return r.listChannelsByGroup(ctx, groupID, &accountID)
+}
+
+func (r *Repo) listChannelsByGroup(ctx context.Context, groupID uuid.UUID, accountID *uuid.UUID) ([]collabdomain.Channel, error) {
 	var rows []channelRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("collab.channels").
@@ -112,9 +154,34 @@ func (r *Repo) ListChannelsByGroup(ctx context.Context, groupID uuid.UUID) ([]co
 		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
+	if accountID == nil || *accountID == uuid.Nil {
+		out := make([]collabdomain.Channel, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, *mapChannel(row))
+		}
+		return out, nil
+	}
+	access, err := r.ResolveGroupAccessForAccount(ctx, groupID, *accountID)
+	if err != nil || !access.Allowed {
+		return nil, err
+	}
 	out := make([]collabdomain.Channel, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, *mapChannel(row))
+		hasOrgs, hasAccounts, err := r.channelHasVisibilityRestrictions(ctx, row.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOrgs && !hasAccounts {
+			out = append(out, *mapChannel(row))
+			continue
+		}
+		allowed, err := r.accountPassesChannelVisibility(ctx, row.ID, *accountID, access.OrganizationIDs)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			out = append(out, *mapChannel(row))
+		}
 	}
 	return out, nil
 }
@@ -188,6 +255,40 @@ func mapChannel(row channelRow) *collabdomain.Channel {
 		CreatedAt:      row.CreatedAt,
 		UpdatedAt:      row.UpdatedAt,
 	}
+}
+
+func (r *Repo) ValidateChannelVisibilityInGroup(ctx context.Context, groupID uuid.UUID, organizationIDs, accountIDs []uuid.UUID) error {
+	for _, orgID := range organizationIDs {
+		if orgID == uuid.Nil {
+			continue
+		}
+		var count int64
+		if err := r.dbFrom(ctx).WithContext(ctx).
+			Table("iam.group_organization_members").
+			Where("group_id = ? AND organization_id = ? AND deleted_at IS NULL AND is_active = TRUE", groupID, orgID).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("organization %s is not a member of the group", orgID)
+		}
+	}
+	for _, accID := range accountIDs {
+		if accID == uuid.Nil {
+			continue
+		}
+		var count int64
+		if err := r.dbFrom(ctx).WithContext(ctx).
+			Table("iam.group_account_members").
+			Where("group_id = ? AND account_id = ? AND deleted_at IS NULL AND is_active = TRUE", groupID, accID).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("account %s is not a member of the group", accID)
+		}
+	}
+	return nil
 }
 
 func uniqueUUIDs(values []uuid.UUID) []uuid.UUID {

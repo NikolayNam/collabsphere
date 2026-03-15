@@ -223,3 +223,93 @@ var issueKYCLevelOp = huma.Operation{
 	Description: "Evaluates configured requirements against verified documents and assigns the highest matching KYC level.\n\n" + platformControlPlaneCaution,
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var listAttachmentLimitsOp = huma.Operation{
+	OperationID: "platform-list-attachment-limits",
+	Method:      "GET",
+	Path:        "/platform/attachment-limits",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "List attachment limits",
+	Description: "Returns attachment limits with optional filters by scope type and scope id. Resolution order: account > organization > platform.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var getPlatformAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-get-platform-attachment-limit",
+	Method:      "GET",
+	Path:        "/platform/attachment-limits/platform",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Get platform default attachment limit",
+	Description: "Returns the platform-wide default attachment limits used when no org/account override exists.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var upsertPlatformAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-upsert-platform-attachment-limit",
+	Method:      "PUT",
+	Path:        "/platform/attachment-limits/platform",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Update platform default attachment limit",
+	Description: "Creates or updates the platform-wide default attachment limits.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var getOrganizationAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-get-organization-attachment-limit",
+	Method:      "GET",
+	Path:        "/platform/attachment-limits/organizations/{organizationId}",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Get organization attachment limit",
+	Description: "Returns organization-specific attachment limits override.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var upsertOrganizationAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-upsert-organization-attachment-limit",
+	Method:      "PUT",
+	Path:        "/platform/attachment-limits/organizations/{organizationId}",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Create or update organization attachment limit",
+	Description: "Creates or updates organization-specific attachment limits override.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var deleteOrganizationAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-delete-organization-attachment-limit",
+	Method:      "DELETE",
+	Path:        "/platform/attachment-limits/organizations/{organizationId}",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Delete organization attachment limit",
+	Description: "Removes organization-specific override; organization falls back to platform default.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var getAccountAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-get-account-attachment-limit",
+	Method:      "GET",
+	Path:        "/platform/attachment-limits/accounts/{accountId}",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Get account attachment limit",
+	Description: "Returns account-specific attachment limits override.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var upsertAccountAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-upsert-account-attachment-limit",
+	Method:      "PUT",
+	Path:        "/platform/attachment-limits/accounts/{accountId}",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Create or update account attachment limit",
+	Description: "Creates or updates account-specific attachment limits override.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var deleteAccountAttachmentLimitOp = huma.Operation{
+	OperationID: "platform-delete-account-attachment-limit",
+	Method:      "DELETE",
+	Path:        "/platform/attachment-limits/accounts/{accountId}",
+	Tags:        []string{"Platform / Attachment Limits"},
+	Summary:     "Delete account attachment limit",
+	Description: "Removes account-specific override; account falls back to organization or platform default.\n\n" + platformControlPlaneCaution,
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

@@ -39,10 +39,12 @@ type ChannelResponse struct {
 type CreateChannelInput struct {
 	GroupID string `path:"group_id"`
 	Body    struct {
-		Slug            string   `json:"slug"`
-		Name            string   `json:"name"`
-		Description     *string  `json:"description,omitempty"`
+		Slug            string  `json:"slug"`
+		Name            string  `json:"name"`
+		Description     *string `json:"description,omitempty"`
 		AdminAccountIDs []string `json:"adminAccountIds,omitempty"`
+		OrganizationID  *string `json:"organizationId,omitempty" doc:"If set, channel for this organization only (mutually exclusive with accountId)"`
+		AccountID       *string `json:"accountId,omitempty" doc:"If set, channel for this account only (mutually exclusive with organizationId)"`
 	}
 }
 

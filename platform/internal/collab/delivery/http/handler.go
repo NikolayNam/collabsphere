@@ -32,7 +32,31 @@ func (h *Handler) CreateChannel(ctx context.Context, input *dto.CreateChannelInp
 	if err != nil {
 		return nil, humaerr.From(ctx, authappValidation())
 	}
-	channel, err := h.svc.CreateChannel(ctx, authapp.CreateChannelCmd{GroupID: groupID, Actor: principal(ctx), Slug: input.Body.Slug, Name: input.Body.Name, Description: input.Body.Description, AdminAccountIDs: adminIDs})
+	var orgID, accID *uuid.UUID
+	if input.Body.OrganizationID != nil && strings.TrimSpace(*input.Body.OrganizationID) != "" {
+		id, err := parseUUID(*input.Body.OrganizationID)
+		if err != nil {
+			return nil, humaerr.From(ctx, authappValidation())
+		}
+		orgID = &id
+	}
+	if input.Body.AccountID != nil && strings.TrimSpace(*input.Body.AccountID) != "" {
+		id, err := parseUUID(*input.Body.AccountID)
+		if err != nil {
+			return nil, humaerr.From(ctx, authappValidation())
+		}
+		accID = &id
+	}
+	channel, err := h.svc.CreateChannel(ctx, authapp.CreateChannelCmd{
+		GroupID:         groupID,
+		Actor:           principal(ctx),
+		Slug:            input.Body.Slug,
+		Name:            input.Body.Name,
+		Description:     input.Body.Description,
+		AdminAccountIDs: adminIDs,
+		OrganizationID:  orgID,
+		AccountID:       accID,
+	})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}

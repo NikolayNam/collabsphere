@@ -17,6 +17,7 @@ func TestHasOrganizationPermission(t *testing.T) {
 		{memberdomain.MembershipRoleManager, PermissionOrganizationManageCatalog, true},
 		{memberdomain.MembershipRoleManager, PermissionOrganizationManageMembers, false},
 		{memberdomain.MembershipRoleMember, PermissionOrganizationEmployeeAccess, true},
+		{memberdomain.MembershipRoleMember, PermissionOrganizationManageCatalog, true},
 		{memberdomain.MembershipRoleViewer, PermissionOrganizationEmployeeAccess, false},
 		{memberdomain.MembershipRoleViewer, PermissionOrganizationRead, true},
 	}

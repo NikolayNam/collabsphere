@@ -79,3 +79,8 @@
 0077 | payments/payment_transaction_lines.sql              | 0077_payment_transaction_lines.sql
 0078 | payments/payment_imports.sql                        | 0078_payment_imports.sql
 0079 | payments/payment_import_items.sql                   | 0079_payment_import_items.sql
+0080 | collab/realtime_event_buffer.sql                    | 0080_realtime_event_buffer.sql
+0081 | collab/channel_organizations.sql                    | 0081_channel_organizations.sql
+0082 | collab/channel_accounts.sql                         | 0082_channel_accounts.sql
+0083 | collab/attachment_limits.sql                        | 0083_attachment_limits.sql
+0084 | storage/upload_limits.sql                           | 0084_upload_limits.sql

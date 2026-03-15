@@ -13,6 +13,7 @@ import (
 
 type RouterOptions struct {
 	AccessLogQuietPaths []string
+	AccessLogDisabled   bool
 	HTTPMetrics         func(http.Handler) http.Handler
 	RateLimit           func(http.Handler) http.Handler
 }
@@ -36,7 +37,7 @@ func NewRouter(httpLog *slog.Logger, options RouterOptions) chi.Router {
 	if options.HTTPMetrics != nil {
 		r.Use(options.HTTPMetrics)
 	}
-	r.Use(middleware.AccessLog(httpLog, middleware.AccessLogOptions{QuietPaths: options.AccessLogQuietPaths}))
+	r.Use(middleware.AccessLog(httpLog, middleware.AccessLogOptions{QuietPaths: options.AccessLogQuietPaths, Disabled: options.AccessLogDisabled}))
 
 	return r
 }

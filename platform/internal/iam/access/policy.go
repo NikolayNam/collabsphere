@@ -25,7 +25,12 @@ func HasOrganizationPermission(role memberdomain.MembershipRole, permission Perm
 			role == memberdomain.MembershipRoleMember
 	case PermissionOrganizationManageProfile, PermissionOrganizationManageMembers, PermissionOrganizationManageOnboarding:
 		return role == memberdomain.MembershipRoleOwner || role == memberdomain.MembershipRoleAdmin
-	case PermissionOrganizationManageCatalog, PermissionOrganizationManagePayments:
+	case PermissionOrganizationManageCatalog:
+		return role == memberdomain.MembershipRoleOwner ||
+			role == memberdomain.MembershipRoleAdmin ||
+			role == memberdomain.MembershipRoleManager ||
+			role == memberdomain.MembershipRoleMember
+	case PermissionOrganizationManagePayments:
 		return role == memberdomain.MembershipRoleOwner ||
 			role == memberdomain.MembershipRoleAdmin ||
 			role == memberdomain.MembershipRoleManager

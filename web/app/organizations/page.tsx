@@ -1860,14 +1860,7 @@ export default function OrganizationsPage() {
                 type="button"
                 onClick={() => setOrganizationSection("uploads")}
               >
-                Категории / Прайс / Продукция
-              </button>
-              <button
-                className={`button ${organizationSection === "catalog" ? "primary" : "secondary"}`}
-                type="button"
-                onClick={() => setOrganizationSection("catalog")}
-              >
-                Списки каталога
+                Загрузка CSV
               </button>
               <button
                 className={`button ${organizationSection === "kyc" ? "primary" : "secondary"}`}
@@ -2154,209 +2147,10 @@ export default function OrganizationsPage() {
                     <strong>{catalogState.title}</strong>
                     <p className="status-copy">{catalogState.description}</p>
                   </div>
-
-                  <div className="cards">
-                    <form className="form-grid" onSubmit={handleCreateCategory}>
-                      <h3>Категории</h3>
-                      <div className="form-row two">
-                        <div className="form-row">
-                          <label className="form-label">Код</label>
-                          <input className="text-input" value={newCategoryCode} onChange={(event) => setNewCategoryCode(event.target.value)} required />
-                        </div>
-                        <div className="form-row">
-                          <label className="form-label">Название</label>
-                          <input className="text-input" value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} required />
-                        </div>
-                      </div>
-                      <div className="form-row">
-                        <label className="form-label">Статус категории</label>
-                        <select className="text-input" value={newCategoryStatus} onChange={(event) => setNewCategoryStatus(event.target.value)}>
-                          {CATALOG_STATUSES.map((status) => (
-                            <option key={status} value={status}>
-                              {catalogStatusLabel(status)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="button-row">
-                        <button className="button secondary" type="submit" disabled={!canManageCatalog}>
-                          Добавить категорию
-                        </button>
-                      </div>
-                      <div className="domain-list">
-                        {categories.map((item) => {
-                          const draft = editingCategory[item.id] || { code: item.code, name: item.name, sortOrder: item.sortOrder || 0, status: item.status || "draft" };
-                          return (
-                            <div key={item.id} className="inline-panel">
-                              <div className="form-row two">
-                                <input
-                                  className="text-input"
-                                  value={draft.code}
-                                  onChange={(event) =>
-                                    setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, code: event.target.value } }))
-                                  }
-                                />
-                                <input
-                                  className="text-input"
-                                  value={draft.name}
-                                  onChange={(event) =>
-                                    setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, name: event.target.value } }))
-                                  }
-                                />
-                              </div>
-                              <div className="form-row">
-                                <select
-                                  className="text-input"
-                                  value={draft.status}
-                                  onChange={(event) => setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, status: event.target.value } }))}
-                                >
-                                  {CATALOG_STATUSES.map((status) => (
-                                    <option key={status} value={status}>
-                                      {catalogStatusLabel(status)}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="button-row">
-                                <button className="button secondary" type="button" onClick={() => void handleUpdateCategory(item.id)} disabled={!canManageCatalog}>
-                                  Сохранить категорию
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </form>
-
-                    <form className="form-grid" onSubmit={handleCreateProduct}>
-                      <h3>Продукция</h3>
-                      <div className="form-row">
-                        <label className="form-label">Название</label>
-                        <input className="text-input" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} required />
-                      </div>
-                      <div className="form-row">
-                        <label className="form-label">Статус продукции</label>
-                        <select className="text-input" value={newProductStatus} onChange={(event) => setNewProductStatus(event.target.value)}>
-                          {CATALOG_STATUSES.map((status) => (
-                            <option key={status} value={status}>
-                              {catalogStatusLabel(status)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-row two">
-                        <div className="form-row">
-                          <label className="form-label">Категория</label>
-                          <select className="text-input" value={newProductCategoryId} onChange={(event) => setNewProductCategoryId(event.target.value)}>
-                            <option value="">Без категории</option>
-                            {categories.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="form-row">
-                          <label className="form-label">Цена</label>
-                          <input className="text-input" value={newProductPriceAmount} onChange={(event) => setNewProductPriceAmount(event.target.value)} />
-                        </div>
-                      </div>
-                      <div className="button-row">
-                        <button className="button secondary" type="submit" disabled={!canManageCatalog}>
-                          Добавить продукцию
-                        </button>
-                      </div>
-                      <div className="domain-list">
-                        {products.map((item) => {
-                          const draft = editingProduct[item.id] || {
-                            name: item.name,
-                            categoryId: item.categoryId || "",
-                            status: item.status || "draft",
-                            priceAmount: item.priceAmount || "",
-                            currencyCode: item.currencyCode || "RUB",
-                            isActive: item.isActive,
-                          };
-                          return (
-                            <div key={item.id} className="inline-panel">
-                              <div className="form-row">
-                                <input
-                                  className="text-input"
-                                  value={draft.name}
-                                  onChange={(event) =>
-                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, name: event.target.value } }))
-                                  }
-                                />
-                              </div>
-                              <div className="form-row two">
-                                <select
-                                  className="text-input"
-                                  value={draft.categoryId}
-                                  onChange={(event) =>
-                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, categoryId: event.target.value } }))
-                                  }
-                                >
-                                  <option value="">Без категории</option>
-                                  {categories.map((category) => (
-                                    <option key={category.id} value={category.id}>
-                                      {category.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  className="text-input"
-                                  value={draft.priceAmount}
-                                  onChange={(event) =>
-                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, priceAmount: event.target.value } }))
-                                  }
-                                  placeholder="0.00"
-                                />
-                              </div>
-                              <div className="form-row two">
-                                <select
-                                  className="text-input"
-                                  value={draft.status}
-                                  onChange={(event) => setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, status: event.target.value } }))}
-                                >
-                                  {CATALOG_STATUSES.map((status) => (
-                                    <option key={status} value={status}>
-                                      {catalogStatusLabel(status)}
-                                    </option>
-                                  ))}
-                                </select>
-                                <input
-                                  className="text-input"
-                                  value={draft.currencyCode}
-                                  onChange={(event) =>
-                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, currencyCode: event.target.value.toUpperCase() } }))
-                                  }
-                                  placeholder="RUB"
-                                />
-                                <label className="muted">
-                                  <input
-                                    type="checkbox"
-                                    checked={draft.isActive}
-                                    onChange={(event) =>
-                                      setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, isActive: event.target.checked } }))
-                                    }
-                                  />{" "}
-                                  active
-                                </label>
-                              </div>
-                              <div className="button-row">
-                                <button className="button secondary" type="button" onClick={() => void handleUpdateProduct(item.id)} disabled={!canManageCatalog}>
-                                  Сохранить продукцию
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </form>
-                  </div>
                 </div>
               ) : null}
 
-              {organizationSection === "catalog" ? (
+              {false && organizationSection === "catalog" ? (
                 <div className="mini-card">
                   <h3>Списки каталога организации</h3>
                   <div className={`status-card ${catalogState.kind === "error" ? "error" : catalogState.kind === "success" ? "success" : "info"}`}>
@@ -2392,15 +2186,25 @@ export default function OrganizationsPage() {
                     <div className="mini-card">
                       <h3>Категории ({categories.length})</h3>
                       {categories.length > 0 ? (
-                        <div className="domain-list">
-                          {categories.map((item) => (
-                            <div key={item.id} className="inline-panel">
-                              <strong>{item.name}</strong>
-                              <p className="muted">
-                                <code>{item.code}</code> · {catalogStatusLabel(item.status)}
-                              </p>
-                            </div>
-                          ))}
+                        <div className="data-table-wrapper">
+                          <table className="data-table">
+                            <thead>
+                            <tr>
+                              <th>Код</th>
+                              <th>Название</th>
+                              <th>Статус</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {categories.map((item) => (
+                              <tr key={item.id}>
+                                <td><code>{item.code}</code></td>
+                                <td><strong>{item.name}</strong></td>
+                                <td>{catalogStatusLabel(item.status)}</td>
+                              </tr>
+                            ))}
+                            </tbody>
+                          </table>
                         </div>
                       ) : (
                         <p className="muted">Категорий пока нет.</p>
@@ -2410,16 +2214,29 @@ export default function OrganizationsPage() {
                     <div className="mini-card">
                       <h3>Продукция ({products.length})</h3>
                       {products.length > 0 ? (
-                        <div className="domain-list">
-                          {products.map((item) => (
-                            <div key={item.id} className="inline-panel">
-                              <strong>{item.name}</strong>
-                              <p className="muted">
-                                {item.priceAmount ? `${item.priceAmount} ${item.currencyCode || ""}` : "Цена не указана"} · {catalogStatusLabel(item.status)} ·{" "}
-                                {item.isActive ? "active" : "inactive"}
-                              </p>
-                            </div>
-                          ))}
+                        <div className="data-table-wrapper">
+                          <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Название</th>
+                              <th>Категория</th>
+                              <th>Цена</th>
+                              <th>Статус</th>
+                              <th>Active</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {products.map((item) => (
+                              <tr key={item.id}>
+                                <td><strong>{item.name}</strong></td>
+                                <td>{categories.find((c) => c.id === item.categoryId)?.name ?? "—"}</td>
+                                <td>{item.priceAmount ? `${item.priceAmount} ${item.currencyCode || ""}` : "—"}</td>
+                                <td>{catalogStatusLabel(item.status)}</td>
+                                <td>{item.isActive ? "да" : "нет"}</td>
+                              </tr>
+                            ))}
+                            </tbody>
+                          </table>
                         </div>
                       ) : (
                         <p className="muted">Продукции пока нет.</p>
@@ -2431,7 +2248,7 @@ export default function OrganizationsPage() {
                     <h3>Прайс-листы ({priceListFiles.length})</h3>
                     <p className="muted">
                       Текущий прайс-лист:{" "}
-                      {cooperationApplication?.priceListObjectId ? <code>{cooperationApplication.priceListObjectId}</code> : "не назначен"}
+                      {cooperationApplication?.priceListObjectId ? <code>{cooperationApplication?.priceListObjectId}</code> : "не назначен"}
                     </p>
                     <div className="form-row">
                       <label className="form-label">Статус прайс-листа</label>
@@ -2829,6 +2646,274 @@ export default function OrganizationsPage() {
           </Panel>
         </div>
       </section>
+
+      {profile && selectedOrganizationId ? (
+        <section className="catalog-blocks">
+          <Panel title="Категории" eyebrow={selectedOrganization?.name ?? "Каталог"}>
+            <div className={`status-card ${catalogState.kind === "error" ? "error" : catalogState.kind === "success" ? "success" : "info"}`}>
+              <strong>{catalogState.title}</strong>
+              <p className="status-copy">{catalogState.description}</p>
+            </div>
+            <form className="form-grid" onSubmit={handleCreateCategory}>
+              <div className="form-row two">
+                <div className="form-row">
+                  <label className="form-label">Код</label>
+                  <input className="text-input" value={newCategoryCode} onChange={(event) => setNewCategoryCode(event.target.value)} required />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Название</label>
+                  <input className="text-input" value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} required />
+                </div>
+              </div>
+              <div className="form-row">
+                <label className="form-label">Статус категории</label>
+                <select className="text-input" value={newCategoryStatus} onChange={(event) => setNewCategoryStatus(event.target.value)}>
+                  {CATALOG_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {catalogStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="button-row">
+                <button className="button secondary" type="submit" disabled={!canManageCatalog}>
+                  Добавить категорию
+                </button>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Код</th>
+                      <th>Название</th>
+                      <th>Статус</th>
+                      {canManageCatalog ? <th>Действия</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categories.length === 0 ? (
+                      <tr>
+                        <td colSpan={canManageCatalog ? 4 : 3} className="muted">
+                          Категорий пока нет. Добавьте первую выше.
+                        </td>
+                      </tr>
+                    ) : (
+                      categories.map((item) => {
+                        const draft = editingCategory[item.id] || { code: item.code, name: item.name, sortOrder: item.sortOrder || 0, status: item.status || "draft" };
+                        return (
+                          <tr key={item.id}>
+                            <td>
+                              <input
+                                className="text-input"
+                                value={draft.code}
+                                onChange={(event) =>
+                                  setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, code: event.target.value } }))
+                                }
+                                disabled={!canManageCatalog}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="text-input"
+                                value={draft.name}
+                                onChange={(event) =>
+                                  setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, name: event.target.value } }))
+                                }
+                                disabled={!canManageCatalog}
+                              />
+                            </td>
+                            <td>
+                              <select
+                                className="text-input"
+                                value={draft.status}
+                                onChange={(event) => setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, status: event.target.value } }))}
+                                disabled={!canManageCatalog}
+                              >
+                                {CATALOG_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {catalogStatusLabel(status)}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            {canManageCatalog ? (
+                              <td>
+                                <button className="button secondary" type="button" onClick={() => void handleUpdateCategory(item.id)}>
+                                  Сохранить
+                                </button>
+                              </td>
+                            ) : null}
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </form>
+          </Panel>
+
+          <Panel title="Продукция" eyebrow={selectedOrganization?.name ?? "Каталог"}>
+            <form className="form-grid" onSubmit={handleCreateProduct}>
+              <div className="form-row">
+                <label className="form-label">Название</label>
+                <input className="text-input" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} required />
+              </div>
+              <div className="form-row">
+                <label className="form-label">Статус продукции</label>
+                <select className="text-input" value={newProductStatus} onChange={(event) => setNewProductStatus(event.target.value)}>
+                  {CATALOG_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {catalogStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-row two">
+                <div className="form-row">
+                  <label className="form-label">Категория</label>
+                  <select className="text-input" value={newProductCategoryId} onChange={(event) => setNewProductCategoryId(event.target.value)}>
+                    <option value="">Без категории</option>
+                    {categories.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Цена</label>
+                  <input className="text-input" value={newProductPriceAmount} onChange={(event) => setNewProductPriceAmount(event.target.value)} />
+                </div>
+              </div>
+              <div className="button-row">
+                <button className="button secondary" type="submit" disabled={!canManageCatalog}>
+                  Добавить продукцию
+                </button>
+              </div>
+              <div className="data-table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Название</th>
+                      <th>Категория</th>
+                      <th>Цена</th>
+                      <th>Валюта</th>
+                      <th>Статус</th>
+                      <th>Active</th>
+                      {canManageCatalog ? <th>Действия</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.length === 0 ? (
+                      <tr>
+                        <td colSpan={canManageCatalog ? 7 : 6} className="muted">
+                          Продукции пока нет. Добавьте первую выше.
+                        </td>
+                      </tr>
+                    ) : (
+                      products.map((item) => {
+                        const draft = editingProduct[item.id] || {
+                          name: item.name,
+                          categoryId: item.categoryId || "",
+                          status: item.status || "draft",
+                          priceAmount: item.priceAmount || "",
+                          currencyCode: item.currencyCode || "RUB",
+                          isActive: item.isActive,
+                        };
+                        return (
+                          <tr key={item.id}>
+                            <td>
+                              <input
+                                className="text-input"
+                                value={draft.name}
+                                onChange={(event) =>
+                                  setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, name: event.target.value } }))
+                                }
+                                disabled={!canManageCatalog}
+                              />
+                            </td>
+                            <td>
+                              <select
+                                className="text-input"
+                                value={draft.categoryId}
+                                onChange={(event) =>
+                                  setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, categoryId: event.target.value } }))
+                                }
+                                disabled={!canManageCatalog}
+                              >
+                                <option value="">Без категории</option>
+                                {categories.map((category) => (
+                                  <option key={category.id} value={category.id}>
+                                    {category.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                className="text-input"
+                                value={draft.priceAmount}
+                                onChange={(event) =>
+                                  setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, priceAmount: event.target.value } }))
+                                }
+                                placeholder="0.00"
+                                disabled={!canManageCatalog}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="text-input"
+                                value={draft.currencyCode}
+                                onChange={(event) =>
+                                  setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, currencyCode: event.target.value.toUpperCase() } }))
+                                }
+                                placeholder="RUB"
+                                disabled={!canManageCatalog}
+                              />
+                            </td>
+                            <td>
+                              <select
+                                className="text-input"
+                                value={draft.status}
+                                onChange={(event) => setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, status: event.target.value } }))}
+                                disabled={!canManageCatalog}
+                              >
+                                {CATALOG_STATUSES.map((status) => (
+                                  <option key={status} value={status}>
+                                    {catalogStatusLabel(status)}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={draft.isActive}
+                                onChange={(event) =>
+                                  setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, isActive: event.target.checked } }))
+                                }
+                                disabled={!canManageCatalog}
+                              />
+                            </td>
+                            {canManageCatalog ? (
+                              <td>
+                                <button className="button secondary" type="button" onClick={() => void handleUpdateProduct(item.id)}>
+                                  Сохранить
+                                </button>
+                              </td>
+                            ) : null}
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </form>
+          </Panel>
+        </section>
+      ) : null}
     </>
   );
 }

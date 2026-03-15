@@ -102,6 +102,7 @@ type App struct {
 	Debug             bool          `env:"APPLICATION_DEBUG" envDefault:"false"`
 	Environment       string        `env:"APPLICATION_ENVIRONMENT" envDefault:"dev"`
 	LogLevel          string        `env:"APPLICATION_LOG_LEVEL" envDefault:"INFO"`
+	AccessLogEnabled  bool          `env:"APPLICATION_ACCESS_LOG_ENABLED" envDefault:"true"`
 	TrustProxyHeaders bool          `env:"APPLICATION_TRUST_PROXY_HEADERS" envDefault:"false"`
 }
 

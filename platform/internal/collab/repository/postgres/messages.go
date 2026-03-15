@@ -164,6 +164,26 @@ func (r *Repo) ListMessages(ctx context.Context, channelID uuid.UUID, principal 
 	})
 }
 
+// ListRecentMessagesForChannel returns the last N messages for a channel without access control, oldest first.
+// Used by Redis broker init to preload channel history.
+func (r *Repo) ListRecentMessagesForChannel(ctx context.Context, channelID uuid.UUID, limit int) ([]collabdomain.Message, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	msgs, err := r.listMessages(ctx, channelID, authdomain.AnonymousPrincipal(), func(db *gorm.DB) *gorm.DB {
+		return db.Where("m.channel_id = ? AND m.deleted_at IS NULL", channelID).
+			Order("m.channel_seq DESC").
+			Limit(limit)
+	})
+	if err != nil || len(msgs) == 0 {
+		return msgs, err
+	}
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+	return msgs, nil
+}
+
 func (r *Repo) listMessages(ctx context.Context, channelID uuid.UUID, principal authdomain.Principal, scope func(*gorm.DB) *gorm.DB) ([]collabdomain.Message, error) {
 	base := r.dbFrom(ctx).WithContext(ctx).
 		Table("collab.messages AS m").
@@ -434,6 +454,76 @@ func (r *Repo) loadReactions(ctx context.Context, messageIDs []uuid.UUID, princi
 		})
 	}
 	return out, nil
+}
+
+func (r *Repo) GetAccountChatAttachmentTotalSize(ctx context.Context, accountID uuid.UUID) (int64, error) {
+	if accountID == uuid.Nil {
+		return 0, nil
+	}
+	var total int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.message_attachments AS ma").
+		Select("COALESCE(SUM(so.size_bytes), 0)").
+		Joins("JOIN storage.objects AS so ON so.id = ma.object_id AND so.deleted_at IS NULL").
+		Where("ma.created_by = ?", accountID).
+		Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (r *Repo) GetOrganizationChatAttachmentTotalSize(ctx context.Context, organizationID uuid.UUID) (int64, error) {
+	if organizationID == uuid.Nil {
+		return 0, nil
+	}
+	var total int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("collab.message_attachments AS ma").
+		Select("COALESCE(SUM(so.size_bytes), 0)").
+		Joins("JOIN storage.objects AS so ON so.id = ma.object_id AND so.deleted_at IS NULL").
+		Where("ma.organization_id = ?", organizationID).
+		Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+type attachmentLimitsRow struct {
+	DocumentLimitBytes int64 `gorm:"column:document_limit_bytes"`
+	PhotoLimitBytes    int64 `gorm:"column:photo_limit_bytes"`
+	VideoLimitBytes    int64 `gorm:"column:video_limit_bytes"`
+	TotalLimitBytes    int64 `gorm:"column:total_limit_bytes"`
+}
+
+func (r *Repo) GetEffectiveAttachmentLimits(ctx context.Context, accountID uuid.UUID, organizationID *uuid.UUID) (document, photo, video, total int64, err error) {
+	db := r.dbFrom(ctx).WithContext(ctx)
+	// Resolution order: account > organization > platform
+	if accountID != uuid.Nil {
+		var row attachmentLimitsRow
+		if err := db.Table("storage.attachment_limits").
+			Select("document_limit_bytes, photo_limit_bytes, video_limit_bytes, total_limit_bytes").
+			Where("scope_type = ? AND scope_id = ?", "account", accountID).
+			Take(&row).Error; err == nil {
+			return row.DocumentLimitBytes, row.PhotoLimitBytes, row.VideoLimitBytes, row.TotalLimitBytes, nil
+		}
+	}
+	if organizationID != nil && *organizationID != uuid.Nil {
+		var row attachmentLimitsRow
+		if err := db.Table("storage.attachment_limits").
+			Select("document_limit_bytes, photo_limit_bytes, video_limit_bytes, total_limit_bytes").
+			Where("scope_type = ? AND scope_id = ?", "organization", *organizationID).
+			Take(&row).Error; err == nil {
+			return row.DocumentLimitBytes, row.PhotoLimitBytes, row.VideoLimitBytes, row.TotalLimitBytes, nil
+		}
+	}
+	var row attachmentLimitsRow
+	if err := db.Table("storage.attachment_limits").
+		Select("document_limit_bytes, photo_limit_bytes, video_limit_bytes, total_limit_bytes").
+		Where("scope_type = ? AND scope_id IS NULL", "platform").
+		Take(&row).Error; err != nil {
+		return 0, 0, 0, 0, err
+	}
+	return row.DocumentLimitBytes, row.PhotoLimitBytes, row.VideoLimitBytes, row.TotalLimitBytes, nil
 }
 
 func (r *Repo) getStorageObjectWithDB(db *gorm.DB, ctx context.Context, objectID uuid.UUID) (*collabdomain.StorageObject, error) {

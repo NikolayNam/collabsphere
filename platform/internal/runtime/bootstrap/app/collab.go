@@ -16,6 +16,7 @@ import (
 	whisper "github.com/NikolayNam/collabsphere/internal/runtime/infrastructure/transcription/whisper"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +25,26 @@ func registerCollabModule(api huma.API, router chi.Router, db *gorm.DB, conf *co
 	accountRepo := accpg.NewAccountRepo(db)
 	clk := clock.NewSystemClock()
 	tokenGen := tokens.NewGenerator()
-	broker := realtime.NewBroker()
+
+	var broker realtime.Broker
+	if conf.Realtime.Redis.Enabled {
+		password, err := conf.Realtime.Redis.PasswordValue()
+		if err != nil {
+			panic(fmt.Errorf("load realtime redis password: %w", err))
+		}
+		redisClient := redis.NewClient(&redis.Options{
+			Addr:     conf.Realtime.Redis.Address,
+			Password: password,
+			DB:       conf.Realtime.Redis.DB,
+		})
+		opts := []realtime.RedisBrokerOption{
+			realtime.WithEventBuffer(collabpg.NewEventBufferStoreAdapter(repo)),
+			realtime.WithChannelLoader(collabpg.NewChannelLoaderAdapter(repo)),
+		}
+		broker = realtime.NewRedisBroker(redisClient, conf.Realtime.Redis.ChannelPrefix, opts...)
+	} else {
+		broker = realtime.NewBroker()
+	}
 
 	secret, err := conf.Auth.JWTSecretValue()
 	if err != nil {

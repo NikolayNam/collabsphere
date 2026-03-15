@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { Panel } from "@/components/panel";
 import { APIError, apiFetch } from "@/lib/api";
@@ -210,6 +210,8 @@ export default function ChatPage() {
   const [groupName, setGroupName] = useState("Product Team");
   const [groupSlug, setGroupSlug] = useState("product-team");
   const [draft, setDraft] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<Array<{ objectId: string; fileName: string; sizeBytes: number }>>([]);
+  const [attachmentUploadState, setAttachmentUploadState] = useState<Status>({ kind: "idle", title: "", description: "" });
   const [groupsState, setGroupsState] = useState<Status>(initialGroupsState);
   const [channelsState, setChannelsState] = useState<Status>(initialChannelsState);
   const [messagesState, setMessagesState] = useState<Status>(initialMessagesState);
@@ -222,6 +224,7 @@ export default function ChatPage() {
   const [organizationAccessQueue, setOrganizationAccessQueue] = useState<OrganizationAccessRequest[]>([]);
   const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
   const [messagesRefreshKey, setMessagesRefreshKey] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const accessToken = useMemo(() => readStoredTokens()?.accessToken || null, []);
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) || null;
@@ -254,11 +257,11 @@ export default function ChatPage() {
       }
 
       try {
-        const payload = await apiFetch<{ data?: MyGroup[] }>("/v1/groups/my", { accessToken });
+        const payload = await apiFetch<{ data?: MyGroup[]; body?: { data?: MyGroup[] } }>("/v1/groups/my", { accessToken });
         if (cancelled) {
           return;
         }
-        const items = Array.isArray(payload.data) ? payload.data : [];
+        const items = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.body?.data) ? payload.body.data : [];
         setGroups(items);
         setSelectedGroupId((current) => {
           if (current && items.some((item) => item.id === current)) {
@@ -365,7 +368,7 @@ export default function ChatPage() {
         const payload = await apiFetch<{
           items?: AccessRequestOrganization[];
           body?: { items?: AccessRequestOrganization[] };
-        }>("/v1/organizations/public/kyc-directory?limit=500", { accessToken });
+        }>("/v1/organizations/list?limit=500", { accessToken });
         if (cancelled) {
           return;
         }
@@ -537,11 +540,11 @@ export default function ChatPage() {
       });
 
       try {
-        const payload = await apiFetch<{ channels?: Channel[] }>(`/v1/groups/${selectedGroupId}/channels`, { accessToken });
+        const payload = await apiFetch<{ channels?: Channel[]; body?: { channels?: Channel[] } }>(`/v1/groups/${selectedGroupId}/channels`, { accessToken });
         if (cancelled) {
           return;
         }
-        const items = Array.isArray(payload.channels) ? payload.channels : [];
+        const items = Array.isArray(payload.channels) ? payload.channels : Array.isArray(payload.body?.channels) ? payload.body.channels : [];
         setChannels(items);
         setSelectedChannelId((current) => {
           if (current && items.some((item) => item.id === current)) {
@@ -604,11 +607,11 @@ export default function ChatPage() {
       );
 
       try {
-        const payload = await apiFetch<{ messages?: Message[] }>(`/v1/channels/${selectedChannelId}/messages?limit=100`, { accessToken });
+        const payload = await apiFetch<{ messages?: Message[]; body?: { messages?: Message[] } }>(`/v1/channels/${selectedChannelId}/messages?limit=100`, { accessToken });
         if (cancelled) {
           return;
         }
-        const items = Array.isArray(payload.messages) ? payload.messages : [];
+        const items = Array.isArray(payload.messages) ? payload.messages : Array.isArray(payload.body?.messages) ? payload.body.messages : [];
         setMessages(items);
         setMessagesState({
           kind: "success",
@@ -732,11 +735,11 @@ export default function ChatPage() {
       });
       return;
     }
-    if (draft.trim() === "") {
+    if (draft.trim() === "" && pendingAttachments.length === 0) {
       setComposerState({
         kind: "error",
         title: "Пустое сообщение",
-        description: "Введите текст перед отправкой.",
+        description: "Введите текст или прикрепите файл.",
       });
       return;
     }
@@ -748,14 +751,19 @@ export default function ChatPage() {
     });
 
     try {
+      const bodyJSON: { body: string; attachmentObjectIds?: string[] } = {
+        body: draft.trim(),
+      };
+      if (pendingAttachments.length > 0) {
+        bodyJSON.attachmentObjectIds = pendingAttachments.map((a) => a.objectId);
+      }
       await apiFetch<Message>(`/v1/channels/${selectedChannelId}/messages`, {
         method: "POST",
         accessToken,
-        bodyJSON: {
-          body: draft.trim(),
-        },
+        bodyJSON,
       });
       setDraft("");
+      setPendingAttachments([]);
       setMessagesRefreshKey((value) => value + 1);
       setComposerState({
         kind: "success",
@@ -788,6 +796,70 @@ export default function ChatPage() {
       });
     }
   }
+
+  async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    if (!files?.length || !accessToken || !selectedChannelId) return;
+
+    setAttachmentUploadState({ kind: "working", title: "Загружаем файлы", description: "..." });
+
+    const uploaded: Array<{ objectId: string; fileName: string; sizeBytes: number }> = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      const limitBytes = isImage ? 15 * 1024 * 1024 : isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (file.size > limitBytes) {
+        const limitMB = (limitBytes / (1024 * 1024)).toFixed(0);
+        setAttachmentUploadState({
+          kind: "error",
+          title: `Файл слишком большой: ${file.name}`,
+          description: `Лимит: ${limitMB} MB (документы 10 MB, фото 15 MB, видео 100 MB). Ваш файл: ${(file.size / (1024 * 1024)).toFixed(1)} MB.`,
+        });
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        // Use /api/upload proxy: Next.js rewrites can fail to forward multipart/form-data correctly
+        const payload = await apiFetch<{ objectId?: string; fileName?: string; sizeBytes?: number; body?: { objectId: string; fileName: string; sizeBytes: number } }>(
+          `/api/upload/v1/channels/${selectedChannelId}/attachments/upload`,
+          {
+            method: "POST",
+            accessToken,
+            body: formData,
+          },
+        );
+        const obj = (payload as { body?: { objectId: string; fileName: string; sizeBytes: number } }).body ?? payload;
+        const objectId = obj.objectId;
+        if (objectId) {
+          uploaded.push({
+            objectId,
+            fileName: obj.fileName ?? file.name,
+            sizeBytes: obj.sizeBytes ?? file.size,
+          });
+        }
+      } catch (error) {
+        const msg = error instanceof APIError ? error.message : error instanceof Error ? error.message : "Upload failed";
+        setAttachmentUploadState({ kind: "error", title: `Ошибка: ${file.name}`, description: msg });
+        return;
+      }
+    }
+
+    setPendingAttachments((prev) => [...prev, ...uploaded]);
+    setAttachmentUploadState({ kind: "success", title: "Файлы загружены", description: `${uploaded.length} файл(ов) готовы к отправке.` });
+    event.target.value = "";
+  }
+
+  function removePendingAttachment(objectId: string) {
+    setPendingAttachments((prev) => prev.filter((a) => a.objectId !== objectId));
+  }
+
+  useEffect(() => {
+    setPendingAttachments([]);
+  }, [selectedChannelId]);
 
   async function handleRequestJoinSelectedChannel() {
     if (!accessToken || !selectedGroupId || !selectedChannelId) {
@@ -1277,67 +1349,111 @@ export default function ChatPage() {
       </div>
 
       <div className="chat-main">
-        <Panel title={selectedChannel ? selectedChannel.name : "Лента"} eyebrow={selectedGroup ? selectedGroup.name : "Select a group"}>
-          <div className={`status-card ${messagesState.kind === "error" ? "error" : messagesState.kind === "success" ? "success" : "info"}`}>
-            <strong>{messagesState.title}</strong>
-            <p className="status-copy">{messagesState.description}</p>
-          </div>
-
-          <div className="chat-timeline">
-            {messages.map((message) => (
-              <article key={message.id} className="chat-message">
-                <div className="chat-message-head">
-                  <strong>{authorLabel(message)}</strong>
-                  <span className="muted">
-                    #{message.channelSeq} · {formatDate(message.createdAt)}
-                    {message.editedAt ? " · edited" : ""}
-                  </span>
-                </div>
-                <p className={`chat-message-body ${message.deletedAt ? "deleted" : ""}`}>
-                  {message.deletedAt ? "Сообщение удалено" : message.body || "Вложение без текста"}
-                </p>
-                {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
-                  <p className="muted">Вложений: {message.attachments.length}</p>
-                ) : null}
-              </article>
-            ))}
-            {selectedChannel && messages.length === 0 ? <p className="muted">Сообщений пока нет.</p> : null}
-            {!selectedChannel ? <p className="muted">Слева выберите группу и канал, чтобы открыть chat timeline.</p> : null}
-          </div>
-        </Panel>
-
         <Panel
-          title="Composer"
-          eyebrow={selectedChannel ? `Channel ${selectedChannel.slug}` : "No channel"}
+          title={selectedChannel ? selectedChannel.name : "Лента"}
+          eyebrow={selectedGroup ? selectedGroup.name : "Select a group"}
           actions={
             <button className="button secondary" type="button" onClick={() => setMessagesRefreshKey((value) => value + 1)}>
               Обновить
             </button>
           }
         >
-          <div className={`status-card ${composerState.kind === "error" ? "error" : composerState.kind === "success" ? "success" : "info"}`}>
-            <strong>{composerState.title}</strong>
-            <p className="status-copy">{composerState.description}</p>
-          </div>
-
-          <form className="chat-composer" onSubmit={handleSendMessage}>
-            <div className="form-row">
-              <label className="form-label" htmlFor="chat-draft">
-                Новое сообщение
-              </label>
-              <textarea
-                id="chat-draft"
-                className="textarea"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Напишите сообщение в выбранный канал"
-                rows={5}
-              />
+          <div className="chat-channel-view">
+            <div className="chat-timeline-wrap">
+              {messagesState.kind === "error" ? (
+                <div className={`status-card error`}>
+                  <strong>{messagesState.title}</strong>
+                  <p className="status-copy">{messagesState.description}</p>
+                </div>
+              ) : null}
+              <div className="chat-timeline">
+                {messages.map((message) => (
+                  <article key={message.id} className="chat-message">
+                    <div className="chat-message-head">
+                      <strong>{authorLabel(message)}</strong>
+                      <span className="muted">
+                        #{message.channelSeq} · {formatDate(message.createdAt)}
+                        {message.editedAt ? " · edited" : ""}
+                      </span>
+                    </div>
+                    <p className={`chat-message-body ${message.deletedAt ? "deleted" : ""}`}>
+                      {message.deletedAt ? "Сообщение удалено" : message.body || "Вложение без текста"}
+                    </p>
+                    {Array.isArray(message.attachments) && message.attachments.length > 0 ? (
+                      <p className="muted">Вложений: {message.attachments.length}</p>
+                    ) : null}
+                  </article>
+                ))}
+                {selectedChannel && messages.length === 0 && messagesState.kind !== "error" ? <p className="muted">Сообщений пока нет.</p> : null}
+                {!selectedChannel ? <p className="muted">Слева выберите группу и канал, чтобы открыть chat timeline.</p> : null}
+              </div>
             </div>
-            <button className="button primary" type="submit" disabled={!selectedChannelId}>
-              Отправить
-            </button>
-          </form>
+            <div className="chat-composer-wrap">
+              {composerState.kind === "error" ? (
+                <div className={`status-card error`}>
+                  <strong>{composerState.title}</strong>
+                  <p className="status-copy">{composerState.description}</p>
+                </div>
+              ) : null}
+              <form className="chat-composer" onSubmit={handleSendMessage}>
+                <div className="form-row">
+                  <textarea
+                    id="chat-draft"
+                    className="textarea chat-composer-input"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    placeholder="Напишите сообщение или прикрепите файл"
+                    rows={3}
+                  />
+                </div>
+                <div className="form-row">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="visually-hidden"
+                    accept="*/*"
+                    onChange={handleFileSelect}
+                  />
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={!selectedChannelId}
+                    >
+                      Прикрепить файл
+                    </button>
+                    <button className="button primary" type="submit" disabled={!selectedChannelId || (draft.trim() === "" && pendingAttachments.length === 0)}>
+                      Отправить
+                    </button>
+                  </div>
+                </div>
+                {attachmentUploadState.kind !== "idle" && attachmentUploadState.title ? (
+                  <div className={`status-card ${attachmentUploadState.kind === "error" ? "error" : attachmentUploadState.kind === "success" ? "success" : "info"}`}>
+                    <strong>{attachmentUploadState.title}</strong>
+                    {attachmentUploadState.description ? <p className="status-copy">{attachmentUploadState.description}</p> : null}
+                  </div>
+                ) : null}
+                {pendingAttachments.length > 0 ? (
+                  <div className="chat-attachments-pending">
+                    <p className="form-label">Вложения ({pendingAttachments.length}):</p>
+                    <ul className="chat-attachment-list">
+                      {pendingAttachments.map((a) => (
+                        <li key={a.objectId} className="chat-attachment-item">
+                          <span>{a.fileName}</span>
+                          <span className="muted">{(a.sizeBytes / 1024).toFixed(1)} KB</span>
+                          <button type="button" className="button secondary" onClick={() => removePendingAttachment(a.objectId)}>
+                            Удалить
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </form>
+            </div>
+          </div>
         </Panel>
       </div>
     </section>

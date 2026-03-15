@@ -103,4 +103,10 @@ migrations:
   - payments/payment_imports.sql
   - payments/payment_import_items.sql
 
+  - collab/realtime_event_buffer.sql
+  - collab/channel_organizations.sql
+  - collab/channel_accounts.sql
+  - collab/attachment_limits.sql
+  - storage/upload_limits.sql
+
 

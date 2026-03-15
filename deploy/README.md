@@ -5,6 +5,7 @@
 ## Structure
 
 - `deploy/compose/core.yaml`: core stack (api, postgres, optional web/web-login profile)
+- `deploy/compose/redis.yaml`: Redis для realtime-чата (Pub/Sub при масштабировании API)
 - `deploy/compose/auth.yaml`: identity stack (ZITADEL)
 - `deploy/compose/storage.yaml`: storage stack (SeaweedFS)
 - `deploy/compose/jobs.yaml`: one-shot jobs (migrate/seed)
@@ -27,7 +28,7 @@
 - Main local stack commands should now use `deploy/env/.env.dev`
 - Main local stack commands should also include `deploy/env/.env.postgres.dev`
 - Storage-aware compose commands should also include `deploy/env/.env.storage.dev`
-- Redis-aware compose commands should also include `deploy/env/.env.redis.dev`
+- Redis-aware compose commands should also include `deploy/env/.env.redis.dev` and `-f deploy/compose/redis.yaml` to start the Redis service
 - ZITADEL-aware compose commands should also include `deploy/env/.env.zitadel.dev`
 - Frontend container stack uses the `web` profile from `deploy/compose/core.yaml`
 - Frontend compose commands should combine base + postgres + storage + redis + zitadel + web overlays

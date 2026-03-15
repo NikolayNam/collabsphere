@@ -26,11 +26,11 @@ const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 type WebSocketHandler struct {
 	svc             *authapp.Service
 	verifier        authmw.AccessTokenVerifier
-	broker          *realtime.Broker
+	broker          realtime.Broker
 	allowQueryToken bool
 }
 
-func NewWebSocketHandler(svc *authapp.Service, verifier authmw.AccessTokenVerifier, broker *realtime.Broker, allowQueryToken bool) *WebSocketHandler {
+func NewWebSocketHandler(svc *authapp.Service, verifier authmw.AccessTokenVerifier, broker realtime.Broker, allowQueryToken bool) *WebSocketHandler {
 	return &WebSocketHandler{svc: svc, verifier: verifier, broker: broker, allowQueryToken: allowQueryToken}
 }
 

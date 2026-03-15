@@ -1,0 +1,25 @@
+name: collabsphere
+
+services:
+  redis:
+    profiles: [ "local" ]
+    image: redis:8.6-trixie
+    restart: unless-stopped
+    hostname: redis
+    networks:
+      - internal.network
+    secrets:
+      - redis_password
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis.data:/data
+
+volumes:
+  redis.data:
+    name: "redis.data"

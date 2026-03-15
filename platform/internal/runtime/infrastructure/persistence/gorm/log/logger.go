@@ -2,10 +2,12 @@ package log
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
@@ -73,7 +75,7 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (sql stri
 	}
 
 	if err != nil {
-		if l.level >= logger.Error {
+		if l.level >= logger.Error && !errors.Is(err, gorm.ErrRecordNotFound) {
 			l.log.ErrorContext(ctx, "db query failed",
 				append(attrs,
 					"event", "db.query.error",

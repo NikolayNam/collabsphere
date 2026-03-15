@@ -40,6 +40,15 @@ var resolveOrganizationByHostOp = huma.Operation{
 	Description: "Resolves a verified active hostname to its organization profile. Useful for tenant-aware routing based on subdomain or custom domain.",
 }
 
+var listOrganizationsOp = huma.Operation{
+	OperationID: "list-organizations",
+	Method:      "GET",
+	Path:        "/organizations/list",
+	Tags:        []string{"Organizations"},
+	Summary:     "List active organizations",
+	Description: "Returns active organizations (id, name, slug). Used for access request forms and similar flows.",
+}
+
 var listPublicKYCDirectoryOp = huma.Operation{
 	OperationID: "list-public-kyc-directory-organizations",
 	Method:      "GET",

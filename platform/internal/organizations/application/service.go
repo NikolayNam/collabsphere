@@ -299,6 +299,16 @@ func (s *Service) ListMyOrganizations(ctx context.Context, actorAccountID uuid.U
 	return out, nil
 }
 
+func (s *Service) ListOrganizations(ctx context.Context, limit int) ([]ports.OrganizationListItem, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	return s.repo.ListActiveOrganizations(ctx, limit)
+}
+
 func (s *Service) ListPublicKYCDirectoryOrganizations(ctx context.Context, limit int) ([]ports.PublicKYCDirectoryOrganization, error) {
 	if limit <= 0 {
 		limit = 100
@@ -431,9 +441,23 @@ func (s *Service) GetCooperationApplication(ctx context.Context, q GetCooperatio
 	return application, nil
 }
 
+func isPriceListOnlyUpdate(cmd UpdateCooperationApplicationCmd) bool {
+	return cmd.ConfirmationEmail == nil && cmd.CompanyName == nil && cmd.RepresentedCategories == nil &&
+		cmd.MinimumOrderAmount == nil && cmd.DeliveryGeography == nil && len(cmd.SalesChannels) == 0 &&
+		cmd.StorefrontURL == nil && cmd.ContactFirstName == nil && cmd.ContactLastName == nil &&
+		cmd.ContactJobTitle == nil && cmd.ContactEmail == nil && cmd.ContactPhone == nil &&
+		cmd.PartnerCode == nil && (cmd.PriceListObjectID != nil || cmd.PriceListStatus != nil || cmd.ClearPriceList)
+}
+
 func (s *Service) UpdateCooperationApplication(ctx context.Context, cmd UpdateCooperationApplicationCmd) (*domain.CooperationApplication, error) {
-	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
-		return nil, err
+	if isPriceListOnlyUpdate(cmd) {
+		if err := s.requireOrganizationCatalogAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+			return nil, err
+		}
 	}
 	if cmd.ClearPriceList && cmd.PriceListObjectID != nil {
 		return nil, apperrors.InvalidInput("clearPriceList and priceListObjectId cannot be used together")
@@ -607,7 +631,7 @@ func (s *Service) PublishAllCatalog(ctx context.Context, cmd PublishAllCatalogCm
 }
 
 func (s *Service) CreateCooperationPriceListUpload(ctx context.Context, cmd CreateCooperationPriceListUploadCmd) (*CreateCooperationPriceListUploadResult, error) {
-	if err := s.requireOrganizationAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := s.requireOrganizationCatalogAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
 		return nil, err
 	}
 	object, uploadURL, expiresAt, err := s.createOrganizationScopedUpload(ctx, cmd.OrganizationID, "organizations", []string{"cooperation-applications", "price-lists"}, cmd.FileName, cmd.ContentType, cmd.SizeBytes, cmd.ChecksumSHA256, "price-list.xlsx")

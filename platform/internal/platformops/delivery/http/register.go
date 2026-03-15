@@ -102,4 +102,40 @@ func Register(api huma.API, h *Handler, verifier authmw.AccessTokenVerifier) {
 		forceVerify.Description += "\n\n> [!CAUTION]\n> This control-plane action is disabled until `AUTH_ZITADEL_ADMIN_TOKEN` or `AUTH_ZITADEL_ADMIN_TOKEN_FILE` is configured on the backend."
 	}
 	huma.Register(api, forceVerify, h.ForceVerifyUserEmail)
+
+	listAttachmentLimits := listAttachmentLimitsOp
+	listAttachmentLimits.Middlewares = adminOnly
+	huma.Register(api, listAttachmentLimits, h.ListAttachmentLimits)
+
+	getPlatformAttachmentLimit := getPlatformAttachmentLimitOp
+	getPlatformAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, getPlatformAttachmentLimit, h.GetPlatformAttachmentLimit)
+
+	upsertPlatformAttachmentLimit := upsertPlatformAttachmentLimitOp
+	upsertPlatformAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, upsertPlatformAttachmentLimit, h.UpsertPlatformAttachmentLimit)
+
+	getOrganizationAttachmentLimit := getOrganizationAttachmentLimitOp
+	getOrganizationAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, getOrganizationAttachmentLimit, h.GetOrganizationAttachmentLimit)
+
+	upsertOrganizationAttachmentLimit := upsertOrganizationAttachmentLimitOp
+	upsertOrganizationAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, upsertOrganizationAttachmentLimit, h.UpsertOrganizationAttachmentLimit)
+
+	deleteOrganizationAttachmentLimit := deleteOrganizationAttachmentLimitOp
+	deleteOrganizationAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, deleteOrganizationAttachmentLimit, h.DeleteOrganizationAttachmentLimit)
+
+	getAccountAttachmentLimit := getAccountAttachmentLimitOp
+	getAccountAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, getAccountAttachmentLimit, h.GetAccountAttachmentLimit)
+
+	upsertAccountAttachmentLimit := upsertAccountAttachmentLimitOp
+	upsertAccountAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, upsertAccountAttachmentLimit, h.UpsertAccountAttachmentLimit)
+
+	deleteAccountAttachmentLimit := deleteAccountAttachmentLimitOp
+	deleteAccountAttachmentLimit.Middlewares = adminOnly
+	huma.Register(api, deleteAccountAttachmentLimit, h.DeleteAccountAttachmentLimit)
 }

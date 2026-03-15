@@ -54,6 +54,7 @@ func buildApp(conf *config.Config, openDB func(*config.Config, *slog.Logger) *go
 	quietPaths := []string{"/health", "/ready", "/v1/health", "/v1/ready"}
 	routerOptions := bootstrap.RouterOptions{
 		AccessLogQuietPaths: quietPaths,
+		AccessLogDisabled:   !conf.APP.AccessLogEnabled,
 	}
 	var httpMetrics *runtimemetrics.HTTP
 	if conf.APP.MetricsEnabled {

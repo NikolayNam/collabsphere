@@ -32,11 +32,11 @@ func (h *Handler) Handle(ctx context.Context, q Query) (*domain.MembersView, err
 		return nil, groupsErrors.GroupNotFound()
 	}
 
-	actorMembership, err := h.repo.GetAccountMember(ctx, q.GroupID, q.ActorAccountID)
+	hasAccess, err := h.repo.HasGroupAccessForAccount(ctx, q.GroupID, q.ActorAccountID)
 	if err != nil {
 		return nil, err
 	}
-	if actorMembership == nil || !actorMembership.IsActive() {
+	if !hasAccess {
 		return nil, groupsErrors.AccessDenied()
 	}
 

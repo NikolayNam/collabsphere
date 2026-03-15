@@ -30,7 +30,8 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     headers.set("Authorization", `Bearer ${options.accessToken}`);
   }
 
-  const response = await fetch(`${getAPIProxyPrefix()}${path}`, {
+  const url = path.startsWith("/api/") ? path : `${getAPIProxyPrefix()}${path}`;
+  const response = await fetch(url, {
     ...options,
     headers,
     body: options.bodyJSON !== undefined ? JSON.stringify(options.bodyJSON) : options.body,

@@ -10,6 +10,7 @@ import (
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	authports "github.com/NikolayNam/collabsphere/internal/auth/application/ports"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
+	"github.com/NikolayNam/collabsphere/internal/platformops/application/ports"
 	"github.com/NikolayNam/collabsphere/internal/platformops/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
 	"github.com/google/uuid"
@@ -116,6 +117,27 @@ type fakeUploadReader struct{}
 
 func (fakeUploadReader) ListUploadQueue(ctx context.Context, query domain.UploadQueueQuery) ([]domain.UploadQueueItem, int, error) {
 	return nil, 0, nil
+}
+
+type fakeAttachmentLimitsRepo struct{}
+
+func (fakeAttachmentLimitsRepo) List(ctx context.Context, scopeType *string, scopeID *uuid.UUID) ([]ports.AttachmentLimit, error) {
+	return nil, nil
+}
+func (fakeAttachmentLimitsRepo) GetPlatform(ctx context.Context) (*ports.AttachmentLimit, error) {
+	return nil, nil
+}
+func (fakeAttachmentLimitsRepo) GetByScope(ctx context.Context, scopeType string, scopeID uuid.UUID) (*ports.AttachmentLimit, error) {
+	return nil, nil
+}
+func (fakeAttachmentLimitsRepo) UpsertPlatform(ctx context.Context, limit ports.AttachmentLimit, now time.Time) (*ports.AttachmentLimit, error) {
+	return nil, nil
+}
+func (fakeAttachmentLimitsRepo) UpsertByScope(ctx context.Context, scopeType string, scopeID uuid.UUID, limit ports.AttachmentLimit, now time.Time) (*ports.AttachmentLimit, error) {
+	return nil, nil
+}
+func (fakeAttachmentLimitsRepo) DeleteByScope(ctx context.Context, scopeType string, scopeID uuid.UUID) error {
+	return nil
 }
 
 type fakeReviewRepo struct {
@@ -278,7 +300,7 @@ func (c *nilAwareZitadelAdminClient) ForceVerifyUserEmail(ctx context.Context, u
 }
 
 func newTestService(roleRepo *fakeRoleRepo, autoGrantRepo *fakeAutoGrantRepo, auditRepo *fakeAuditRepo, accountReader *fakeAccountReader, reviewRepo *fakeReviewRepo, zitadel authports.ZitadelAdminClient, bootstrap []uuid.UUID) *Service {
-	return New(roleRepo, autoGrantRepo, auditRepo, accountReader, fakeDashboardReader{}, fakeUploadReader{}, reviewRepo, fakeClock{now: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)}, fakeTxManager{}, zitadel, bootstrap)
+	return New(roleRepo, autoGrantRepo, auditRepo, accountReader, fakeDashboardReader{}, fakeUploadReader{}, reviewRepo, fakeAttachmentLimitsRepo{}, fakeClock{now: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC)}, fakeTxManager{}, zitadel, bootstrap)
 }
 
 func mustAccount(t *testing.T, id uuid.UUID, email string) *accdomain.Account {

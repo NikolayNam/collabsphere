@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	platformapp "github.com/NikolayNam/collabsphere/internal/platformops/application"
+	platformports "github.com/NikolayNam/collabsphere/internal/platformops/application/ports"
 	platformdto "github.com/NikolayNam/collabsphere/internal/platformops/delivery/http/dto"
 	platformdomain "github.com/NikolayNam/collabsphere/internal/platformops/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
@@ -142,6 +143,178 @@ func (h *Handler) GetDashboardSummary(ctx context.Context, _ *platformdto.Dashbo
 	out.Body.CooperationRejected = summary.CooperationRejected
 	out.Body.CooperationNeedsInfo = summary.CooperationNeedsInfo
 	return out, nil
+}
+
+func (h *Handler) ListAttachmentLimits(ctx context.Context, input *platformdto.ListAttachmentLimitsInput) (*platformdto.AttachmentLimitListResponse, error) {
+	var scopeType *string
+	if s := strings.TrimSpace(input.ScopeType); s != "" {
+		scopeType = &s
+	}
+	var scopeID *uuid.UUID
+	if s := strings.TrimSpace(input.ScopeID); s != "" {
+		parsed, err := httpbind.ParseUUID(s, fault.Validation("scopeId is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("scopeId", "must be a UUID")))
+		if err != nil {
+			return nil, humaerr.From(ctx, err)
+		}
+		scopeID = &parsed
+	}
+	limits, err := h.svc.ListAttachmentLimits(ctx, scopeType, scopeID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitListResponse{Status: http.StatusOK}
+	out.Body.Items = make([]platformdto.AttachmentLimit, 0, len(limits))
+	for _, l := range limits {
+		out.Body.Items = append(out.Body.Items, attachmentLimitDTO(l))
+	}
+	return out, nil
+}
+
+func (h *Handler) GetPlatformAttachmentLimit(ctx context.Context, _ *platformdto.GetPlatformAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	limit, err := h.svc.GetPlatformAttachmentLimit(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitResponse{Status: http.StatusOK}
+	out.Body = attachmentLimitDTO(*limit)
+	return out, nil
+}
+
+func (h *Handler) UpsertPlatformAttachmentLimit(ctx context.Context, input *platformdto.UpsertPlatformAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	limit, err := h.svc.UpsertPlatformAttachmentLimit(ctx, platformports.AttachmentLimit{
+		DocumentLimitBytes: input.Body.DocumentLimitBytes,
+		PhotoLimitBytes:    input.Body.PhotoLimitBytes,
+		VideoLimitBytes:    input.Body.VideoLimitBytes,
+		TotalLimitBytes:    input.Body.TotalLimitBytes,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitResponse{Status: http.StatusOK}
+	out.Body = attachmentLimitDTO(*limit)
+	return out, nil
+}
+
+func (h *Handler) GetOrganizationAttachmentLimit(ctx context.Context, input *platformdto.GetOrganizationAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	limit, err := h.svc.GetOrganizationAttachmentLimit(ctx, organizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitResponse{Status: http.StatusOK}
+	out.Body = attachmentLimitDTO(*limit)
+	return out, nil
+}
+
+func (h *Handler) UpsertOrganizationAttachmentLimit(ctx context.Context, input *platformdto.UpsertOrganizationAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	limit, err := h.svc.UpsertOrganizationAttachmentLimit(ctx, organizationID, platformports.AttachmentLimit{
+		DocumentLimitBytes: input.Body.DocumentLimitBytes,
+		PhotoLimitBytes:    input.Body.PhotoLimitBytes,
+		VideoLimitBytes:    input.Body.VideoLimitBytes,
+		TotalLimitBytes:    input.Body.TotalLimitBytes,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitResponse{Status: http.StatusOK}
+	out.Body = attachmentLimitDTO(*limit)
+	return out, nil
+}
+
+func (h *Handler) DeleteOrganizationAttachmentLimit(ctx context.Context, input *platformdto.DeleteOrganizationAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	organizationID, err := httpbind.ParseUUID(input.OrganizationID, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	if err := h.svc.DeleteOrganizationAttachmentLimit(ctx, organizationID); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &platformdto.AttachmentLimitResponse{Status: http.StatusNoContent}, nil
+}
+
+func (h *Handler) GetAccountAttachmentLimit(ctx context.Context, input *platformdto.GetAccountAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	accountID, err := httpbind.ParseUUID(input.AccountID, fault.Validation("Account id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("accountId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	limit, err := h.svc.GetAccountAttachmentLimit(ctx, accountID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitResponse{Status: http.StatusOK}
+	out.Body = attachmentLimitDTO(*limit)
+	return out, nil
+}
+
+func (h *Handler) UpsertAccountAttachmentLimit(ctx context.Context, input *platformdto.UpsertAccountAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	accountID, err := httpbind.ParseUUID(input.AccountID, fault.Validation("Account id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("accountId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	limit, err := h.svc.UpsertAccountAttachmentLimit(ctx, accountID, platformports.AttachmentLimit{
+		DocumentLimitBytes: input.Body.DocumentLimitBytes,
+		PhotoLimitBytes:    input.Body.PhotoLimitBytes,
+		VideoLimitBytes:    input.Body.VideoLimitBytes,
+		TotalLimitBytes:    input.Body.TotalLimitBytes,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &platformdto.AttachmentLimitResponse{Status: http.StatusOK}
+	out.Body = attachmentLimitDTO(*limit)
+	return out, nil
+}
+
+func (h *Handler) DeleteAccountAttachmentLimit(ctx context.Context, input *platformdto.DeleteAccountAttachmentLimitInput) (*platformdto.AttachmentLimitResponse, error) {
+	access := platformAccessFromContext(ctx)
+	if access == nil {
+		return nil, humaerr.From(ctx, fault.Forbidden("Platform access denied", fault.Code("PLATFORM_FORBIDDEN")))
+	}
+	accountID, err := httpbind.ParseUUID(input.AccountID, fault.Validation("Account id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("accountId", "must be a UUID")))
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	if err := h.svc.DeleteAccountAttachmentLimit(ctx, accountID); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &platformdto.AttachmentLimitResponse{Status: http.StatusNoContent}, nil
+}
+
+func attachmentLimitDTO(l platformports.AttachmentLimit) platformdto.AttachmentLimit {
+	return platformdto.AttachmentLimit{
+		ID:                 l.ID,
+		ScopeType:          l.ScopeType,
+		ScopeID:            l.ScopeID,
+		DocumentLimitBytes: l.DocumentLimitBytes,
+		PhotoLimitBytes:    l.PhotoLimitBytes,
+		VideoLimitBytes:    l.VideoLimitBytes,
+		TotalLimitBytes:    l.TotalLimitBytes,
+		CreatedAt:          l.CreatedAt,
+		UpdatedAt:          l.UpdatedAt,
+	}
 }
 
 func (h *Handler) ListUploads(ctx context.Context, input *platformdto.ListUploadsInput) (*platformdto.UploadQueueResponse, error) {

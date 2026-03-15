@@ -107,6 +107,31 @@ ORDER BY g.id, ag.priority ASC, g.created_at DESC
 	return out, nil
 }
 
+func (r *GroupRepo) HasGroupAccessForAccount(ctx context.Context, groupID domain.GroupID, accountID accdomain.AccountID) (bool, error) {
+	if groupID.IsZero() || accountID.IsZero() {
+		return false, nil
+	}
+	var directCount int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("iam.group_account_members").
+		Where("group_id = ? AND account_id = ? AND deleted_at IS NULL AND is_active = TRUE", groupID.UUID(), accountID.UUID()).
+		Count(&directCount).Error; err != nil {
+		return false, err
+	}
+	if directCount > 0 {
+		return true, nil
+	}
+	var orgCount int64
+	if err := r.dbFrom(ctx).WithContext(ctx).
+		Table("iam.group_organization_members AS gom").
+		Joins("JOIN iam.memberships AS m ON m.organization_id = gom.organization_id").
+		Where("gom.group_id = ? AND gom.deleted_at IS NULL AND gom.is_active = TRUE AND m.account_id = ? AND m.deleted_at IS NULL AND m.is_active = TRUE", groupID.UUID(), accountID.UUID()).
+		Count(&orgCount).Error; err != nil {
+		return false, err
+	}
+	return orgCount > 0, nil
+}
+
 func (r *GroupRepo) ListMembers(ctx context.Context, groupID domain.GroupID) (*domain.MembersView, error) {
 	if groupID.IsZero() {
 		return &domain.MembersView{}, nil

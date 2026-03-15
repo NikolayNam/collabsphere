@@ -306,6 +306,36 @@ func TestUploadCooperationPriceListIntegrationRejectsViewer(t *testing.T) {
 	}
 }
 
+func TestUploadCooperationPriceListIntegrationSuccessAsMember(t *testing.T) {
+	env := newOrganizationsIntegrationEnv(t)
+	_, ownerToken := env.createAuthenticatedAccount(t, "price-list-member-owner@example.com")
+	organizationID := env.createOrganization(t, ownerToken, "Member Upload Org", "member-upload-org")
+
+	memberID, memberToken := env.createAuthenticatedAccount(t, "member@example.com")
+	env.addMember(t, organizationID, memberID, memberdomain.MembershipRoleMember)
+
+	fileContent := []byte("sku,name\n1,Milk\n2,Bread\n")
+	resp := env.postMultipartFile(t, "/v1/organizations/"+organizationID.String()+"/cooperation-application/price-list", memberToken, "file", "price-list.csv", "text/csv", fileContent)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != nethttp.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		OrganizationID    uuid.UUID  `json:"organizationId"`
+		PriceListObjectID *uuid.UUID `json:"priceListObjectId"`
+	}
+	decodeJSON(t, resp.Body, &body)
+
+	if body.OrganizationID != organizationID {
+		t.Fatalf("organizationId = %s, want %s", body.OrganizationID, organizationID)
+	}
+	if body.PriceListObjectID == nil || *body.PriceListObjectID == uuid.Nil {
+		t.Fatal("priceListObjectId is nil, want uploaded object id")
+	}
+}
+
 func TestUploadCooperationPriceListIntegrationSuccess(t *testing.T) {
 	env := newOrganizationsIntegrationEnv(t)
 	_, ownerToken := env.createAuthenticatedAccount(t, "price-list-success@example.com")

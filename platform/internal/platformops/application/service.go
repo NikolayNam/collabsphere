@@ -107,17 +107,18 @@ type TransitionLegalDocumentReviewCmd struct {
 }
 
 type Service struct {
-	roles           ports.RoleBindingRepository
-	autoGrants      ports.AutoGrantRuleRepository
-	audits          ports.AuditRepository
-	accounts        ports.AccountReader
-	dashboards      ports.DashboardReader
-	uploads         ports.UploadQueueReader
-	reviews         ports.OrganizationReviewRepository
-	clock           ports.Clock
-	txm             sharedtx.Manager
-	zitadelAdmin    authports.ZitadelAdminClient
-	bootstrapAdmins map[uuid.UUID]struct{}
+	roles            ports.RoleBindingRepository
+	autoGrants       ports.AutoGrantRuleRepository
+	audits           ports.AuditRepository
+	accounts         ports.AccountReader
+	dashboards       ports.DashboardReader
+	uploads          ports.UploadQueueReader
+	reviews          ports.OrganizationReviewRepository
+	attachmentLimits ports.AttachmentLimitsRepository
+	clock            ports.Clock
+	txm              sharedtx.Manager
+	zitadelAdmin     authports.ZitadelAdminClient
+	bootstrapAdmins  map[uuid.UUID]struct{}
 }
 
 func New(
@@ -128,6 +129,7 @@ func New(
 	dashboards ports.DashboardReader,
 	uploads ports.UploadQueueReader,
 	reviews ports.OrganizationReviewRepository,
+	attachmentLimits ports.AttachmentLimitsRepository,
 	clock ports.Clock,
 	txm sharedtx.Manager,
 	zitadelAdmin authports.ZitadelAdminClient,
@@ -141,14 +143,15 @@ func New(
 		bootstrapAdmins[accountID] = struct{}{}
 	}
 	return &Service{
-		roles:           roles,
-		autoGrants:      autoGrants,
-		audits:          audits,
-		accounts:        accounts,
-		dashboards:      dashboards,
-		uploads:         uploads,
-		reviews:         reviews,
-		clock:           clock,
+		roles:            roles,
+		autoGrants:       autoGrants,
+		audits:           audits,
+		accounts:         accounts,
+		dashboards:       dashboards,
+		uploads:          uploads,
+		reviews:          reviews,
+		attachmentLimits: attachmentLimits,
+		clock:            clock,
 		txm:             txm,
 		zitadelAdmin:    zitadelAdmin,
 		bootstrapAdmins: bootstrapAdmins,
@@ -408,6 +411,125 @@ func (s *Service) GetDashboardSummary(ctx context.Context) (*domain.DashboardSum
 		return nil, fault.Internal("Load platform dashboard summary failed", fault.Code("INTERNAL"), fault.WithCause(err))
 	}
 	return summary, nil
+}
+
+func (s *Service) ListAttachmentLimits(ctx context.Context, scopeType *string, scopeID *uuid.UUID) ([]ports.AttachmentLimit, error) {
+	limits, err := s.attachmentLimits.List(ctx, scopeType, scopeID)
+	if err != nil {
+		return nil, fault.Internal("Load attachment limits failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return limits, nil
+}
+
+func (s *Service) GetPlatformAttachmentLimit(ctx context.Context) (*ports.AttachmentLimit, error) {
+	limit, err := s.attachmentLimits.GetPlatform(ctx)
+	if err != nil {
+		return nil, fault.Internal("Load platform attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	if limit == nil {
+		return nil, fault.NotFound("Platform attachment limit not found", fault.Code("PLATFORM_ATTACHMENT_LIMIT_NOT_FOUND"))
+	}
+	return limit, nil
+}
+
+func (s *Service) UpsertPlatformAttachmentLimit(ctx context.Context, limit ports.AttachmentLimit) (*ports.AttachmentLimit, error) {
+	if err := validateAttachmentLimit(limit); err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	result, err := s.attachmentLimits.UpsertPlatform(ctx, limit, now)
+	if err != nil {
+		return nil, fault.Internal("Upsert platform attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return result, nil
+}
+
+func (s *Service) GetOrganizationAttachmentLimit(ctx context.Context, organizationID uuid.UUID) (*ports.AttachmentLimit, error) {
+	if organizationID == uuid.Nil {
+		return nil, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID"))
+	}
+	limit, err := s.attachmentLimits.GetByScope(ctx, "organization", organizationID)
+	if err != nil {
+		return nil, fault.Internal("Load organization attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	if limit == nil {
+		return nil, fault.NotFound("Organization attachment limit not found", fault.Code("PLATFORM_ATTACHMENT_LIMIT_NOT_FOUND"))
+	}
+	return limit, nil
+}
+
+func (s *Service) UpsertOrganizationAttachmentLimit(ctx context.Context, organizationID uuid.UUID, limit ports.AttachmentLimit) (*ports.AttachmentLimit, error) {
+	if organizationID == uuid.Nil {
+		return nil, fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID"))
+	}
+	if err := validateAttachmentLimit(limit); err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	result, err := s.attachmentLimits.UpsertByScope(ctx, "organization", organizationID, limit, now)
+	if err != nil {
+		return nil, fault.Internal("Upsert organization attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return result, nil
+}
+
+func (s *Service) DeleteOrganizationAttachmentLimit(ctx context.Context, organizationID uuid.UUID) error {
+	if organizationID == uuid.Nil {
+		return fault.Validation("Organization id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("organizationId", "must be a UUID"))
+	}
+	if err := s.attachmentLimits.DeleteByScope(ctx, "organization", organizationID); err != nil {
+		return fault.Internal("Delete organization attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return nil
+}
+
+func (s *Service) GetAccountAttachmentLimit(ctx context.Context, accountID uuid.UUID) (*ports.AttachmentLimit, error) {
+	if accountID == uuid.Nil {
+		return nil, fault.Validation("Account id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("accountId", "must be a UUID"))
+	}
+	limit, err := s.attachmentLimits.GetByScope(ctx, "account", accountID)
+	if err != nil {
+		return nil, fault.Internal("Load account attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	if limit == nil {
+		return nil, fault.NotFound("Account attachment limit not found", fault.Code("PLATFORM_ATTACHMENT_LIMIT_NOT_FOUND"))
+	}
+	return limit, nil
+}
+
+func (s *Service) UpsertAccountAttachmentLimit(ctx context.Context, accountID uuid.UUID, limit ports.AttachmentLimit) (*ports.AttachmentLimit, error) {
+	if accountID == uuid.Nil {
+		return nil, fault.Validation("Account id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("accountId", "must be a UUID"))
+	}
+	if err := validateAttachmentLimit(limit); err != nil {
+		return nil, err
+	}
+	now := s.clock.Now()
+	result, err := s.attachmentLimits.UpsertByScope(ctx, "account", accountID, limit, now)
+	if err != nil {
+		return nil, fault.Internal("Upsert account attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return result, nil
+}
+
+func (s *Service) DeleteAccountAttachmentLimit(ctx context.Context, accountID uuid.UUID) error {
+	if accountID == uuid.Nil {
+		return fault.Validation("Account id is invalid", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("accountId", "must be a UUID"))
+	}
+	if err := s.attachmentLimits.DeleteByScope(ctx, "account", accountID); err != nil {
+		return fault.Internal("Delete account attachment limit failed", fault.Code("INTERNAL"), fault.WithCause(err))
+	}
+	return nil
+}
+
+func validateAttachmentLimit(limit ports.AttachmentLimit) error {
+	if limit.DocumentLimitBytes <= 0 || limit.PhotoLimitBytes <= 0 || limit.VideoLimitBytes <= 0 || limit.TotalLimitBytes <= 0 {
+		return fault.Validation("All limit values must be positive", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("limits", "documentLimitBytes, photoLimitBytes, videoLimitBytes, totalLimitBytes must be > 0"))
+	}
+	if limit.TotalLimitBytes < limit.DocumentLimitBytes || limit.TotalLimitBytes < limit.PhotoLimitBytes || limit.TotalLimitBytes < limit.VideoLimitBytes {
+		return fault.Validation("Total limit must be at least as large as each per-type limit", fault.Code("PLATFORM_INVALID_INPUT"), fault.Field("totalLimitBytes", "must be >= documentLimitBytes, photoLimitBytes, videoLimitBytes"))
+	}
+	return nil
 }
 
 func (s *Service) ListUploadQueue(ctx context.Context, cmd ListUploadQueueCmd) ([]domain.UploadQueueItem, int, error) {

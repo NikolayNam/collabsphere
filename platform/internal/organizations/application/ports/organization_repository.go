@@ -43,6 +43,12 @@ type OrganizationMembershipView struct {
 	MembershipRole string
 }
 
+type OrganizationListItem struct {
+	ID   uuid.UUID
+	Name string
+	Slug string
+}
+
 type PublicKYCDirectoryOrganization struct {
 	ID            uuid.UUID
 	Name          string
@@ -114,6 +120,7 @@ type OrganizationRepository interface {
 	Create(ctx context.Context, t *domain.Organization) error
 	GetByID(ctx context.Context, id domain.OrganizationID) (*domain.Organization, error)
 	ListByAccount(ctx context.Context, accountID uuid.UUID) ([]OrganizationMembershipView, error)
+	ListActiveOrganizations(ctx context.Context, limit int) ([]OrganizationListItem, error)
 	ListPublicKYCDirectoryOrganizations(ctx context.Context, kycLevelCode string, limit int) ([]PublicKYCDirectoryOrganization, error)
 	GetByHostname(ctx context.Context, hostname string) (*domain.Organization, error)
 	ListDomains(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationDomain, error)

@@ -64,8 +64,8 @@ type Service struct {
 	conferenceProvider string
 	publicBaseURL      string
 	storageBucket      string
-	guestInviteTTL     time.Duration
-	guestAccessTTL     time.Duration
+	guestInviteTTL   time.Duration
+	guestAccessTTL   time.Duration
 }
 
 func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tokens TokenGenerator, jwt AccessTokenManager, clock Clock, publisher EventPublisher, transcriber Transcriber, conferenceProvider, publicBaseURL, storageBucket string, guestInviteTTL, guestAccessTTL time.Duration) *Service {
@@ -85,8 +85,8 @@ func New(repo *collabpg.Repo, accounts AccountReader, storage ObjectStorage, tok
 		conferenceProvider: provider,
 		publicBaseURL:      publicBaseURL,
 		storageBucket:      storageBucket,
-		guestInviteTTL:     guestInviteTTL,
-		guestAccessTTL:     guestAccessTTL,
+		guestInviteTTL:   guestInviteTTL,
+		guestAccessTTL:   guestAccessTTL,
 	}
 }
 
@@ -104,6 +104,8 @@ type CreateChannelCmd struct {
 	Name            string
 	Description     *string
 	AdminAccountIDs []uuid.UUID
+	OrganizationID  *uuid.UUID // If set, channel for this org only (mutually exclusive with AccountID)
+	AccountID       *uuid.UUID // If set, channel for this account only (mutually exclusive with OrganizationID)
 }
 
 type ListChannelsQuery struct {
