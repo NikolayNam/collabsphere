@@ -371,12 +371,11 @@ docker compose `
 4. При необходимости заранее переопределить bootstrap-поля первого администратора в `deploy/secrets/identity/zitadel_init_steps.yaml`
 5. Если ZITADEL уже запускался с неверным hostname или старыми настройками Login V2, удалить локальные тома `zitadel.postgres.data` и `zitadel.shared`, затем повторить первый старт
    Для self-hosted login это часто проявляется как `500` в `web-login` или proxy/login action responses с ошибками ZITADEL вроде `Errors.Token.Invalid (AUTH-7fs1e)` при вызове session APIs
-6. Создать в ZITADEL OIDC application для backend callback `http://api.localhost:8080/v1/auth/zitadel/callback`
-7. Перенести выданные `client_id` в `AUTH_ZITADEL_CLIENT_ID`, а `client_secret` в `deploy/secrets/identity/zitadel_client_secret`, затем установить `AUTH_ZITADEL_ENABLED=true`
+6. Включить `AUTH_ZITADEL_ENABLED=true` и убедиться, что есть admin PAT (`AUTH_ZITADEL_ADMIN_TOKEN` или `deploy/secrets/identity/zitadel_admin_token`)
+7. Запустить `make up-dev` или `make up-dev-web`: перед стартом `api` выполнится `go -C platform run ./cmd/zitadel-sync-oidc`, который сначала валидирует текущие credentials и при валидной паре пропускает перевыпуск; если app/secret реально отсутствуют или credentials невалидны — автоматически восстановит их, обновит `AUTH_ZITADEL_CLIENT_ID` в `deploy/env/.env.zitadel.dev` и запишет `client_secret` в `deploy/secrets/identity/zitadel_client_secret`
 8. При необходимости включить browser return URL через `APPLICATION_PUBLIC_BASE_URL=http://api.localhost:8080` и `AUTH_BROWSER_DEFAULT_RETURN_URL=/auth/callback`
 9. Если нужен platform endpoint `POST /v1/platform/users/{userId}/email/force-verify`, создать отдельный service account в ZITADEL, выдать ему admin-права и сохранить его PAT в `AUTH_ZITADEL_ADMIN_TOKEN` или `AUTH_ZITADEL_ADMIN_TOKEN_FILE`
-10. Перезапустить `api`
-11. После этого можно прогнать живой browser smoke: `make smoke-auth-zitadel-e2e`
+10. После этого можно прогнать живой browser smoke: `make smoke-auth-zitadel-e2e`
 
 Что важно в текущем auth-контуре:
 
@@ -503,7 +502,7 @@ make smoke-auth-zitadel-e2e
 -join ((48..57 + 65..90 + 97..122) | Get-Random -Count 32 | ForEach-Object {[char]$_})
 ```
 
-`AUTH_ZITADEL_CLIENT_ID` и `deploy/secrets/identity/zitadel_client_secret` не генерируются заранее. Они появляются только после первого запуска ZITADEL, когда вы создаёте OIDC application в админ-панели и копируете оттуда выданные значения.
+`AUTH_ZITADEL_CLIENT_ID` и `deploy/secrets/identity/zitadel_client_secret` синхронизируются автоматически Go-утилитой `platform/cmd/zitadel-sync-oidc` во время `make up-dev`/`make up-dev-web`. Утилита также восстанавливает пару client id/secret после полного сброса ZITADEL volumes.
 
 ### ZITADEL admin token для force-verify
 

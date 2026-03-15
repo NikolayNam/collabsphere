@@ -10,6 +10,7 @@ import (
 )
 
 type CooperationApplicationStatus string
+type CooperationPriceListStatus string
 
 const (
 	CooperationApplicationStatusDraft       CooperationApplicationStatus = "draft"
@@ -18,6 +19,15 @@ const (
 	CooperationApplicationStatusApproved    CooperationApplicationStatus = "approved"
 	CooperationApplicationStatusRejected    CooperationApplicationStatus = "rejected"
 	CooperationApplicationStatusNeedsInfo   CooperationApplicationStatus = "needs_info"
+)
+
+const (
+	CooperationPriceListStatusDraft      CooperationPriceListStatus = "draft"
+	CooperationPriceListStatusValidating CooperationPriceListStatus = "validating"
+	CooperationPriceListStatusVerified   CooperationPriceListStatus = "verified"
+	CooperationPriceListStatusPublished  CooperationPriceListStatus = "published"
+	CooperationPriceListStatusWithdrawn  CooperationPriceListStatus = "withdrawn"
+	CooperationPriceListStatusArchived   CooperationPriceListStatus = "archived"
 )
 
 type CooperationApplication struct {
@@ -35,6 +45,7 @@ type CooperationApplication struct {
 	contactLastName       *string
 	contactJobTitle       *string
 	priceListObjectID     *uuid.UUID
+	priceListStatus       CooperationPriceListStatus
 	contactEmail          *Email
 	contactPhone          *string
 	partnerCode           *string
@@ -64,11 +75,12 @@ func NewCooperationApplication(p NewCooperationApplicationParams) (*CooperationA
 	}
 	updatedAt := p.Now
 	return &CooperationApplication{
-		id:             p.ID,
-		organizationID: p.OrganizationID,
-		status:         CooperationApplicationStatusDraft,
-		createdAt:      p.Now,
-		updatedAt:      &updatedAt,
+		id:              p.ID,
+		organizationID:  p.OrganizationID,
+		status:          CooperationApplicationStatusDraft,
+		priceListStatus: CooperationPriceListStatusDraft,
+		createdAt:       p.Now,
+		updatedAt:       &updatedAt,
 	}, nil
 }
 
@@ -87,6 +99,7 @@ type RehydrateCooperationApplicationParams struct {
 	ContactLastName       *string
 	ContactJobTitle       *string
 	PriceListObjectID     *uuid.UUID
+	PriceListStatus       string
 	ContactEmail          *string
 	ContactPhone          *string
 	PartnerCode           *string
@@ -178,6 +191,10 @@ func RehydrateCooperationApplication(p RehydrateCooperationApplicationParams) (*
 	if err != nil {
 		return nil, err
 	}
+	priceListStatus, err := normalizeCooperationPriceListStatusOrDefault(p.PriceListStatus)
+	if err != nil {
+		return nil, err
+	}
 
 	return &CooperationApplication{
 		id:                    p.ID,
@@ -194,6 +211,7 @@ func RehydrateCooperationApplication(p RehydrateCooperationApplicationParams) (*
 		contactLastName:       contactLastName,
 		contactJobTitle:       contactJobTitle,
 		priceListObjectID:     cloneUUIDPtr(p.PriceListObjectID),
+		priceListStatus:       priceListStatus,
 		contactEmail:          contactEmail,
 		contactPhone:          contactPhone,
 		partnerCode:           partnerCode,
@@ -218,6 +236,7 @@ type CooperationApplicationPatch struct {
 	ContactLastName       *string
 	ContactJobTitle       *string
 	PriceListObjectID     *uuid.UUID
+	PriceListStatus       *string
 	ClearPriceList        bool
 	ContactEmail          *string
 	ContactPhone          *string
@@ -308,6 +327,13 @@ func (a *CooperationApplication) ApplyPatch(p CooperationApplicationPatch) error
 	} else if p.PriceListObjectID != nil {
 		a.priceListObjectID = cloneUUIDPtr(p.PriceListObjectID)
 	}
+	if p.PriceListStatus != nil {
+		v, err := normalizeCooperationPriceListStatusOrDefault(*p.PriceListStatus)
+		if err != nil {
+			return err
+		}
+		a.priceListStatus = v
+	}
 	if p.ContactEmail != nil {
 		v, err := normalizeOptionalOrganizationEmail(p.ContactEmail)
 		if err != nil {
@@ -385,6 +411,9 @@ func (a *CooperationApplication) ContactJobTitle() *string { return cloneStringP
 func (a *CooperationApplication) PriceListObjectID() *uuid.UUID {
 	return cloneUUIDPtr(a.priceListObjectID)
 }
+func (a *CooperationApplication) PriceListStatus() CooperationPriceListStatus {
+	return a.priceListStatus
+}
 func (a *CooperationApplication) ContactEmail() *string { return emailToStringPtr(a.contactEmail) }
 func (a *CooperationApplication) ContactPhone() *string { return cloneStringPtr(a.contactPhone) }
 func (a *CooperationApplication) PartnerCode() *string  { return cloneStringPtr(a.partnerCode) }
@@ -408,6 +437,24 @@ func normalizeCooperationApplicationStatus(value string) (CooperationApplication
 		return CooperationApplicationStatus(strings.TrimSpace(value)), nil
 	default:
 		return "", ErrCooperationApplicationStatusInvalid
+	}
+}
+
+func normalizeCooperationPriceListStatusOrDefault(value string) (CooperationPriceListStatus, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if normalized == "" {
+		return CooperationPriceListStatusDraft, nil
+	}
+	switch CooperationPriceListStatus(normalized) {
+	case CooperationPriceListStatusDraft,
+		CooperationPriceListStatusValidating,
+		CooperationPriceListStatusVerified,
+		CooperationPriceListStatusPublished,
+		CooperationPriceListStatusWithdrawn,
+		CooperationPriceListStatusArchived:
+		return CooperationPriceListStatus(normalized), nil
+	default:
+		return "", ErrCooperationPriceListStatusInvalid
 	}
 }
 

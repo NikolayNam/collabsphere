@@ -26,6 +26,7 @@ func ToCooperationApplicationResponse(application *domain.CooperationApplication
 			ContactLastName:       application.ContactLastName(),
 			ContactJobTitle:       application.ContactJobTitle(),
 			PriceListObjectID:     application.PriceListObjectID(),
+			PriceListStatus:       string(application.PriceListStatus()),
 			ContactEmail:          application.ContactEmail(),
 			ContactPhone:          application.ContactPhone(),
 			PartnerCode:           application.PartnerCode(),

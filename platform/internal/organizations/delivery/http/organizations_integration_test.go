@@ -23,7 +23,9 @@ import (
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
 	accpg "github.com/NikolayNam/collabsphere/internal/accounts/repository/postgres"
 	authdomain "github.com/NikolayNam/collabsphere/internal/auth/domain"
+	catalogpg "github.com/NikolayNam/collabsphere/internal/catalog/repository/postgres"
 	memberdomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
+	membershipsApp "github.com/NikolayNam/collabsphere/internal/memberships/application"
 	memberpg "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
 	orgapp "github.com/NikolayNam/collabsphere/internal/organizations/application"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
@@ -644,10 +646,13 @@ func newOrganizationsIntegrationEnv(t *testing.T) *organizationsIntegrationEnv {
 	accountRepo := accpg.NewAccountRepo(db)
 	orgRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberpg.NewMembershipRepo(db)
+	roleRepo := memberpg.NewOrganizationRoleRepo(db)
+	roleResolver := membershipsApp.NewRoleResolverAdapter(roleRepo)
 	storage := newFakeOrganizationStorage()
 	const bucket = "integration-bucket"
 	txManager := dbtx.New(db)
-	service := orgapp.New(orgRepo, membershipRepo, nil, txManager, clock.NewSystemClock(), storage, bucket, nil, "", nil)
+	catalogRepo := catalogpg.NewCatalogRepo(db)
+	service := orgapp.New(orgRepo, membershipRepo, roleResolver, nil, catalogRepo, txManager, clock.NewSystemClock(), storage, bucket, nil, "", nil)
 	handler := NewHandler(service)
 	jwtManager := jwt.NewManager(conf.Auth.JWTSecret, conf.Auth.AccessTTL, conf.Auth.RefreshSessionTTL)
 

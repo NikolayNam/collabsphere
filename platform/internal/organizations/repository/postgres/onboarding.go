@@ -63,6 +63,7 @@ func (r *OrganizationRepo) SaveCooperationApplication(ctx context.Context, appli
 		"contact_last_name":      model.ContactLastName,
 		"contact_job_title":      model.ContactJobTitle,
 		"price_list_object_id":   model.PriceListObjectID,
+		"price_list_status":      model.PriceListStatus,
 		"contact_email":          model.ContactEmail,
 		"contact_phone":          model.ContactPhone,
 		"partner_code":           model.PartnerCode,

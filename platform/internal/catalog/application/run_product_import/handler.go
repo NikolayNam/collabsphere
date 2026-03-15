@@ -14,6 +14,7 @@ import (
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	productimport "github.com/NikolayNam/collabsphere/internal/catalog/application/product_import"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/fault"
@@ -24,6 +25,7 @@ type Handler struct {
 	repo          ports.CatalogRepository
 	organizations ports.OrganizationReader
 	memberships   ports.MembershipReader
+	roleResolver  memberports.RoleResolver
 	clock         ports.Clock
 	storage       ports.ObjectStorage
 }
@@ -77,12 +79,12 @@ type headerIndexes struct {
 	isActive           int
 }
 
-func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock, storage ports.ObjectStorage) *Handler {
-	return &Handler{repo: repo, organizations: organizations, memberships: memberships, clock: clock, storage: storage}
+func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, clock ports.Clock, storage ports.ObjectStorage) *Handler {
+	return &Handler{repo: repo, organizations: organizations, memberships: memberships, roleResolver: roleResolver, clock: clock, storage: storage}
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) (*productimport.View, error) {
-	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, h.roleResolver, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
 	if h.storage == nil {
@@ -342,6 +344,7 @@ func (h *Handler) applyRows(ctx context.Context, organizationID orgdomain.Organi
 				OrganizationID: organizationID,
 				ParentID:       nextParentID,
 				TemplateID:     existing.TemplateID(),
+				Status:         string(existing.Status()),
 				Code:           code,
 				Name:           nextName,
 				SortOrder:      nextSortOrder,
@@ -443,6 +446,7 @@ func (h *Handler) applyRows(ctx context.Context, organizationID orgdomain.Organi
 					ID:             existing.ID(),
 					OrganizationID: organizationID,
 					CategoryID:     categoryID,
+					Status:         string(existing.Status()),
 					Name:           *row.ProductName,
 					Description:    cloneStringPtr(row.Description),
 					SKU:            cloneStringPtr(row.SKU),

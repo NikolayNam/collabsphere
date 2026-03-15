@@ -20,8 +20,10 @@ func registerCoreModules(api huma.API, apiV1 chi.Router, db *gorm.DB, conf *conf
 func registerDomainModules(api huma.API, router chi.Router, db *gorm.DB, conf *config.Config) {
 	registerAccountsModule(api, db, conf)
 	registerOrganzationsModule(api, db, conf)
+	registerTenantsModule(api, db, conf)
 	registerMembershipsModule(api, db, conf)
 	registerCatalogModule(api, db, conf)
+	registerMarketplaceModule(api, db, conf)
 	registerGroupsModule(api, db, conf)
 	registerCollabModule(api, router, db, conf)
 	registerStorageModule(api, db, conf)

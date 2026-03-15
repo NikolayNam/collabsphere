@@ -11,6 +11,7 @@ type Command struct {
 	ActorAccountID accdomain.AccountID
 	ProductID      catalogdomain.ProductID
 	CategoryID     *catalogdomain.ProductCategoryID
+	Status         *string
 	Name           *string
 	Description    *string
 	SKU            *string

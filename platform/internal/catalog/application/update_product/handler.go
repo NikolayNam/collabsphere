@@ -9,21 +9,23 @@ import (
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 )
 
 type Handler struct {
 	repo          ports.CatalogRepository
 	organizations ports.OrganizationReader
 	memberships   ports.MembershipReader
+	roleResolver  memberports.RoleResolver
 	clock         ports.Clock
 }
 
-func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock) *Handler {
-	return &Handler{repo: repo, organizations: organizations, memberships: memberships, clock: clock}
+func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, clock ports.Clock) *Handler {
+	return &Handler{repo: repo, organizations: organizations, memberships: memberships, roleResolver: roleResolver, clock: clock}
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.Product, error) {
-	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, h.roleResolver, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
 
@@ -69,6 +71,10 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.Produ
 	if cmd.CurrencyCode != nil {
 		currencyCode = cmd.CurrencyCode
 	}
+	status := string(current.Status())
+	if cmd.Status != nil {
+		status = strings.TrimSpace(*cmd.Status)
+	}
 	isActive := current.IsActive()
 	if cmd.IsActive != nil {
 		isActive = *cmd.IsActive
@@ -78,6 +84,7 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.Produ
 		ID:             current.ID(),
 		OrganizationID: current.OrganizationID(),
 		CategoryID:     categoryID,
+		Status:         status,
 		Name:           name,
 		Description:    description,
 		SKU:            sku,

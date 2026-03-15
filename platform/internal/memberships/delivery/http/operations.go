@@ -71,3 +71,80 @@ var acceptInvitationOp = huma.Operation{
 	Description: "Accepts an organization invitation for the authenticated account. The invitation email must match the authenticated account email.",
 	Security:    []map[string][]string{{"bearerAuth": {}}},
 }
+
+var createAccessRequestOp = huma.Operation{
+	OperationID: "create-organization-access-request",
+	Method:      "POST",
+	Path:        "/organizations/{organization_id}/access-requests",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Create an organization access request",
+	Description: "Creates a self-service request to join an organization. The request is reviewed later by organization owners or admins.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var listAccessRequestsOp = huma.Operation{
+	OperationID: "list-organization-access-requests",
+	Method:      "GET",
+	Path:        "/organizations/{organization_id}/access-requests",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "List organization access requests",
+	Description: "Returns organization access requests. Only organization owners/admins can read and review this queue.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var approveAccessRequestOp = huma.Operation{
+	OperationID: "approve-organization-access-request",
+	Method:      "POST",
+	Path:        "/organizations/{organization_id}/access-requests/{request_id}/approve",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Approve an organization access request",
+	Description: "Approves a pending request and grants organization membership to the requester using the requested role.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var listOrganizationRolesOp = huma.Operation{
+	OperationID: "list-organization-roles",
+	Method:      "GET",
+	Path:        "/organizations/{organization_id}/roles",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "List organization roles",
+	Description: "Returns system and custom organization roles. Only owners and admins can manage roles.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+var createOrganizationRoleOp = huma.Operation{
+	OperationID: "create-organization-role",
+	Method:      "POST",
+	Path:        "/organizations/{organization_id}/roles",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Create a custom organization role",
+	Description: "Creates a custom role extending a system base role. Code must be unique within the organization.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+var updateOrganizationRoleOp = huma.Operation{
+	OperationID: "update-organization-role",
+	Method:      "PATCH",
+	Path:        "/organizations/{organization_id}/roles/{role_id}",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Update an organization role",
+	Description: "Updates a custom role. System roles cannot be modified. Role code is immutable.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+var deleteOrganizationRoleOp = huma.Operation{
+	OperationID: "delete-organization-role",
+	Method:      "DELETE",
+	Path:        "/organizations/{organization_id}/roles/{role_id}",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Delete an organization role",
+	Description: "Soft-deletes a custom role. Fails if the role is assigned to any members.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}
+
+var rejectAccessRequestOp = huma.Operation{
+	OperationID: "reject-organization-access-request",
+	Method:      "POST",
+	Path:        "/organizations/{organization_id}/access-requests/{request_id}/reject",
+	Tags:        []string{"Organizations / Members"},
+	Summary:     "Reject an organization access request",
+	Description: "Rejects a pending access request without granting membership.",
+	Security:    []map[string][]string{{"bearerAuth": {}}},
+}

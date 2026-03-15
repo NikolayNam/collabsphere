@@ -10,6 +10,7 @@ type Command struct {
 	OrganizationID orgdomain.OrganizationID
 	ActorAccountID accdomain.AccountID
 	ParentID       *catalogdomain.ProductCategoryID
+	Status         *string
 	Code           string
 	Name           string
 	SortOrder      int64

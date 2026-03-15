@@ -20,6 +20,7 @@ import (
 
 func registerMembershipsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	membershipRepo := membershipsPG.NewMembershipRepo(db)
+	roleRepo := membershipsPG.NewOrganizationRoleRepo(db)
 	organizationRepo := orgPG.NewOrganizationRepo(db)
 	accountRepo := accpg.NewAccountRepo(db)
 	auditRepo := membershipsPG.NewAccessAuditRepo(db)
@@ -27,7 +28,7 @@ func registerMembershipsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	clk := clock.NewSystemClock()
 	tokenGenerator := tokens.NewGenerator()
 
-	membershipService := membershipsApp.New(membershipRepo, organizationRepo, accountRepo, txManager, tokenGenerator, auditRepo, clk, 7*24*time.Hour)
+	membershipService := membershipsApp.New(membershipRepo, roleRepo, organizationRepo, accountRepo, txManager, tokenGenerator, auditRepo, clk, 7*24*time.Hour)
 	membershipHandler := membershipsHTTP.NewHandler(membershipService)
 
 	secret, err := conf.Auth.JWTSecretValue()

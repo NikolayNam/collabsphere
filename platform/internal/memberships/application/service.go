@@ -72,8 +72,61 @@ type AcceptInvitationResult struct {
 	Member     memberDomain.MemberView
 }
 
+type CreateAccessRequestCmd struct {
+	OrganizationID orgDomain.OrganizationID
+	ActorAccountID uuid.UUID
+	Role           string
+	Message        *string
+}
+
+type ReviewAccessRequestCmd struct {
+	OrganizationID orgDomain.OrganizationID
+	RequestID      uuid.UUID
+	ActorAccountID uuid.UUID
+	Decision       string
+	ReviewNote     *string
+}
+
+type AccessRequestReviewDecision string
+
+const (
+	AccessRequestDecisionApprove AccessRequestReviewDecision = "approve"
+	AccessRequestDecisionReject  AccessRequestReviewDecision = "reject"
+)
+
+type ListOrganizationRolesQuery struct {
+	OrganizationID   orgDomain.OrganizationID
+	ActorAccountID  uuid.UUID
+	IncludeDeleted  bool
+}
+
+type CreateOrganizationRoleCmd struct {
+	OrganizationID  orgDomain.OrganizationID
+	ActorAccountID  uuid.UUID
+	Code            string
+	Name            string
+	Description     string
+	BaseRole        string
+}
+
+type UpdateOrganizationRoleCmd struct {
+	OrganizationID  orgDomain.OrganizationID
+	RoleID          uuid.UUID
+	ActorAccountID  uuid.UUID
+	Name            *string
+	Description     *string
+	BaseRole        *string
+}
+
+type DeleteOrganizationRoleCmd struct {
+	OrganizationID  orgDomain.OrganizationID
+	RoleID          uuid.UUID
+	ActorAccountID  uuid.UUID
+}
+
 type Service struct {
 	repo           memberPorts.MembershipRepository
+	roleRepo       memberPorts.OrganizationRoleRepository
 	accounts       memberPorts.AccountReader
 	orgReader      orgReaderAdapter
 	tx             sharedtx.Manager
@@ -83,12 +136,13 @@ type Service struct {
 	invitationTTL  time.Duration
 }
 
-func New(memberRepo memberPorts.MembershipRepository, orgRepo orgPorts.OrganizationRepository, accountRepo memberPorts.AccountReader, txm sharedtx.Manager, tokenGenerator memberPorts.TokenGenerator, auditRepo memberPorts.AccessAuditRepository, clock memberPorts.Clock, invitationTTL time.Duration) *Service {
+func New(memberRepo memberPorts.MembershipRepository, roleRepo memberPorts.OrganizationRoleRepository, orgRepo orgPorts.OrganizationRepository, accountRepo memberPorts.AccountReader, txm sharedtx.Manager, tokenGenerator memberPorts.TokenGenerator, auditRepo memberPorts.AccessAuditRepository, clock memberPorts.Clock, invitationTTL time.Duration) *Service {
 	if invitationTTL <= 0 {
 		invitationTTL = defaultOrganizationInvitationTTL
 	}
 	return &Service{
 		repo:           memberRepo,
+		roleRepo:       roleRepo,
 		accounts:       accountRepo,
 		orgReader:      orgReaderAdapter{repo: orgRepo},
 		tx:             txm,
@@ -109,11 +163,22 @@ func (s *Service) AddMember(ctx context.Context, actorAccountID uuid.UUID, orgID
 	if err != nil {
 		return nil, memberErrors.InvalidInput("Invalid account_id")
 	}
-	targetRole := parseRole(role, memberDomain.MembershipRoleMember)
-	if !targetRole.IsValid() {
+	targetRoleCode := parseRole(role, memberDomain.MembershipRoleMember)
+	if strings.TrimSpace(string(targetRoleCode)) == "" {
 		return nil, memberErrors.InvalidInput("Invalid role")
 	}
-	if !accesspolicy.CanAssignOrganizationRole(actorMembership.Role(), targetRole) {
+	targetResolved, err := s.ResolveRoleForPermissions(ctx, orgID, string(targetRoleCode))
+	if err != nil {
+		return nil, memberErrors.Internal("resolve role", err)
+	}
+	if targetResolved == "" {
+		return nil, memberErrors.InvalidInput("Invalid role")
+	}
+	actorResolved, err := s.ResolveRoleForPermissions(ctx, orgID, string(actorMembership.Role()))
+	if err != nil || actorResolved == "" {
+		return nil, fault.Forbidden("Membership role assignment is not allowed")
+	}
+	if !accesspolicy.CanAssignOrganizationRole(actorResolved, targetResolved) {
 		return nil, fault.Forbidden("Membership role assignment is not allowed")
 	}
 
@@ -129,7 +194,7 @@ func (s *Service) AddMember(ctx context.Context, actorAccountID uuid.UUID, orgID
 			created, err := memberDomain.NewMembership(memberDomain.NewMembershipParams{
 				OrganizationID: orgID,
 				AccountID:      targetAccountID,
-				Role:           targetRole,
+				Role:           targetRoleCode,
 				Now:            now,
 			})
 			if err != nil {
@@ -153,14 +218,18 @@ func (s *Service) AddMember(ctx context.Context, actorAccountID uuid.UUID, orgID
 			})
 		}
 
-		if !accesspolicy.CanManageOrganizationRole(actorMembership.Role(), existing.Role()) {
+		existingResolved, err := s.ResolveRoleForPermissions(ctx, orgID, string(existing.Role()))
+		if err != nil || existingResolved == "" {
+			return fault.Forbidden("Membership change is not allowed for the selected member")
+		}
+		if !accesspolicy.CanManageOrganizationRole(actorResolved, existingResolved) {
 			return fault.Forbidden("Membership change is not allowed for the selected member")
 		}
 		if existing.IsActive() && !existing.IsRemoved() {
 			return memberErrors.MemberAlreadyExists()
 		}
 		previousState := membershipState(existing)
-		if err := existing.ChangeRole(targetRole, now); err != nil {
+		if err := existing.ChangeRole(targetRoleCode, now); err != nil {
 			return memberErrors.InvalidInput("Invalid role")
 		}
 		if err := existing.Activate(now); err != nil {
@@ -204,18 +273,35 @@ func (s *Service) UpdateMember(ctx context.Context, cmd UpdateMemberCmd) (*membe
 		if target == nil {
 			return fault.NotFound("Membership not found")
 		}
-		if !accesspolicy.CanManageOrganizationRole(actorMembership.Role(), target.Role()) {
+		actorResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(actorMembership.Role()))
+		if err != nil || actorResolved == "" {
+			return fault.Forbidden("Membership change is not allowed for the selected member")
+		}
+		targetResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(target.Role()))
+		if err != nil || targetResolved == "" {
+			return fault.Forbidden("Membership change is not allowed for the selected member")
+		}
+		if !accesspolicy.CanManageOrganizationRole(actorResolved, targetResolved) {
 			return fault.Forbidden("Membership change is not allowed for the selected member")
 		}
 
 		now := s.clock.Now()
 		nextRole := target.Role()
+		nextResolved := targetResolved
 		if cmd.Role != nil {
 			nextRole = parseRole(*cmd.Role, target.Role())
-			if !nextRole.IsValid() {
+			if strings.TrimSpace(string(nextRole)) == "" {
 				return memberErrors.InvalidInput("Invalid role")
 			}
-			if !accesspolicy.CanAssignOrganizationRole(actorMembership.Role(), nextRole) {
+			var err error
+			nextResolved, err = s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(nextRole))
+			if err != nil {
+				return memberErrors.Internal("resolve role", err)
+			}
+			if nextResolved == "" {
+				return memberErrors.InvalidInput("Invalid role")
+			}
+			if !accesspolicy.CanAssignOrganizationRole(actorResolved, nextResolved) {
 				return fault.Forbidden("Membership role assignment is not allowed")
 			}
 		}
@@ -224,7 +310,7 @@ func (s *Service) UpdateMember(ctx context.Context, cmd UpdateMemberCmd) (*membe
 		if cmd.IsActive != nil {
 			nextActive = *cmd.IsActive
 		}
-		if target.Role() == memberDomain.MembershipRoleOwner && (!nextActive || nextRole != memberDomain.MembershipRoleOwner) {
+		if targetResolved == memberDomain.MembershipRoleOwner && (!nextActive || nextResolved != memberDomain.MembershipRoleOwner) {
 			if err := s.ensureAnotherActiveOwner(ctx, cmd.OrganizationID); err != nil {
 				return err
 			}
@@ -284,10 +370,18 @@ func (s *Service) RemoveMember(ctx context.Context, cmd RemoveMemberCmd) error {
 		if target == nil {
 			return fault.NotFound("Membership not found")
 		}
-		if !accesspolicy.CanManageOrganizationRole(actorMembership.Role(), target.Role()) {
+		actorResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(actorMembership.Role()))
+		if err != nil || actorResolved == "" {
 			return fault.Forbidden("Membership removal is not allowed for the selected member")
 		}
-		if target.Role() == memberDomain.MembershipRoleOwner && target.IsActive() {
+		targetResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(target.Role()))
+		if err != nil || targetResolved == "" {
+			return fault.Forbidden("Membership removal is not allowed for the selected member")
+		}
+		if !accesspolicy.CanManageOrganizationRole(actorResolved, targetResolved) {
+			return fault.Forbidden("Membership removal is not allowed for the selected member")
+		}
+		if targetResolved == memberDomain.MembershipRoleOwner && target.IsActive() {
 			if err := s.ensureAnotherActiveOwner(ctx, cmd.OrganizationID); err != nil {
 				return err
 			}
@@ -329,11 +423,22 @@ func (s *Service) CreateInvitation(ctx context.Context, cmd CreateInvitationCmd)
 	if err != nil {
 		return nil, memberErrors.InvalidInput("Invalid email")
 	}
-	role := parseRole(cmd.Role, memberDomain.MembershipRoleMember)
-	if !role.IsValid() {
+	roleCode := parseRole(cmd.Role, memberDomain.MembershipRoleMember)
+	if strings.TrimSpace(string(roleCode)) == "" {
 		return nil, memberErrors.InvalidInput("Invalid role")
 	}
-	if !accesspolicy.CanAssignOrganizationRole(actorMembership.Role(), role) {
+	roleResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(roleCode))
+	if err != nil {
+		return nil, memberErrors.Internal("resolve role", err)
+	}
+	if roleResolved == "" {
+		return nil, memberErrors.InvalidInput("Invalid role")
+	}
+	actorResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(actorMembership.Role()))
+	if err != nil || actorResolved == "" {
+		return nil, fault.Forbidden("Membership role assignment is not allowed")
+	}
+	if !accesspolicy.CanAssignOrganizationRole(actorResolved, roleResolved) {
 		return nil, fault.Forbidden("Membership role assignment is not allowed")
 	}
 
@@ -365,7 +470,7 @@ func (s *Service) CreateInvitation(ctx context.Context, cmd CreateInvitationCmd)
 		invitation, err := memberDomain.NewOrganizationInvitation(memberDomain.NewOrganizationInvitationParams{
 			OrganizationID:   cmd.OrganizationID,
 			Email:            email,
-			Role:             role,
+			Role:             roleCode,
 			TokenHash:        s.tokenGenerator.Hash(rawToken),
 			InviterAccountID: cmd.ActorAccountID,
 			ExpiresAt:        now.Add(s.invitationTTL),
@@ -552,6 +657,207 @@ func (s *Service) AcceptInvitation(ctx context.Context, cmd AcceptInvitationCmd)
 	return result, nil
 }
 
+func (s *Service) CreateAccessRequest(ctx context.Context, cmd CreateAccessRequestCmd) (*memberDomain.AccessRequestView, error) {
+	if cmd.OrganizationID.IsZero() {
+		return nil, memberErrors.InvalidInput("Invalid organization_id")
+	}
+	requesterID, err := accdomain.AccountIDFromUUID(cmd.ActorAccountID)
+	if err != nil || requesterID.IsZero() {
+		return nil, fault.Unauthorized("Authentication required")
+	}
+	exists, err := s.orgReader.Exists(ctx, cmd.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, memberErrors.OrganizationNotFound()
+	}
+
+	roleCode := parseRole(cmd.Role, memberDomain.MembershipRoleMember)
+	if strings.TrimSpace(string(roleCode)) == "" {
+		return nil, memberErrors.InvalidInput("Invalid role")
+	}
+	roleResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(roleCode))
+	if err != nil {
+		return nil, memberErrors.Internal("resolve role", err)
+	}
+	if roleResolved == "" {
+		return nil, memberErrors.InvalidInput("Invalid role")
+	}
+
+	var out *memberDomain.AccessRequestView
+	err = s.withinTransaction(ctx, func(ctx context.Context) error {
+		member, err := s.repo.GetMemberByAccount(ctx, cmd.OrganizationID, requesterID)
+		if err != nil {
+			return memberErrors.Internal("get requester membership", err)
+		}
+		if member != nil && member.IsActive() && !member.IsRemoved() {
+			return memberErrors.MemberAlreadyExists()
+		}
+
+		req, err := memberDomain.NewOrganizationAccessRequest(memberDomain.NewOrganizationAccessRequestParams{
+			OrganizationID:   cmd.OrganizationID,
+			RequesterAccount: cmd.ActorAccountID,
+			RequestedRole:    roleCode,
+			Message:          cmd.Message,
+			Now:              s.clock.Now(),
+		})
+		if err != nil {
+			return memberErrors.InvalidInput("Invalid organization access request")
+		}
+		if err := s.repo.CreateAccessRequest(ctx, req); err != nil {
+			return err
+		}
+		view := req.ToView()
+		out = &view
+		return s.appendAudit(ctx, accessAuditParams{
+			organizationID: cmd.OrganizationID.UUID(),
+			actorAccountID: cmd.ActorAccountID,
+			action:         "organization.access_request.create",
+			targetType:     "organization_access_request",
+			targetID:       uuidPtr(view.ID),
+			previousState:  map[string]any{},
+			nextState:      accessRequestViewState(view),
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (s *Service) ListAccessRequests(ctx context.Context, actorAccountID uuid.UUID, orgID orgDomain.OrganizationID) ([]memberDomain.AccessRequestView, error) {
+	if _, err := s.requireManageableMembership(ctx, orgID, actorAccountID); err != nil {
+		return nil, err
+	}
+	requests, err := s.repo.ListAccessRequests(ctx, orgID)
+	if err != nil {
+		return nil, memberErrors.Internal("list access requests", err)
+	}
+	out := make([]memberDomain.AccessRequestView, 0, len(requests))
+	for _, req := range requests {
+		out = append(out, req.ToView())
+	}
+	return out, nil
+}
+
+func (s *Service) ReviewAccessRequest(ctx context.Context, cmd ReviewAccessRequestCmd) (*memberDomain.AccessRequestView, *memberDomain.MemberView, error) {
+	actorMembership, err := s.requireManageableMembership(ctx, cmd.OrganizationID, cmd.ActorAccountID)
+	if err != nil {
+		return nil, nil, err
+	}
+	decision := AccessRequestReviewDecision(strings.ToLower(strings.TrimSpace(cmd.Decision)))
+	if decision != AccessRequestDecisionApprove && decision != AccessRequestDecisionReject {
+		return nil, nil, memberErrors.InvalidInput("Invalid access request decision")
+	}
+
+	var requestView *memberDomain.AccessRequestView
+	var memberView *memberDomain.MemberView
+	err = s.withinTransaction(ctx, func(ctx context.Context) error {
+		req, err := s.repo.GetAccessRequestByID(ctx, cmd.OrganizationID, cmd.RequestID)
+		if err != nil {
+			return memberErrors.Internal("get access request", err)
+		}
+		if req == nil {
+			return memberErrors.AccessRequestNotFound()
+		}
+		if req.Status() != memberDomain.AccessRequestStatusPending {
+			return memberErrors.AccessRequestAlreadyReviewed()
+		}
+
+		previousState := accessRequestViewState(req.ToView())
+		now := s.clock.Now()
+
+		if decision == AccessRequestDecisionApprove {
+			actorResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(actorMembership.Role()))
+			if err != nil || actorResolved == "" {
+				return fault.Forbidden("Membership role assignment is not allowed")
+			}
+			requestedResolved, err := s.ResolveRoleForPermissions(ctx, cmd.OrganizationID, string(req.RequestedRole()))
+			if err != nil || requestedResolved == "" {
+				return fault.Forbidden("Membership role assignment is not allowed")
+			}
+			if !accesspolicy.CanAssignOrganizationRole(actorResolved, requestedResolved) {
+				return fault.Forbidden("Membership role assignment is not allowed")
+			}
+			targetAccountID, err := accdomain.AccountIDFromUUID(req.RequesterAccountID())
+			if err != nil || targetAccountID.IsZero() {
+				return memberErrors.InvalidInput("Invalid requester account")
+			}
+			existing, err := s.repo.GetMemberByAccount(ctx, cmd.OrganizationID, targetAccountID)
+			if err != nil {
+				return memberErrors.Internal("get requester membership", err)
+			}
+			if existing == nil {
+				member, err := memberDomain.NewMembership(memberDomain.NewMembershipParams{
+					OrganizationID: cmd.OrganizationID,
+					AccountID:      targetAccountID,
+					Role:           req.RequestedRole(),
+					Now:            now,
+				})
+				if err != nil {
+					return memberErrors.InvalidInput("Invalid membership")
+				}
+				if err := s.repo.AddMember(ctx, cmd.OrganizationID, member); err != nil {
+					return err
+				}
+				memberView, err = s.getMemberViewByAccount(ctx, cmd.OrganizationID, targetAccountID)
+				if err != nil {
+					return err
+				}
+			} else {
+				if existing.IsActive() && !existing.IsRemoved() {
+					return memberErrors.MemberAlreadyExists()
+				}
+				if err := existing.ChangeRole(req.RequestedRole(), now); err != nil {
+					return memberErrors.InvalidInput("Invalid role")
+				}
+				if err := existing.Activate(now); err != nil {
+					return memberErrors.InvalidInput("Invalid membership state")
+				}
+				if err := s.repo.SaveMember(ctx, cmd.OrganizationID, existing); err != nil {
+					return memberErrors.Internal("save member", err)
+				}
+				memberView, err = s.getMemberViewByAccount(ctx, cmd.OrganizationID, targetAccountID)
+				if err != nil {
+					return err
+				}
+			}
+			if err := req.Approve(cmd.ActorAccountID, cmd.ReviewNote, now); err != nil {
+				return memberErrors.InvalidInput("Invalid organization access request")
+			}
+		} else {
+			if err := req.Reject(cmd.ActorAccountID, cmd.ReviewNote, now); err != nil {
+				return memberErrors.InvalidInput("Invalid organization access request")
+			}
+		}
+
+		if err := s.repo.SaveAccessRequest(ctx, req); err != nil {
+			return memberErrors.Internal("save access request", err)
+		}
+
+		view := req.ToView()
+		requestView = &view
+
+		if err := s.appendAudit(ctx, accessAuditParams{
+			organizationID: cmd.OrganizationID.UUID(),
+			actorAccountID: cmd.ActorAccountID,
+			action:         "organization.access_request.review",
+			targetType:     "organization_access_request",
+			targetID:       uuidPtr(view.ID),
+			previousState:  previousState,
+			nextState:      accessRequestViewState(view),
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return requestView, memberView, nil
+}
+
 func (s *Service) requireReadableMembership(ctx context.Context, orgID orgDomain.OrganizationID, actorAccountID uuid.UUID) (*memberDomain.Membership, error) {
 	if orgID.IsZero() {
 		return nil, memberErrors.InvalidInput("Invalid organization_id")
@@ -574,7 +880,11 @@ func (s *Service) requireReadableMembership(ctx context.Context, orgID orgDomain
 	if membership == nil || !membership.IsActive() || membership.IsRemoved() {
 		return nil, fault.Forbidden("Organization access denied")
 	}
-	if !accesspolicy.HasOrganizationPermission(membership.Role(), accesspolicy.PermissionOrganizationRead) {
+	resolved, err := s.ResolveRoleForPermissions(ctx, orgID, string(membership.Role()))
+	if err != nil || resolved == "" {
+		return nil, fault.Forbidden("Organization access denied")
+	}
+	if !accesspolicy.HasOrganizationPermission(resolved, accesspolicy.PermissionOrganizationRead) {
 		return nil, fault.Forbidden("Organization access denied")
 	}
 	return membership, nil
@@ -585,7 +895,11 @@ func (s *Service) requireManageableMembership(ctx context.Context, orgID orgDoma
 	if err != nil {
 		return nil, err
 	}
-	if !accesspolicy.HasOrganizationPermission(membership.Role(), accesspolicy.PermissionOrganizationManageMembers) {
+	resolved, err := s.ResolveRoleForPermissions(ctx, orgID, string(membership.Role()))
+	if err != nil || resolved == "" {
+		return nil, fault.Forbidden("Only organization owners or admins can manage members")
+	}
+	if !accesspolicy.HasOrganizationPermission(resolved, accesspolicy.PermissionOrganizationManageMembers) {
 		return nil, fault.Forbidden("Only organization owners or admins can manage members")
 	}
 	return membership, nil
@@ -703,12 +1017,122 @@ func invitationViewState(invitation memberDomain.InvitationView) map[string]any 
 	}
 }
 
+func accessRequestViewState(request memberDomain.AccessRequestView) map[string]any {
+	return map[string]any{
+		"requestId":          request.ID,
+		"requesterAccountId": request.RequesterAccount,
+		"requestedRole":      request.RequestedRole,
+		"status":             request.Status,
+		"reviewerAccountId":  request.ReviewerAccount,
+		"reviewedAt":         request.ReviewedAt,
+	}
+}
+
 func parseAccountID(raw string) (accdomain.AccountID, error) {
 	parsed, err := uuid.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed == uuid.Nil {
 		return accdomain.AccountID{}, memberErrors.ErrValidation
 	}
 	return accdomain.AccountIDFromUUID(parsed)
+}
+
+func (s *Service) ListOrganizationRoles(ctx context.Context, q ListOrganizationRolesQuery) ([]*memberDomain.OrganizationRole, error) {
+	if _, err := s.requireManageableMembership(ctx, q.OrganizationID, q.ActorAccountID); err != nil {
+		return nil, err
+	}
+	return s.roleRepo.List(ctx, q.OrganizationID, q.IncludeDeleted)
+}
+
+func (s *Service) CreateOrganizationRole(ctx context.Context, cmd CreateOrganizationRoleCmd) (*memberDomain.OrganizationRole, error) {
+	if _, err := s.requireManageableMembership(ctx, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+		return nil, err
+	}
+	role, err := memberDomain.NewOrganizationRole(memberDomain.NewOrganizationRoleParams{
+		ID:             uuid.New(),
+		OrganizationID: cmd.OrganizationID,
+		Code:           cmd.Code,
+		Name:           cmd.Name,
+		Description:    cmd.Description,
+		BaseRole:       cmd.BaseRole,
+		Now:            s.clock.Now(),
+	})
+	if err != nil {
+		return nil, memberErrors.FromDomain(err)
+	}
+	if err := s.roleRepo.Create(ctx, role); err != nil {
+		return nil, memberErrors.FromDomain(err)
+	}
+	return role, nil
+}
+
+func (s *Service) UpdateOrganizationRole(ctx context.Context, cmd UpdateOrganizationRoleCmd) (*memberDomain.OrganizationRole, error) {
+	if _, err := s.requireManageableMembership(ctx, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+		return nil, err
+	}
+	role, err := s.roleRepo.GetByID(ctx, cmd.OrganizationID, cmd.RoleID)
+	if err != nil {
+		return nil, err
+	}
+	if role == nil || role.IsDeleted() {
+		return nil, fault.NotFound("Organization role not found", fault.Code("ORGANIZATION_ROLE_NOT_FOUND"))
+	}
+	patch := memberDomain.OrganizationRolePatch{UpdatedAt: s.clock.Now()}
+	if cmd.Name != nil {
+		patch.Name = cmd.Name
+	}
+	if cmd.Description != nil {
+		patch.Description = cmd.Description
+	}
+	if cmd.BaseRole != nil {
+		patch.BaseRole = cmd.BaseRole
+	}
+	if err := role.ApplyPatch(patch); err != nil {
+		return nil, memberErrors.FromDomain(err)
+	}
+	if err := s.roleRepo.Save(ctx, role); err != nil {
+		return nil, memberErrors.FromDomain(err)
+	}
+	return role, nil
+}
+
+func (s *Service) DeleteOrganizationRole(ctx context.Context, cmd DeleteOrganizationRoleCmd) error {
+	if _, err := s.requireManageableMembership(ctx, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+		return err
+	}
+	role, err := s.roleRepo.GetByID(ctx, cmd.OrganizationID, cmd.RoleID)
+	if err != nil {
+		return err
+	}
+	if role == nil || role.IsDeleted() {
+		return fault.NotFound("Organization role not found", fault.Code("ORGANIZATION_ROLE_NOT_FOUND"))
+	}
+	count, err := s.roleRepo.CountMembersWithRole(ctx, cmd.OrganizationID, role.Code())
+	if err != nil {
+		return fault.Internal("Count members failed", fault.WithCause(err))
+	}
+	if count > 0 {
+		return fault.Conflict("Role is in use and cannot be deleted. Reassign or remove members first.", fault.Code("ORGANIZATION_ROLE_IN_USE"))
+	}
+	now := s.clock.Now()
+	if err := role.SoftDelete(now); err != nil {
+		return memberErrors.FromDomain(err)
+	}
+	return s.roleRepo.Save(ctx, role)
+}
+
+func (s *Service) ResolveRoleForPermissions(ctx context.Context, orgID orgDomain.OrganizationID, roleCode string) (memberDomain.MembershipRole, error) {
+	r := memberDomain.MembershipRole(strings.ToLower(strings.TrimSpace(roleCode)))
+	if r.IsValid() {
+		return r, nil
+	}
+	custom, err := s.roleRepo.GetByCode(ctx, orgID, roleCode)
+	if err != nil {
+		return "", err
+	}
+	if custom == nil || custom.IsDeleted() {
+		return "", nil
+	}
+	return custom.BaseRole(), nil
 }
 
 func parseRole(raw string, fallback memberDomain.MembershipRole) memberDomain.MembershipRole {

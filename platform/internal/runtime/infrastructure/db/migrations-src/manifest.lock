@@ -67,3 +67,9 @@
 0065 | iam/organization_access_audit_events.sql            | 0065_organization_access_audit_events.sql
 0066 | kyc/profiles_documents_reviews.sql                  | 0066_profiles_documents_reviews.sql
 0067 | kyc/levels.sql                                      | 0067_levels.sql
+0068 | iam/organization_access_requests.sql                | 0068_organization_access_requests.sql
+0069 | tenant/tenants.sql                                  | 0069_tenants.sql
+0070 | kyc/public_directory_level.sql                      | 0070_public_directory_level.sql
+0071 | sales/board.sql                                     | 0071_sales_board.sql
+0072 | catalog/catalog_statuses.sql                        | 0072_catalog_statuses.sql
+0073 | org/organization_roles.sql                          | 0073_organization_roles.sql

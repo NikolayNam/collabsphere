@@ -33,6 +33,7 @@ var (
 
 	ErrCooperationApplicationIDEmpty           = errors.New("cooperation application id is empty")
 	ErrCooperationApplicationStatusInvalid     = errors.New("cooperation application status is invalid")
+	ErrCooperationPriceListStatusInvalid       = errors.New("cooperation price list status is invalid")
 	ErrCooperationConfirmationEmailInvalid     = errors.New("cooperation confirmation email is invalid")
 	ErrCooperationCompanyNameInvalid           = errors.New("cooperation company name is invalid")
 	ErrCooperationRepresentedCategoriesInvalid = errors.New("cooperation represented categories is invalid")

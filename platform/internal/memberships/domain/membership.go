@@ -99,7 +99,7 @@ func NewMembership(p NewMembershipParams) (*Membership, error) {
 	if p.OrganizationID.IsZero() || p.AccountID.IsZero() {
 		return nil, ErrMembershipInvalid
 	}
-	if !p.Role.IsValid() {
+	if strings.TrimSpace(string(p.Role)) == "" {
 		return nil, ErrMembershipInvalid
 	}
 	if p.Now.IsZero() {
@@ -157,7 +157,7 @@ func (m *Membership) UpdatedAt() *time.Time              { return cloneTimePtr(m
 func (m *Membership) DeletedAt() *time.Time              { return cloneTimePtr(m.deletedAt) }
 
 func (m *Membership) ChangeRole(role MembershipRole, now time.Time) error {
-	if !role.IsValid() || now.IsZero() {
+	if strings.TrimSpace(string(role)) == "" || now.IsZero() {
 		return ErrMembershipInvalid
 	}
 	m.role = role

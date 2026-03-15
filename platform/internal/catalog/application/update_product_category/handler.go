@@ -9,21 +9,23 @@ import (
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 )
 
 type Handler struct {
 	repo          ports.CatalogRepository
 	organizations ports.OrganizationReader
 	memberships   ports.MembershipReader
+	roleResolver  memberports.RoleResolver
 	clock         ports.Clock
 }
 
-func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock) *Handler {
-	return &Handler{repo: repo, organizations: organizations, memberships: memberships, clock: clock}
+func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, clock ports.Clock) *Handler {
+	return &Handler{repo: repo, organizations: organizations, memberships: memberships, roleResolver: roleResolver, clock: clock}
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.ProductCategory, error) {
-	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, h.roleResolver, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
 
@@ -60,6 +62,10 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.Produ
 	if cmd.Name != nil {
 		name = strings.TrimSpace(*cmd.Name)
 	}
+	status := string(current.Status())
+	if cmd.Status != nil {
+		status = strings.TrimSpace(*cmd.Status)
+	}
 	sortOrder := current.SortOrder()
 	if cmd.SortOrder != nil {
 		sortOrder = *cmd.SortOrder
@@ -70,6 +76,7 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.Produ
 		OrganizationID: current.OrganizationID(),
 		ParentID:       parentID,
 		TemplateID:     current.TemplateID(),
+		Status:         status,
 		Code:           code,
 		Name:           name,
 		SortOrder:      sortOrder,

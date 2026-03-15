@@ -4,6 +4,7 @@ type CreateProductInput struct {
 	OrganizationID string `path:"organization_id"`
 	Body           struct {
 		CategoryID   *string `json:"categoryId,omitempty" format:"uuid"`
+		Status       *string `json:"status,omitempty" maxLength:"24"`
 		Name         string  `json:"name" required:"true" maxLength:"255"`
 		Description  *string `json:"description,omitempty"`
 		SKU          *string `json:"sku,omitempty" maxLength:"128"`

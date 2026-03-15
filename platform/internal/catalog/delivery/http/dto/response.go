@@ -10,6 +10,7 @@ type ProductCategoryBody struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organizationId"`
 	ParentID       *uuid.UUID `json:"parentId,omitempty"`
+	Status         string     `json:"status"`
 	Code           string     `json:"code"`
 	Name           string     `json:"name"`
 	SortOrder      int64      `json:"sortOrder"`
@@ -21,6 +22,7 @@ type ProductBody struct {
 	OrganizationID uuid.UUID   `json:"organizationId"`
 	CategoryID     *uuid.UUID  `json:"categoryId,omitempty"`
 	VideoObjectIDs []uuid.UUID `json:"videoObjectIds,omitempty"`
+	Status         string      `json:"status"`
 	Name           string      `json:"name"`
 	Description    *string     `json:"description,omitempty"`
 	SKU            *string     `json:"sku,omitempty"`

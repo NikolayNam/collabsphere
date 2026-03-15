@@ -71,6 +71,30 @@ func (h *Handler) ResolveOrganizationByHost(ctx context.Context, input *dto.Reso
 	}
 	return h.organizationResponse(ctx, organization, http.StatusOK)
 }
+
+func (h *Handler) ListPublicKYCDirectory(ctx context.Context, input *dto.ListPublicKYCDirectoryInput) (*dto.PublicKYCDirectoryResponse, error) {
+	items, err := h.svc.ListPublicKYCDirectoryOrganizations(ctx, input.Limit)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.PublicKYCDirectoryResponse{Status: http.StatusOK}
+	out.Body.Items = make([]dto.PublicKYCDirectoryOrganizationBody, 0, len(items))
+	for _, item := range items {
+		out.Body.Items = append(out.Body.Items, dto.PublicKYCDirectoryOrganizationBody{
+			ID:            item.ID.String(),
+			Name:          item.Name,
+			Slug:          item.Slug,
+			Description:   item.Description,
+			Website:       item.Website,
+			Industry:      item.Industry,
+			PrimaryDomain: item.PrimaryDomain,
+			KYCLevelCode:  item.KYCLevelCode,
+			KYCLevelName:  item.KYCLevelName,
+		})
+	}
+	return out, nil
+}
+
 func (h *Handler) UpdateOrganization(ctx context.Context, input *dto.UpdateOrganizationInput) (*dto.OrganizationResponse, error) {
 	actorID, err := principalOrganizationActorUUID(ctx)
 	if err != nil {
@@ -223,11 +247,26 @@ func (h *Handler) UpdateCooperationApplication(ctx context.Context, input *dto.U
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
-	applicationView, err := h.svc.UpdateCooperationApplication(ctx, application.UpdateCooperationApplicationCmd{OrganizationID: organizationID, ActorAccountID: actorID, ConfirmationEmail: input.Body.ConfirmationEmail, CompanyName: input.Body.CompanyName, RepresentedCategories: input.Body.RepresentedCategories, MinimumOrderAmount: input.Body.MinimumOrderAmount, DeliveryGeography: input.Body.DeliveryGeography, SalesChannels: input.Body.SalesChannels, StorefrontURL: input.Body.StorefrontURL, ContactFirstName: input.Body.ContactFirstName, ContactLastName: input.Body.ContactLastName, ContactJobTitle: input.Body.ContactJobTitle, PriceListObjectID: input.Body.PriceListObjectID, ClearPriceList: input.Body.ClearPriceList, ContactEmail: input.Body.ContactEmail, ContactPhone: input.Body.ContactPhone, PartnerCode: input.Body.PartnerCode})
+	applicationView, err := h.svc.UpdateCooperationApplication(ctx, application.UpdateCooperationApplicationCmd{OrganizationID: organizationID, ActorAccountID: actorID, ConfirmationEmail: input.Body.ConfirmationEmail, CompanyName: input.Body.CompanyName, RepresentedCategories: input.Body.RepresentedCategories, MinimumOrderAmount: input.Body.MinimumOrderAmount, DeliveryGeography: input.Body.DeliveryGeography, SalesChannels: input.Body.SalesChannels, StorefrontURL: input.Body.StorefrontURL, ContactFirstName: input.Body.ContactFirstName, ContactLastName: input.Body.ContactLastName, ContactJobTitle: input.Body.ContactJobTitle, PriceListObjectID: input.Body.PriceListObjectID, PriceListStatus: input.Body.PriceListStatus, ClearPriceList: input.Body.ClearPriceList, ContactEmail: input.Body.ContactEmail, ContactPhone: input.Body.ContactPhone, PartnerCode: input.Body.PartnerCode})
 	if err != nil {
 		return nil, humaerr.From(ctx, err)
 	}
 	return mapper.ToCooperationApplicationResponse(applicationView, http.StatusOK), nil
+}
+
+func (h *Handler) PublishAllCatalog(ctx context.Context, input *dto.PublishAllCatalogInput) (*dto.PublishAllCatalogResponse, error) {
+	actorID, err := principalOrganizationActorUUID(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	organizationID, err := parseOrganizationID(input.ID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	if err := h.svc.PublishAllCatalog(ctx, application.PublishAllCatalogCmd{OrganizationID: organizationID, ActorAccountID: actorID}); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.PublishAllCatalogResponse{Status: http.StatusNoContent}, nil
 }
 
 func (h *Handler) SubmitCooperationApplication(ctx context.Context, input *dto.SubmitCooperationApplicationInput) (*dto.CooperationApplicationResponse, error) {

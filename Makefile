@@ -101,6 +101,9 @@ clean-logs:
 	@rm -f $(RUN_LOG)
 
 up-dev: clean-logs
+	@echo "Preparing ZITADEL OIDC credentials..."
+	@$(COMPOSE) $(COMPOSE_ARGS) up -d zitadel-db zitadel >/dev/null
+	@go -C platform run ./cmd/zitadel-sync-oidc
 	@mkdir -p $(dir $(APP_LOG))
 	@echo "Running application... (log: $(APP_LOG))"
 	@echo "Deploy progress:"
@@ -131,6 +134,9 @@ up-dev: clean-logs
 	@$(COMPOSE) $(COMPOSE_ARGS) ps
 
 up-dev-web: clean-logs
+	@echo "Preparing ZITADEL OIDC credentials..."
+	@$(COMPOSE) $(COMPOSE_ARGS_WITH_WEB) up -d zitadel-db zitadel >/dev/null
+	@go -C platform run ./cmd/zitadel-sync-oidc
 	@mkdir -p $(dir $(APP_LOG))
 	@echo "Running full platform with web surfaces... (log: $(APP_LOG))"
 	@echo "Deploy progress:"

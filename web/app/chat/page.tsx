@@ -17,6 +17,52 @@ type MyGroup = {
   membershipRole?: string | null;
 };
 
+type MyOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+  membershipRole: string;
+};
+
+type AccessRequestOrganization = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+type GroupAccountMember = {
+  id: string;
+  accountId: string;
+  email: string;
+  displayName?: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type GroupOrganizationMember = {
+  id: string;
+  organizationId: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type OrganizationAccessRequest = {
+  id: string;
+  organizationId: string;
+  requesterAccountId: string;
+  requestedRole: string;
+  message?: string | null;
+  status: string;
+  reviewerAccountId?: string | null;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+};
+
 type Channel = {
   id: string;
   groupId: string;
@@ -78,6 +124,30 @@ const initialJoinRequestState: Status = {
   description: "Можно отправить запрос в backend на добавление аккаунта в группу выбранного канала.",
 };
 
+const initialOrganizationLinkState: Status = {
+  kind: "idle",
+  title: "Группы организаций",
+  description: "Можно добавить организацию в выбранную группу через `POST /v1/groups/{groupId}/organizations`.",
+};
+
+const initialMembersState: Status = {
+  kind: "idle",
+  title: "Участники группы",
+  description: "Состав группы читается через `GET /v1/groups/{groupId}/members`.",
+};
+
+const initialOrganizationAccessRequestState: Status = {
+  kind: "idle",
+  title: "Доступ к организации",
+  description: "Отправка self-service запроса в `POST /v1/organizations/{organizationId}/access-requests`.",
+};
+
+const initialOrganizationAccessQueueState: Status = {
+  kind: "idle",
+  title: "Очередь заявок",
+  description: "Для вашей организации можно смотреть и разбирать заявки через `/access-requests`.",
+};
+
 const initialMessagesState: Status = {
   kind: "idle",
   title: "Лента сообщений",
@@ -125,9 +195,17 @@ function authorLabel(message: Message): string {
 
 export default function ChatPage() {
   const [groups, setGroups] = useState<MyGroup[]>([]);
+  const [organizations, setOrganizations] = useState<MyOrganization[]>([]);
+  const [requestOrganizations, setRequestOrganizations] = useState<AccessRequestOrganization[]>([]);
+  const [groupAccountMembers, setGroupAccountMembers] = useState<GroupAccountMember[]>([]);
+  const [groupOrganizationMembers, setGroupOrganizationMembers] = useState<GroupOrganizationMember[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [requestOrganizationId, setRequestOrganizationId] = useState("");
+  const [requestRole, setRequestRole] = useState("member");
+  const [requestMessage, setRequestMessage] = useState("");
   const [selectedChannelId, setSelectedChannelId] = useState("");
   const [groupName, setGroupName] = useState("Product Team");
   const [groupSlug, setGroupSlug] = useState("product-team");
@@ -137,11 +215,17 @@ export default function ChatPage() {
   const [messagesState, setMessagesState] = useState<Status>(initialMessagesState);
   const [composerState, setComposerState] = useState<Status>(initialComposerState);
   const [joinRequestState, setJoinRequestState] = useState<Status>(initialJoinRequestState);
+  const [organizationLinkState, setOrganizationLinkState] = useState<Status>(initialOrganizationLinkState);
+  const [membersState, setMembersState] = useState<Status>(initialMembersState);
+  const [organizationAccessRequestState, setOrganizationAccessRequestState] = useState<Status>(initialOrganizationAccessRequestState);
+  const [organizationAccessQueueState, setOrganizationAccessQueueState] = useState<Status>(initialOrganizationAccessQueueState);
+  const [organizationAccessQueue, setOrganizationAccessQueue] = useState<OrganizationAccessRequest[]>([]);
   const [groupsRefreshKey, setGroupsRefreshKey] = useState(0);
   const [messagesRefreshKey, setMessagesRefreshKey] = useState(0);
 
   const accessToken = useMemo(() => readStoredTokens()?.accessToken || null, []);
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) || null;
+  const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) || null;
   const selectedChannel = channels.find((channel) => channel.id === selectedChannelId) || null;
 
   useEffect(() => {
@@ -215,6 +299,225 @@ export default function ChatPage() {
       cancelled = true;
     };
   }, [accessToken, groupsRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOrganizations() {
+      if (!accessToken) {
+        if (!cancelled) {
+          setOrganizations([]);
+          setSelectedOrganizationId("");
+          setOrganizationLinkState({
+            kind: "error",
+            title: "Нет локальной сессии",
+            description: "Сначала завершите login через /login, затем можно добавлять организации в группы.",
+          });
+        }
+        return;
+      }
+
+      try {
+        const payload = await apiFetch<{ data?: MyOrganization[] }>("/v1/organizations/my", { accessToken });
+        if (cancelled) {
+          return;
+        }
+        const items = Array.isArray(payload.data) ? payload.data : [];
+        setOrganizations(items);
+        setSelectedOrganizationId((current) => {
+          if (current && items.some((item) => item.id === current)) {
+            return current;
+          }
+          return items[0]?.id || "";
+        });
+        setOrganizationLinkState((current) => (current.kind === "error" ? initialOrganizationLinkState : current));
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        const message =
+          error instanceof APIError
+            ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+            : error instanceof Error
+              ? error.message
+              : "Unknown organizations error";
+        setOrganizations([]);
+        setSelectedOrganizationId("");
+        setOrganizationLinkState({
+          kind: "error",
+          title: "Не удалось загрузить организации",
+          description: message,
+        });
+      }
+    }
+
+    void loadOrganizations();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAccessRequestOrganizations() {
+      try {
+        const payload = await apiFetch<{
+          items?: AccessRequestOrganization[];
+          body?: { items?: AccessRequestOrganization[] };
+        }>("/v1/organizations/public/kyc-directory?limit=500", { accessToken });
+        if (cancelled) {
+          return;
+        }
+        const items = Array.isArray(payload.items)
+          ? payload.items
+          : Array.isArray(payload.body?.items)
+            ? payload.body.items
+            : [];
+        setRequestOrganizations(items);
+        setRequestOrganizationId((current) => (current && items.some((item) => item.id === current) ? current : items[0]?.id || ""));
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        const fallback = organizations.map((item) => ({ id: item.id, name: item.name, slug: item.slug }));
+        setRequestOrganizations(fallback);
+        setRequestOrganizationId((current) => (current && fallback.some((item) => item.id === current) ? current : fallback[0]?.id || ""));
+      }
+    }
+
+    void loadAccessRequestOrganizations();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, organizations]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOrganizationAccessQueue() {
+      if (!accessToken || !selectedOrganizationId) {
+        setOrganizationAccessQueue([]);
+        setOrganizationAccessQueueState(initialOrganizationAccessQueueState);
+        return;
+      }
+      setOrganizationAccessQueueState({
+        kind: "working",
+        title: "Загружаем заявки",
+        description: "Читаем очередь заявок для выбранной организации.",
+      });
+      try {
+        const payload = await apiFetch<{ requests?: OrganizationAccessRequest[]; body?: { requests?: OrganizationAccessRequest[] } }>(
+          `/v1/organizations/${selectedOrganizationId}/access-requests`,
+          { accessToken },
+        );
+        if (cancelled) {
+          return;
+        }
+        const items = Array.isArray(payload.requests)
+          ? payload.requests
+          : Array.isArray(payload.body?.requests)
+            ? payload.body.requests
+            : [];
+        setOrganizationAccessQueue(items);
+        setOrganizationAccessQueueState({
+          kind: "success",
+          title: "Очередь заявок загружена",
+          description: `Найдено заявок: ${items.length}.`,
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        const message =
+          error instanceof APIError
+            ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+            : error instanceof Error
+              ? error.message
+              : "Unknown access requests error";
+        setOrganizationAccessQueue([]);
+        setOrganizationAccessQueueState({
+          kind: "error",
+          title: "Не удалось загрузить заявки",
+          description: message,
+        });
+      }
+    }
+
+    void loadOrganizationAccessQueue();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedOrganizationId, groupsRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMembers() {
+      if (!accessToken || !selectedGroupId) {
+        setGroupAccountMembers([]);
+        setGroupOrganizationMembers([]);
+        setMembersState(initialMembersState);
+        return;
+      }
+
+      setMembersState({
+        kind: "working",
+        title: "Загружаем участников",
+        description: "Проверяем текущий состав аккаунтов и организаций в выбранной группе.",
+      });
+
+      try {
+        const payload = await apiFetch<{
+          accounts?: GroupAccountMember[];
+          organizations?: GroupOrganizationMember[];
+          body?: { accounts?: GroupAccountMember[]; organizations?: GroupOrganizationMember[] };
+        }>(`/v1/groups/${selectedGroupId}/members`, { accessToken });
+        if (cancelled) {
+          return;
+        }
+        const accounts = Array.isArray(payload.accounts)
+          ? payload.accounts
+          : Array.isArray(payload.body?.accounts)
+            ? payload.body.accounts
+            : [];
+        const organizations = Array.isArray(payload.organizations)
+          ? payload.organizations
+          : Array.isArray(payload.body?.organizations)
+            ? payload.body.organizations
+            : [];
+        setGroupAccountMembers(accounts);
+        setGroupOrganizationMembers(organizations);
+        setMembersState({
+          kind: "success",
+          title: "Участники загружены",
+          description: `Аккаунтов: ${accounts.length}, организаций: ${organizations.length}.`,
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        const message =
+          error instanceof APIError
+            ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+            : error instanceof Error
+              ? error.message
+              : "Unknown group members error";
+        setGroupAccountMembers([]);
+        setGroupOrganizationMembers([]);
+        setMembersState({
+          kind: "error",
+          title: "Не удалось загрузить участников",
+          description: message,
+        });
+      }
+    }
+
+    void loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedGroupId, groupsRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -460,6 +763,18 @@ export default function ChatPage() {
         description: "Лента перечитается немедленно и продолжит обновляться polling-ом.",
       });
     } catch (error) {
+      if (error instanceof APIError) {
+        const code = (error.code || "").trim().toUpperCase();
+        const message = error.message.toLowerCase();
+        if (error.status === 409 || code === "MEMBER_EXIST" || message.includes("member already exists")) {
+          setOrganizationAccessRequestState({
+            kind: "success",
+            title: "Доступ уже есть",
+            description: "Вы уже состоите в этой организации. Повторная заявка не требуется.",
+          });
+          return;
+        }
+      }
       const message =
         error instanceof APIError
           ? `${error.message}${error.code ? ` (${error.code})` : ""}`
@@ -480,6 +795,15 @@ export default function ChatPage() {
         kind: "error",
         title: "Нет выбранного канала",
         description: "Сначала выберите группу и канал, затем отправьте запрос на присоединение.",
+      });
+      return;
+    }
+
+    if (selectedGroup?.membershipSource === "account") {
+      setJoinRequestState({
+        kind: "success",
+        title: "Вы уже в группе",
+        description: "Для выбранной группы у вас уже есть прямой доступ. Можно просто открыть канал и писать сообщения.",
       });
       return;
     }
@@ -508,6 +832,25 @@ export default function ChatPage() {
         description: "Backend принял запрос на добавление в группу выбранного канала.",
       });
     } catch (error) {
+      if (error instanceof APIError && error.status === 409) {
+        setJoinRequestState({
+          kind: "success",
+          title: "Вы уже в группе",
+          description: "Backend подтвердил, что аккаунт уже состоит в этой группе. Дополнительный запрос не нужен.",
+        });
+        return;
+      }
+
+      if (error instanceof APIError && error.status === 403) {
+        setJoinRequestState({
+          kind: "error",
+          title: "Нужны права owner",
+          description:
+            "Этот endpoint может вызывать только owner группы. Если нужен доступ другому аккаунту, owner должен добавить его через `POST /v1/groups/{groupId}/accounts`.",
+        });
+        return;
+      }
+
       const message =
         error instanceof APIError
           ? `${error.message}${error.code ? ` (${error.code})` : ""}`
@@ -517,6 +860,157 @@ export default function ChatPage() {
       setJoinRequestState({
         kind: "error",
         title: "Не удалось отправить запрос",
+        description: message,
+      });
+    }
+  }
+
+  async function handleAttachOrganizationToGroup() {
+    if (!accessToken || !selectedGroupId) {
+      setOrganizationLinkState({
+        kind: "error",
+        title: "Нет выбранной группы",
+        description: "Сначала выберите группу, затем добавьте организацию.",
+      });
+      return;
+    }
+    if (!selectedOrganizationId) {
+      setOrganizationLinkState({
+        kind: "error",
+        title: "Нет выбранной организации",
+        description: "Выберите организацию из списка и повторите.",
+      });
+      return;
+    }
+
+    setOrganizationLinkState({
+      kind: "working",
+      title: "Добавляем организацию",
+      description: "Запрос уходит в `POST /v1/groups/{groupId}/organizations`.",
+    });
+
+    try {
+      await apiFetch(`/v1/groups/${selectedGroupId}/organizations`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: { organizationId: selectedOrganizationId },
+      });
+      setGroupsRefreshKey((value) => value + 1);
+      setOrganizationLinkState({
+        kind: "success",
+        title: "Организация добавлена",
+        description: `${selectedOrganization?.name || "Organization"} теперь подключена к выбранной группе.`,
+      });
+    } catch (error) {
+      if (error instanceof APIError && error.status === 409) {
+        setOrganizationLinkState({
+          kind: "success",
+          title: "Организация уже в группе",
+          description: "Повторно добавлять не нужно: backend подтвердил существующее членство организации.",
+        });
+        return;
+      }
+      if (error instanceof APIError && error.status === 403) {
+        setOrganizationLinkState({
+          kind: "error",
+          title: "Нужны права owner",
+          description: "Добавлять организации в группу может только owner этой группы.",
+        });
+        return;
+      }
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown add organization error";
+      setOrganizationLinkState({
+        kind: "error",
+        title: "Не удалось добавить организацию",
+        description: message,
+      });
+    }
+  }
+
+  async function handleCreateOrganizationAccessRequest() {
+    const organizationId = requestOrganizationId.trim();
+    if (!accessToken || organizationId === "") {
+      setOrganizationAccessRequestState({
+        kind: "error",
+        title: "Нужен organizationId",
+        description: "Укажите UUID организации и повторите запрос.",
+      });
+      return;
+    }
+    setOrganizationAccessRequestState({
+      kind: "working",
+      title: "Отправляем заявку",
+      description: "Создаём заявку на доступ к организации.",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${organizationId}/access-requests`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: {
+          role: requestRole,
+          message: requestMessage.trim() || undefined,
+        },
+      });
+      setOrganizationAccessRequestState({
+        kind: "success",
+        title: "Заявка отправлена",
+        description: "Owner/admin организации сможет рассмотреть заявку в очереди access requests.",
+      });
+      setRequestMessage("");
+      if (selectedOrganizationId === organizationId) {
+        setGroupsRefreshKey((value) => value + 1);
+      }
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown create access request error";
+      setOrganizationAccessRequestState({
+        kind: "error",
+        title: "Не удалось отправить заявку",
+        description: message,
+      });
+    }
+  }
+
+  async function handleReviewOrganizationAccessRequest(requestId: string, decision: "approve" | "reject") {
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    setOrganizationAccessQueueState({
+      kind: "working",
+      title: decision === "approve" ? "Одобряем заявку" : "Отклоняем заявку",
+      description: "Обновляем статус заявки в backend.",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/access-requests/${requestId}/${decision}`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: {},
+      });
+      setGroupsRefreshKey((value) => value + 1);
+      setOrganizationAccessQueueState({
+        kind: "success",
+        title: "Заявка обработана",
+        description: "Очередь будет перечитана автоматически.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof APIError
+          ? `${error.message}${error.code ? ` (${error.code})` : ""}`
+          : error instanceof Error
+            ? error.message
+            : "Unknown review access request error";
+      setOrganizationAccessQueueState({
+        kind: "error",
+        title: "Не удалось обработать заявку",
         description: message,
       });
     }
@@ -613,6 +1107,171 @@ export default function ChatPage() {
               </button>
             ))}
             {selectedGroup && channels.length === 0 ? <p className="muted">У выбранной группы нет доступных каналов.</p> : null}
+          </div>
+        </Panel>
+
+        <Panel title="Группы организаций" eyebrow={selectedGroup ? selectedGroup.name : "Сначала выберите группу"}>
+          <div
+            className={`status-card ${organizationLinkState.kind === "error" ? "error" : organizationLinkState.kind === "success" ? "success" : "info"}`}
+          >
+            <strong>{organizationLinkState.title}</strong>
+            <p className="status-copy">{organizationLinkState.description}</p>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-row">
+              <label className="form-label" htmlFor="chat-organization-selector">
+                Организация
+              </label>
+              <select
+                id="chat-organization-selector"
+                className="text-input"
+                value={selectedOrganizationId}
+                onChange={(event) => setSelectedOrganizationId(event.target.value)}
+              >
+                <option value="">Выберите организацию</option>
+                {organizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name} ({organization.membershipRole})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => void handleAttachOrganizationToGroup()}
+              disabled={!selectedGroupId || !selectedOrganizationId}
+            >
+              Добавить организацию в группу
+            </button>
+          </div>
+        </Panel>
+
+        <Panel title="Запрос доступа к организации" eyebrow="Self-service">
+          <div
+            className={`status-card ${organizationAccessRequestState.kind === "error" ? "error" : organizationAccessRequestState.kind === "success" ? "success" : "info"}`}
+          >
+            <strong>{organizationAccessRequestState.title}</strong>
+            <p className="status-copy">{organizationAccessRequestState.description}</p>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-row">
+              <label className="form-label" htmlFor="chat-request-organization">
+                Организация
+              </label>
+              <select
+                id="chat-request-organization"
+                className="text-input"
+                value={requestOrganizationId}
+                onChange={(event) => setRequestOrganizationId(event.target.value)}
+              >
+                <option value="">Выберите организацию</option>
+                {requestOrganizations.map((organization) => (
+                  <option key={organization.id} value={organization.id}>
+                    {organization.name} ({organization.slug})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-row">
+              <label className="form-label" htmlFor="chat-request-role">
+                Роль
+              </label>
+              <select id="chat-request-role" className="text-input" value={requestRole} onChange={(event) => setRequestRole(event.target.value)}>
+                <option value="member">member</option>
+                <option value="viewer">viewer</option>
+                <option value="manager">manager</option>
+                <option value="admin">admin</option>
+                <option value="owner">owner</option>
+              </select>
+            </div>
+            <div className="form-row">
+              <label className="form-label" htmlFor="chat-request-message">
+                Комментарий
+              </label>
+              <textarea
+                id="chat-request-message"
+                className="textarea"
+                value={requestMessage}
+                onChange={(event) => setRequestMessage(event.target.value)}
+                rows={3}
+                placeholder="Почему вам нужен доступ"
+              />
+            </div>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => void handleCreateOrganizationAccessRequest()}
+              disabled={!requestOrganizationId}
+            >
+              Отправить заявку на доступ
+            </button>
+          </div>
+        </Panel>
+
+        <Panel title="Очередь заявок организации" eyebrow={selectedOrganization ? selectedOrganization.name : "Выберите организацию"}>
+          <div
+            className={`status-card ${organizationAccessQueueState.kind === "error" ? "error" : organizationAccessQueueState.kind === "success" ? "success" : "info"}`}
+          >
+            <strong>{organizationAccessQueueState.title}</strong>
+            <p className="status-copy">{organizationAccessQueueState.description}</p>
+          </div>
+          <div className="chat-list">
+            {organizationAccessQueue.map((request) => (
+              <div key={request.id} className="chat-list-item">
+                <strong>{request.requesterAccountId.slice(0, 8)}</strong>
+                <span className="muted">
+                  {request.requestedRole} · {request.status}
+                </span>
+                {request.message ? <span className="muted">{request.message}</span> : null}
+                {request.status === "pending" ? (
+                  <div className="button-row">
+                    <button className="button secondary" type="button" onClick={() => void handleReviewOrganizationAccessRequest(request.id, "approve")}>
+                      Одобрить
+                    </button>
+                    <button className="button secondary" type="button" onClick={() => void handleReviewOrganizationAccessRequest(request.id, "reject")}>
+                      Отклонить
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            {selectedOrganizationId && organizationAccessQueue.length === 0 ? <p className="muted">Заявок пока нет.</p> : null}
+          </div>
+        </Panel>
+
+        <Panel title="Участники группы" eyebrow={selectedGroup ? selectedGroup.slug : "No group selected"}>
+          <div className={`status-card ${membersState.kind === "error" ? "error" : membersState.kind === "success" ? "success" : "info"}`}>
+            <strong>{membersState.title}</strong>
+            <p className="status-copy">{membersState.description}</p>
+          </div>
+
+          <div className="chat-list">
+            <p className="muted">Account members</p>
+            {groupAccountMembers.map((member) => (
+              <div key={member.id} className="chat-list-item">
+                <strong>{member.displayName?.trim() || member.email}</strong>
+                <span className="muted">
+                  {member.role} · {member.isActive ? "active" : "inactive"}
+                </span>
+              </div>
+            ))}
+            {selectedGroup && groupAccountMembers.length === 0 ? <p className="muted">Прямых account-участников нет.</p> : null}
+          </div>
+
+          <div className="chat-list">
+            <p className="muted">Organization members</p>
+            {groupOrganizationMembers.map((member) => (
+              <div key={member.id} className="chat-list-item">
+                <strong>{member.name}</strong>
+                <span className="muted">
+                  {member.slug} · {member.isActive ? "active" : "inactive"}
+                </span>
+              </div>
+            ))}
+            {selectedGroup && groupOrganizationMembers.length === 0 ? <p className="muted">Организации пока не подключены.</p> : null}
           </div>
         </Panel>
       </div>

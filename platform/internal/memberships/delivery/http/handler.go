@@ -164,6 +164,186 @@ func (h *Handler) AcceptInvitation(ctx context.Context, input *dto.AcceptInvitat
 	return out, nil
 }
 
+func (h *Handler) CreateAccessRequest(ctx context.Context, input *dto.CreateAccessRequestInput) (*dto.AccessRequestResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	req, err := h.svc.CreateAccessRequest(ctx, application.CreateAccessRequestCmd{
+		OrganizationID: orgID,
+		ActorAccountID: actorID,
+		Role:           input.Body.Role,
+		Message:        input.Body.Message,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.AccessRequestResponse{Status: http.StatusCreated, Body: toAccessRequestPayload(*req)}, nil
+}
+
+func (h *Handler) ListAccessRequests(ctx context.Context, input *dto.ListAccessRequestsInput) (*dto.AccessRequestsListResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	items, err := h.svc.ListAccessRequests(ctx, actorID, orgID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.AccessRequestsListResponse{Status: http.StatusOK}
+	out.Body.Requests = make([]dto.AccessRequestPayload, 0, len(items))
+	for _, item := range items {
+		out.Body.Requests = append(out.Body.Requests, toAccessRequestPayload(item))
+	}
+	return out, nil
+}
+
+func (h *Handler) ApproveAccessRequest(ctx context.Context, input *dto.ReviewAccessRequestInput) (*dto.ReviewAccessRequestResponse, error) {
+	return h.reviewAccessRequest(ctx, input, string(application.AccessRequestDecisionApprove))
+}
+
+func (h *Handler) RejectAccessRequest(ctx context.Context, input *dto.ReviewAccessRequestInput) (*dto.ReviewAccessRequestResponse, error) {
+	return h.reviewAccessRequest(ctx, input, string(application.AccessRequestDecisionReject))
+}
+
+func (h *Handler) ListOrganizationRoles(ctx context.Context, input *dto.ListOrganizationRolesInput) (*dto.OrganizationRolesListResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	roles, err := h.svc.ListOrganizationRoles(ctx, application.ListOrganizationRolesQuery{
+		OrganizationID:  orgID,
+		ActorAccountID:  actorID,
+		IncludeDeleted:  input.IncludeDeleted,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.OrganizationRolesListResponse{Status: http.StatusOK}
+	out.Body.Roles = append(out.Body.Roles, systemRolePayloads(orgID)...)
+	for _, r := range roles {
+		out.Body.Roles = append(out.Body.Roles, toOrganizationRolePayload(r))
+	}
+	return out, nil
+}
+
+func (h *Handler) CreateOrganizationRole(ctx context.Context, input *dto.CreateOrganizationRoleInput) (*dto.OrganizationRoleResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	role, err := h.svc.CreateOrganizationRole(ctx, application.CreateOrganizationRoleCmd{
+		OrganizationID: orgID,
+		ActorAccountID: actorID,
+		Code:           input.Body.Code,
+		Name:           input.Body.Name,
+		Description:   input.Body.Description,
+		BaseRole:      input.Body.BaseRole,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.OrganizationRoleResponse{Status: http.StatusCreated, Body: toOrganizationRolePayload(role)}, nil
+}
+
+func (h *Handler) UpdateOrganizationRole(ctx context.Context, input *dto.UpdateOrganizationRoleInput) (*dto.OrganizationRoleResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	roleID, err := parseUUID(input.RoleID)
+	if err != nil {
+		return nil, humaerr.From(ctx, fault.Validation("Invalid role_id"))
+	}
+	role, err := h.svc.UpdateOrganizationRole(ctx, application.UpdateOrganizationRoleCmd{
+		OrganizationID: orgID,
+		RoleID:         roleID,
+		ActorAccountID: actorID,
+		Name:           input.Body.Name,
+		Description:   input.Body.Description,
+		BaseRole:      input.Body.BaseRole,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.OrganizationRoleResponse{Status: http.StatusOK, Body: toOrganizationRolePayload(role)}, nil
+}
+
+func (h *Handler) DeleteOrganizationRole(ctx context.Context, input *dto.DeleteOrganizationRoleInput) (*dto.EmptyResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	roleID, err := parseUUID(input.RoleID)
+	if err != nil {
+		return nil, humaerr.From(ctx, fault.Validation("Invalid role_id"))
+	}
+	if err := h.svc.DeleteOrganizationRole(ctx, application.DeleteOrganizationRoleCmd{
+		OrganizationID: orgID,
+		RoleID:         roleID,
+		ActorAccountID: actorID,
+	}); err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	return &dto.EmptyResponse{Status: http.StatusNoContent}, nil
+}
+
+func (h *Handler) reviewAccessRequest(ctx context.Context, input *dto.ReviewAccessRequestInput, decision string) (*dto.ReviewAccessRequestResponse, error) {
+	actorID, err := principalMembershipActor(ctx)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	orgID, err := parseOrganizationID(input.OrganizationID)
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	requestID, err := parseUUID(input.RequestID)
+	if err != nil {
+		return nil, humaerr.From(ctx, fault.Validation("Invalid request_id"))
+	}
+	requestView, memberView, err := h.svc.ReviewAccessRequest(ctx, application.ReviewAccessRequestCmd{
+		OrganizationID: orgID,
+		RequestID:      requestID,
+		ActorAccountID: actorID,
+		Decision:       decision,
+		ReviewNote:     input.Body.ReviewNote,
+	})
+	if err != nil {
+		return nil, humaerr.From(ctx, err)
+	}
+	out := &dto.ReviewAccessRequestResponse{Status: http.StatusOK}
+	out.Body.Request = toAccessRequestPayload(*requestView)
+	if memberView != nil {
+		payload := toMemberPayload(*memberView)
+		out.Body.Member = &payload
+	}
+	return out, nil
+}
+
 func principalMembershipActor(ctx context.Context) (uuid.UUID, error) {
 	principal := authmw.PrincipalFromContext(ctx)
 	if !principal.IsAccount() {
@@ -214,5 +394,65 @@ func toInvitationPayload(invitation memberDomain.InvitationView) dto.InvitationP
 		ExpiresAt:           invitation.ExpiresAt,
 		CreatedAt:           invitation.CreatedAt,
 		UpdatedAt:           invitation.UpdatedAt,
+	}
+}
+
+func toAccessRequestPayload(request memberDomain.AccessRequestView) dto.AccessRequestPayload {
+	return dto.AccessRequestPayload{
+		ID:               request.ID,
+		OrganizationID:   request.OrganizationID,
+		RequesterAccount: request.RequesterAccount,
+		RequestedRole:    request.RequestedRole,
+		Message:          request.Message,
+		Status:           request.Status,
+		ReviewerAccount:  request.ReviewerAccount,
+		ReviewNote:       request.ReviewNote,
+		ReviewedAt:       request.ReviewedAt,
+		CreatedAt:        request.CreatedAt,
+		UpdatedAt:        request.UpdatedAt,
+	}
+}
+
+var systemRoleDisplayNames = map[string]string{
+	"owner":   "Owner",
+	"admin":   "Administrator",
+	"manager": "Manager",
+	"member":  "Member",
+	"viewer":  "Viewer",
+}
+
+func systemRolePayloads(orgID orgDomain.OrganizationID) []dto.OrganizationRolePayload {
+	codes := []string{"owner", "admin", "manager", "member", "viewer"}
+	out := make([]dto.OrganizationRolePayload, 0, len(codes))
+	for _, code := range codes {
+		name := code
+		if n, ok := systemRoleDisplayNames[code]; ok {
+			name = n
+		}
+		out = append(out, dto.OrganizationRolePayload{
+			ID:             uuid.Nil,
+			OrganizationID: orgID.UUID(),
+			Code:           code,
+			Name:           name,
+			Description:   "",
+			BaseRole:      code,
+			IsSystem:      true,
+		})
+	}
+	return out
+}
+
+func toOrganizationRolePayload(r *memberDomain.OrganizationRole) dto.OrganizationRolePayload {
+	return dto.OrganizationRolePayload{
+		ID:             r.ID(),
+		OrganizationID: r.OrganizationID().UUID(),
+		Code:           r.Code(),
+		Name:           r.Name(),
+		Description:    r.Description(),
+		BaseRole:       string(r.BaseRole()),
+		IsSystem:       false,
+		CreatedAt:      r.CreatedAt(),
+		UpdatedAt:      r.UpdatedAt(),
+		DeletedAt:      r.DeletedAt(),
 	}
 }

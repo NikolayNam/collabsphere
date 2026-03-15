@@ -25,6 +25,7 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/update_product_category"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 	uploadports "github.com/NikolayNam/collabsphere/internal/uploads/application/ports"
 	uploaddomain "github.com/NikolayNam/collabsphere/internal/uploads/domain"
@@ -104,6 +105,7 @@ type Service struct {
 	repo               ports.CatalogRepository
 	organizations      ports.OrganizationReader
 	memberships        ports.MembershipReader
+	roleResolver      memberports.RoleResolver
 	tx                 sharedtx.Manager
 	clock              ports.Clock
 	storage            ports.ObjectStorage
@@ -111,23 +113,24 @@ type Service struct {
 	uploads            uploadports.Repository
 }
 
-func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, tx sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, storageBucket string, uploads uploadports.Repository) *Service {
+func New(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, tx sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, storageBucket string, uploads uploadports.Repository) *Service {
 	return &Service{
-		createCategory:     create_product_category.NewHandler(repo, organizations, memberships, clock),
-		updateCategory:     update_product_category.NewHandler(repo, organizations, memberships, clock),
-		deleteCategory:     delete_product_category.NewHandler(repo, organizations, memberships, clock),
-		listCategories:     list_product_categories.NewHandler(repo, organizations, memberships),
-		createProduct:      create_product.NewHandler(repo, organizations, memberships, clock),
-		updateProduct:      update_product.NewHandler(repo, organizations, memberships, clock),
-		deleteProduct:      delete_product.NewHandler(repo, organizations, memberships, clock),
-		listProducts:       list_products.NewHandler(repo, organizations, memberships),
-		getProductByID:     get_product_by_id.NewHandler(repo, organizations, memberships),
-		createImportUpload: create_product_import_upload.NewHandler(repo, organizations, memberships, clock, storage, storageBucket),
-		runImport:          run_product_import.NewHandler(repo, organizations, memberships, clock, storage),
-		getImport:          get_product_import.NewHandler(repo, organizations, memberships),
+		createCategory:     create_product_category.NewHandler(repo, organizations, memberships, roleResolver, clock),
+		updateCategory:     update_product_category.NewHandler(repo, organizations, memberships, roleResolver, clock),
+		deleteCategory:     delete_product_category.NewHandler(repo, organizations, memberships, roleResolver, clock),
+		listCategories:     list_product_categories.NewHandler(repo, organizations, memberships, roleResolver),
+		createProduct:      create_product.NewHandler(repo, organizations, memberships, roleResolver, clock),
+		updateProduct:      update_product.NewHandler(repo, organizations, memberships, roleResolver, clock),
+		deleteProduct:      delete_product.NewHandler(repo, organizations, memberships, roleResolver, clock),
+		listProducts:       list_products.NewHandler(repo, organizations, memberships, roleResolver),
+		getProductByID:     get_product_by_id.NewHandler(repo, organizations, memberships, roleResolver),
+		createImportUpload: create_product_import_upload.NewHandler(repo, organizations, memberships, roleResolver, clock, storage, storageBucket),
+		runImport:          run_product_import.NewHandler(repo, organizations, memberships, roleResolver, clock, storage),
+		getImport:          get_product_import.NewHandler(repo, organizations, memberships, roleResolver),
 		repo:               repo,
 		organizations:      organizations,
 		memberships:        memberships,
+		roleResolver:       roleResolver,
 		tx:                 tx,
 		clock:              clock,
 		storage:            storage,
@@ -266,7 +269,7 @@ func (s *Service) UploadProductVideo(ctx context.Context, cmd UploadProductVideo
 	if s.storage == nil || s.storageBucket == "" || s.repo == nil || s.organizations == nil || s.memberships == nil || s.clock == nil {
 		return nil, catalogerrors.Internal("product video upload is unavailable", io.ErrClosedPipe)
 	}
-	if err := catalogaccess.RequireOrganizationEmployeeAccess(ctx, s.organizations, s.memberships, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+	if err := catalogaccess.RequireOrganizationEmployeeAccess(ctx, s.organizations, s.memberships, s.roleResolver, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
 		return nil, err
 	}
 
@@ -327,7 +330,7 @@ func (s *Service) UploadProductVideo(ctx context.Context, cmd UploadProductVideo
 }
 
 func (s *Service) ListProductVideos(ctx context.Context, organizationID orgdomain.OrganizationID, productID catalogdomain.ProductID, actorAccountID accdomain.AccountID) ([]ProductVideoView, error) {
-	if err := catalogaccess.RequireOrganizationAccess(ctx, s.organizations, s.memberships, organizationID, actorAccountID, false); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, s.organizations, s.memberships, s.roleResolver, organizationID, actorAccountID, false); err != nil {
 		return nil, err
 	}
 	items, err := s.repo.ListProductVideos(ctx, organizationID.UUID(), productID.UUID())

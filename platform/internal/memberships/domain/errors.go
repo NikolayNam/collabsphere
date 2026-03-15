@@ -19,4 +19,12 @@ var (
 	ErrInvalidOrganizationStatus = errors.New("invalid organization status")
 
 	ErrMembershipInvalid = errors.New("membership is invalid")
+
+	ErrOrganizationRoleInvalid         = errors.New("organization role is invalid")
+	ErrOrganizationRoleCodeInvalid    = errors.New("organization role code is invalid")
+	ErrOrganizationRoleCodeReserved   = errors.New("organization role code is reserved for system roles")
+	ErrOrganizationRoleNameInvalid    = errors.New("organization role name is invalid")
+	ErrOrganizationRoleBaseRoleInvalid = errors.New("organization role base role is invalid")
+	ErrOrganizationRoleNotFound       = errors.New("organization role not found")
+	ErrOrganizationRoleInUse          = errors.New("organization role is in use and cannot be deleted")
 )

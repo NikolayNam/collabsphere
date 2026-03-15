@@ -149,6 +149,18 @@ func (m membershipsStub) ListInvitations(ctx context.Context, orgID orgdomain.Or
 func (m membershipsStub) RevokeExpiredPendingInvitations(ctx context.Context, orgID orgdomain.OrganizationID, email accdomain.Email, actorAccountID uuid.UUID, now time.Time) error {
 	panic("unexpected call")
 }
+func (m membershipsStub) CreateAccessRequest(ctx context.Context, req *memberdomain.OrganizationAccessRequest) error {
+	panic("unexpected call")
+}
+func (m membershipsStub) SaveAccessRequest(ctx context.Context, req *memberdomain.OrganizationAccessRequest) error {
+	panic("unexpected call")
+}
+func (m membershipsStub) GetAccessRequestByID(ctx context.Context, orgID orgdomain.OrganizationID, requestID uuid.UUID) (*memberdomain.OrganizationAccessRequest, error) {
+	panic("unexpected call")
+}
+func (m membershipsStub) ListAccessRequests(ctx context.Context, orgID orgdomain.OrganizationID) ([]memberdomain.OrganizationAccessRequest, error) {
+	panic("unexpected call")
+}
 
 type channelAccessStub struct {
 	accountAccess collabdomain.Access

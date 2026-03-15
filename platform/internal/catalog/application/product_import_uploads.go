@@ -15,7 +15,7 @@ func (s *Service) CompleteProductImportUpload(ctx context.Context, cmd CompleteP
 	if cmd.UploadID == uuid.Nil {
 		return nil, catalogerrors.ProductImportFileInvalid("uploadId is required")
 	}
-	if err := catalogaccess.RequireOrganizationAccess(ctx, s.organizations, s.memberships, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, s.organizations, s.memberships, s.roleResolver, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
 	if s.uploads == nil || s.storage == nil || s.runImport == nil {

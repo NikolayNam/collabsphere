@@ -10,7 +10,7 @@ type AddMemberInput struct {
 	OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
 	Body           struct {
 		AccountID string `json:"accountId" required:"true" format:"uuid"`
-		Role      string `json:"role,omitempty" enum:"owner,admin,manager,member,viewer"`
+		Role      string `json:"role,omitempty" doc:"System role (owner, admin, manager, member, viewer) or custom role code"`
 	}
 }
 
@@ -18,7 +18,7 @@ type UpdateMemberInput struct {
 	OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
 	MembershipID   string `path:"membership_id" required:"true" format:"uuid"`
 	Body           struct {
-		Role     *string `json:"role,omitempty" enum:"owner,admin,manager,member,viewer"`
+		Role     *string `json:"role,omitempty" doc:"System or custom role code"`
 		IsActive *bool   `json:"isActive,omitempty"`
 	}
 }
@@ -36,7 +36,7 @@ type CreateInvitationInput struct {
 	OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
 	Body           struct {
 		Email string `json:"email" required:"true" format:"email"`
-		Role  string `json:"role,omitempty" enum:"owner,admin,manager,member,viewer"`
+		Role  string `json:"role,omitempty" doc:"System or custom role code"`
 	}
 }
 
@@ -46,6 +46,26 @@ type ListInvitationsInput struct {
 
 type AcceptInvitationInput struct {
 	Token string `path:"token" required:"true"`
+}
+
+type CreateAccessRequestInput struct {
+	OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
+	Body           struct {
+		Role    string  `json:"role,omitempty" doc:"System or custom role code"`
+		Message *string `json:"message,omitempty"`
+	}
+}
+
+type ListAccessRequestsInput struct {
+	OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
+}
+
+type ReviewAccessRequestInput struct {
+	OrganizationID string `path:"organization_id" required:"true" format:"uuid"`
+	RequestID      string `path:"request_id" required:"true" format:"uuid"`
+	Body           struct {
+		ReviewNote *string `json:"reviewNote,omitempty"`
+	}
 }
 
 type MemberPayload struct {
@@ -103,6 +123,40 @@ type AcceptInvitationResponse struct {
 	Body   struct {
 		Invitation InvitationPayload `json:"invitation"`
 		Member     MemberPayload     `json:"member"`
+	}
+}
+
+type AccessRequestPayload struct {
+	ID               uuid.UUID  `json:"id"`
+	OrganizationID   uuid.UUID  `json:"organizationId"`
+	RequesterAccount uuid.UUID  `json:"requesterAccountId"`
+	RequestedRole    string     `json:"requestedRole"`
+	Message          *string    `json:"message,omitempty"`
+	Status           string     `json:"status"`
+	ReviewerAccount  *uuid.UUID `json:"reviewerAccountId,omitempty"`
+	ReviewNote       *string    `json:"reviewNote,omitempty"`
+	ReviewedAt       *time.Time `json:"reviewedAt,omitempty"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        *time.Time `json:"updatedAt,omitempty"`
+}
+
+type AccessRequestResponse struct {
+	Status int
+	Body   AccessRequestPayload
+}
+
+type AccessRequestsListResponse struct {
+	Status int
+	Body   struct {
+		Requests []AccessRequestPayload `json:"requests"`
+	}
+}
+
+type ReviewAccessRequestResponse struct {
+	Status int
+	Body   struct {
+		Request AccessRequestPayload `json:"request"`
+		Member  *MemberPayload       `json:"member,omitempty"`
 	}
 }
 

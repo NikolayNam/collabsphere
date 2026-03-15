@@ -314,10 +314,14 @@ func newMembershipsIntegrationEnv(t *testing.T) *membershipsIntegrationEnv {
 	accountService := accountsapp.New(accountRepo, passwordHasher, clk, nil, "")
 	accountHandler := accountshttp.NewHandler(accountService, conf.Auth.LocalSignupEnabled)
 
-	organizationService := orgapp.New(organizationRepo, membershipRepo, categoryRepo, dbtx.New(db), clk, nil, "", nil, "", uploadRepo)
+	catalogRepo := catalogpg.NewCatalogRepo(db)
+	roleRepo := memberspg.NewOrganizationRoleRepo(db)
+	roleResolver := membershipsapp.NewRoleResolverAdapter(roleRepo)
+	organizationService := orgapp.New(organizationRepo, membershipRepo, roleResolver, categoryRepo, catalogRepo, dbtx.New(db), clk, nil, "", nil, "", uploadRepo)
 	organizationHandler := orghttp.NewHandler(organizationService)
 
-	membershipService := membershipsapp.New(membershipRepo, organizationRepo, accountRepo, dbtx.New(db), tokenGenerator, memberspg.NewAccessAuditRepo(db), clk, 7*24*time.Hour)
+	roleRepo := memberspg.NewOrganizationRoleRepo(db)
+	membershipService := membershipsapp.New(membershipRepo, roleRepo, organizationRepo, accountRepo, dbtx.New(db), tokenGenerator, memberspg.NewAccessAuditRepo(db), clk, 7*24*time.Hour)
 	membershipHandler := NewHandler(membershipService)
 
 	root := chi.NewRouter()

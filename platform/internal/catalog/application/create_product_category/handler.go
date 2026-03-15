@@ -8,21 +8,23 @@ import (
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 )
 
 type Handler struct {
 	repo          ports.CatalogRepository
 	organizations ports.OrganizationReader
 	memberships   ports.MembershipReader
+	roleResolver  memberports.RoleResolver
 	clock         ports.Clock
 }
 
-func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock) *Handler {
-	return &Handler{repo: repo, organizations: organizations, memberships: memberships, clock: clock}
+func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, clock ports.Clock) *Handler {
+	return &Handler{repo: repo, organizations: organizations, memberships: memberships, roleResolver: roleResolver, clock: clock}
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.ProductCategory, error) {
-	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, h.roleResolver, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
 	if cmd.ParentID != nil {
@@ -34,11 +36,16 @@ func (h *Handler) Handle(ctx context.Context, cmd Command) (*catalogdomain.Produ
 			return nil, catalogerrors.ProductCategoryNotFound()
 		}
 	}
+	status := ""
+	if cmd.Status != nil {
+		status = *cmd.Status
+	}
 
 	category, err := catalogdomain.NewProductCategory(catalogdomain.NewProductCategoryParams{
 		ID:             catalogdomain.NewProductCategoryID(),
 		OrganizationID: cmd.OrganizationID,
 		ParentID:       cmd.ParentID,
+		Status:         status,
 		Code:           cmd.Code,
 		Name:           cmd.Name,
 		SortOrder:      cmd.SortOrder,

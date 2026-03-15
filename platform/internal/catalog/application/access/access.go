@@ -8,26 +8,35 @@ import (
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	accesspolicy "github.com/NikolayNam/collabsphere/internal/iam/access"
 	memberdomain "github.com/NikolayNam/collabsphere/internal/memberships/domain"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 	orgdomain "github.com/NikolayNam/collabsphere/internal/organizations/domain"
 )
 
-func RequireOrganizationAccess(ctx context.Context, organizations ports.OrganizationReader, memberships ports.MembershipReader, organizationID orgdomain.OrganizationID, actorID accdomain.AccountID, requireManage bool) error {
+func RequireOrganizationAccess(ctx context.Context, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, organizationID orgdomain.OrganizationID, actorID accdomain.AccountID, requireManage bool) error {
 	_, member, err := loadOrganizationMember(ctx, organizations, memberships, organizationID, actorID)
 	if err != nil {
 		return err
 	}
-	if requireManage && !accesspolicy.HasOrganizationPermission(member.Role(), accesspolicy.PermissionOrganizationManageCatalog) {
+	resolved, err := roleResolver.ResolveRoleForPermissions(ctx, organizationID, string(member.Role()))
+	if err != nil || resolved == "" {
+		return catalogerrors.AccessDenied()
+	}
+	if requireManage && !accesspolicy.HasOrganizationPermission(resolved, accesspolicy.PermissionOrganizationManageCatalog) {
 		return catalogerrors.AccessDenied()
 	}
 	return nil
 }
 
-func RequireOrganizationEmployeeAccess(ctx context.Context, organizations ports.OrganizationReader, memberships ports.MembershipReader, organizationID orgdomain.OrganizationID, actorID accdomain.AccountID) error {
+func RequireOrganizationEmployeeAccess(ctx context.Context, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, organizationID orgdomain.OrganizationID, actorID accdomain.AccountID) error {
 	_, member, err := loadOrganizationMember(ctx, organizations, memberships, organizationID, actorID)
 	if err != nil {
 		return err
 	}
-	if !accesspolicy.HasOrganizationPermission(member.Role(), accesspolicy.PermissionOrganizationEmployeeAccess) {
+	resolved, err := roleResolver.ResolveRoleForPermissions(ctx, organizationID, string(member.Role()))
+	if err != nil || resolved == "" {
+		return catalogerrors.AccessDenied()
+	}
+	if !accesspolicy.HasOrganizationPermission(resolved, accesspolicy.PermissionOrganizationEmployeeAccess) {
 		return catalogerrors.AccessDenied()
 	}
 	return nil

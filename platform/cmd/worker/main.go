@@ -10,6 +10,7 @@ import (
 	catalogpg "github.com/NikolayNam/collabsphere/internal/catalog/repository/postgres"
 	collabapp "github.com/NikolayNam/collabsphere/internal/collab/application"
 	collabpg "github.com/NikolayNam/collabsphere/internal/collab/repository/postgres"
+	membershipsApp "github.com/NikolayNam/collabsphere/internal/memberships/application"
 	memberspg "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
 	orgapp "github.com/NikolayNam/collabsphere/internal/organizations/application"
 	orgpg "github.com/NikolayNam/collabsphere/internal/organizations/repository/postgres"
@@ -70,14 +71,17 @@ func main() {
 
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)
+	roleRepo := memberspg.NewOrganizationRoleRepo(db)
+	roleResolver := membershipsApp.NewRoleResolverAdapter(roleRepo)
 	categoryRepo := catalogpg.NewProductCategoryRepo(db)
+	catalogRepo := catalogpg.NewCatalogRepo(db)
 	txManager := dbtx.New(db)
 	uploadRepo := uploadpg.NewRepo(db)
 	documentAnalyzer, err := generichttp.NewClient(conf.DocumentAnalysis)
 	if err != nil {
 		log.Fatalf("init document analysis client: %v", err)
 	}
-	organizationService := orgapp.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, storageClient, conf.Storage.S3.Bucket, documentAnalyzer, conf.DocumentAnalysis.Provider, uploadRepo)
+	organizationService := orgapp.New(organizationRepo, membershipRepo, roleResolver, categoryRepo, catalogRepo, txManager, clk, storageClient, conf.Storage.S3.Bucket, documentAnalyzer, conf.DocumentAnalysis.Provider, uploadRepo)
 
 	pollEvery := smallestPositiveDuration(conf.Transcription.WorkerPollEvery, conf.DocumentAnalysis.WorkerPollEvery)
 	if pollEvery <= 0 {

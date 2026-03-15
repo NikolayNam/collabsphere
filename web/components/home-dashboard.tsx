@@ -137,6 +137,9 @@ export function HomeDashboard() {
                 <Link href="/chat" className="button-link secondary">
                   Открыть chat
                 </Link>
+                <Link href="/offers-requests" className="button-link secondary">
+                  Заявки и предложения
+                </Link>
                 <Link href="/me" className="button-link secondary">
                   Профиль и токены
                 </Link>
@@ -233,6 +236,14 @@ export function HomeDashboard() {
               </p>
               <Link href="/chat" className="button-link secondary">
                 Открыть chat
+              </Link>
+            </div>
+            <div className="feature-card">
+              <img className="feature-illustration" src="/illustrations/workspace.svg" alt="Доска заявок и предложений" />
+              <strong>Заявки и предложения</strong>
+              <p className="muted">Отдельная страница с витриной заявок (orders) и предложений (offers) для быстрого просмотра.</p>
+              <Link href="/offers-requests" className="button-link secondary">
+                Открыть доску
               </Link>
             </div>
           </div>

@@ -21,6 +21,7 @@ type CooperationApplication struct {
 	ContactLastName       *string    `gorm:"column:contact_last_name;type:varchar(128)"`
 	ContactJobTitle       *string    `gorm:"column:contact_job_title;type:varchar(128)"`
 	PriceListObjectID     *uuid.UUID `gorm:"column:price_list_object_id;type:uuid"`
+	PriceListStatus       string     `gorm:"column:price_list_status;type:varchar(24);not null"`
 	ContactEmail          *string    `gorm:"column:contact_email;type:varchar(320)"`
 	ContactPhone          *string    `gorm:"column:contact_phone;type:varchar(32)"`
 	PartnerCode           *string    `gorm:"column:partner_code;type:varchar(128)"`

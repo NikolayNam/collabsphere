@@ -11,6 +11,7 @@ type Command struct {
 	ActorAccountID accdomain.AccountID
 	CategoryID     catalogdomain.ProductCategoryID
 	ParentID       *catalogdomain.ProductCategoryID
+	Status         *string
 	Code           *string
 	Name           *string
 	SortOrder      *int64

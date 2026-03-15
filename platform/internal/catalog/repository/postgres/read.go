@@ -23,6 +23,7 @@ type catalogProductCategoryRow struct {
 	OrganizationID uuid.UUID  `gorm:"column:organization_id"`
 	ParentID       *uuid.UUID `gorm:"column:parent_id"`
 	TemplateID     *uuid.UUID `gorm:"column:template_id"`
+	Status         string     `gorm:"column:status"`
 	Code           string     `gorm:"column:code"`
 	Name           string     `gorm:"column:name"`
 	SortOrder      int64      `gorm:"column:sort_order"`
@@ -34,6 +35,7 @@ type catalogProductRow struct {
 	ID             uuid.UUID  `gorm:"column:id"`
 	OrganizationID uuid.UUID  `gorm:"column:organization_id"`
 	CategoryID     *uuid.UUID `gorm:"column:product_type_id"`
+	Status         string     `gorm:"column:status"`
 	Name           string     `gorm:"column:name"`
 	Description    *string    `gorm:"column:description"`
 	SKU            *string    `gorm:"column:sku"`
@@ -90,7 +92,7 @@ func (r *CatalogRepo) GetProductCategoryByID(ctx context.Context, organizationID
 	var m catalogProductCategoryRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.product_categories").
-		Select("id", "organization_id", "parent_id", "template_id", "code", "name", "sort_order", "created_at", "updated_at").
+		Select("id", "organization_id", "parent_id", "template_id", "status", "code", "name", "sort_order", "created_at", "updated_at").
 		Where("organization_id = ? AND id = ? AND deleted_at IS NULL", organizationID.UUID(), categoryID.UUID()).
 		Take(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -106,7 +108,7 @@ func (r *CatalogRepo) FindProductCategoryByCode(ctx context.Context, organizatio
 	var m catalogProductCategoryRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.product_categories").
-		Select("id", "organization_id", "parent_id", "template_id", "code", "name", "sort_order", "created_at", "updated_at").
+		Select("id", "organization_id", "parent_id", "template_id", "status", "code", "name", "sort_order", "created_at", "updated_at").
 		Where("organization_id = ? AND code = ? AND deleted_at IS NULL", organizationID.UUID(), strings.TrimSpace(code)).
 		Take(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -121,7 +123,7 @@ func (r *CatalogRepo) ListProductCategories(ctx context.Context, organizationID 
 	var rows []catalogProductCategoryRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.product_categories").
-		Select("id", "organization_id", "parent_id", "template_id", "code", "name", "sort_order", "created_at", "updated_at").
+		Select("id", "organization_id", "parent_id", "template_id", "status", "code", "name", "sort_order", "created_at", "updated_at").
 		Where("organization_id = ? AND deleted_at IS NULL", organizationID.UUID()).
 		Order("sort_order ASC, name ASC, id ASC").
 		Limit(maxCatalogListRows).
@@ -144,7 +146,7 @@ func (r *CatalogRepo) GetProductByID(ctx context.Context, organizationID orgdoma
 	var m catalogProductRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.products").
-		Select("id", "organization_id", "product_type_id", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
+		Select("id", "organization_id", "product_type_id", "status", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
 		Where("organization_id = ? AND id = ? AND deleted_at IS NULL", organizationID.UUID(), productID.UUID()).
 		Take(&m).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -165,7 +167,7 @@ func (r *CatalogRepo) GetProductBySKU(ctx context.Context, organizationID orgdom
 	var rows []catalogProductRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.products").
-		Select("id", "organization_id", "product_type_id", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
+		Select("id", "organization_id", "product_type_id", "status", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
 		Where("organization_id = ? AND sku = ? AND deleted_at IS NULL", organizationID.UUID(), trimmed).
 		Order("created_at DESC, id DESC").
 		Limit(2).
@@ -187,7 +189,7 @@ func (r *CatalogRepo) ListProducts(ctx context.Context, organizationID orgdomain
 	var rows []catalogProductRow
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.products").
-		Select("id", "organization_id", "product_type_id", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
+		Select("id", "organization_id", "product_type_id", "status", "name", "description", "sku", "price_amount::text AS price_amount", "currency_code", "is_active", "created_at", "updated_at").
 		Where("organization_id = ? AND deleted_at IS NULL", organizationID.UUID()).
 		Order("created_at DESC, id DESC").
 		Limit(maxCatalogListRows).
@@ -297,6 +299,7 @@ func rehydrateCategoryRow(row catalogProductCategoryRow) (*catalogdomain.Product
 		OrganizationID: organizationID,
 		ParentID:       parentID,
 		TemplateID:     row.TemplateID,
+		Status:         row.Status,
 		Code:           row.Code,
 		Name:           row.Name,
 		SortOrder:      row.SortOrder,
@@ -326,6 +329,7 @@ func rehydrateProductRow(row catalogProductRow) (*catalogdomain.Product, error) 
 		ID:             productID,
 		OrganizationID: organizationID,
 		CategoryID:     categoryID,
+		Status:         row.Status,
 		Name:           row.Name,
 		Description:    row.Description,
 		SKU:            row.SKU,

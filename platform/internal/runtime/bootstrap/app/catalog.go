@@ -7,6 +7,7 @@ import (
 	catalogports "github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
 	cataloghttp "github.com/NikolayNam/collabsphere/internal/catalog/delivery/http"
 	catalogpg "github.com/NikolayNam/collabsphere/internal/catalog/repository/postgres"
+	membershipsApp "github.com/NikolayNam/collabsphere/internal/memberships/application"
 	memberspg "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
 	orgpg "github.com/NikolayNam/collabsphere/internal/organizations/repository/postgres"
 	"github.com/NikolayNam/collabsphere/internal/runtime/foundation/clock"
@@ -23,6 +24,8 @@ func registerCatalogModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	repo := catalogpg.NewCatalogRepo(db)
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)
+	roleRepo := memberspg.NewOrganizationRoleRepo(db)
+	roleResolver := membershipsApp.NewRoleResolverAdapter(roleRepo)
 	txManager := dbtx.New(db)
 	uploadRepo := uploadpg.NewRepo(db)
 	clk := clock.NewSystemClock()
@@ -36,7 +39,7 @@ func registerCatalogModule(api huma.API, db *gorm.DB, conf *config.Config) {
 		objectStorage = client
 	}
 
-	service := catalogapp.New(repo, organizationRepo, membershipRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, uploadRepo)
+	service := catalogapp.New(repo, organizationRepo, membershipRepo, roleResolver, txManager, clk, objectStorage, conf.Storage.S3.Bucket, uploadRepo)
 	handler := cataloghttp.NewHandler(service)
 
 	secret, err := conf.Auth.JWTSecretValue()

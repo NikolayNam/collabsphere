@@ -69,7 +69,7 @@ type OrganizationKYCDocument = {
   objectId: string;
   documentType: string;
   title: string;
-  status: string;
+  status?: string;
   reviewNote?: string;
   reviewerAccountId?: string;
   createdAt: string;
@@ -79,7 +79,7 @@ type OrganizationKYCDocument = {
 
 type OrganizationKYCProfile = {
   organizationId: string;
-  status: string;
+  status?: string;
   legalName?: string;
   countryCode?: string;
   registrationNumber?: string;
@@ -92,6 +92,71 @@ type OrganizationKYCProfile = {
   updatedAt: string;
   documents: OrganizationKYCDocument[];
 };
+
+type ProductCategory = {
+  id: string;
+  organizationId: string;
+  parentId?: string | null;
+  status: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
+type ProductItem = {
+  id: string;
+  organizationId: string;
+  categoryId?: string | null;
+  status: string;
+  name: string;
+  description?: string | null;
+  sku?: string | null;
+  priceAmount?: string | null;
+  currencyCode?: string | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type OrganizationFileItem = {
+  objectId: string;
+  fileName: string;
+  contentType?: string | null;
+  sizeBytes: number;
+  createdAt: string;
+  sourceType: string;
+  sourceId?: string | null;
+};
+
+type CooperationApplication = {
+  organizationId: string;
+  priceListObjectId?: string | null;
+  priceListStatus?: string;
+  status?: string;
+  updatedAt?: string | null;
+};
+
+const CATALOG_STATUSES = ["draft", "validating", "verified", "published", "withdrawn", "archived"] as const;
+
+function catalogStatusLabel(status?: string): string {
+  const value = (status || "").trim().toLowerCase();
+  switch (value) {
+    case "draft":
+      return "Черновик";
+    case "validating":
+      return "Валидируется";
+    case "verified":
+      return "Подтвержден";
+    case "published":
+      return "Опубликован";
+    case "withdrawn":
+      return "Отозван";
+    case "archived":
+      return "Архив";
+    default:
+      return status || "unknown";
+  }
+}
 
 function kycStatusLabel(status?: string): string {
   const value = (status || "").trim().toLowerCase();
@@ -145,6 +210,46 @@ function kycDocumentStatusBadgeClass(status?: string): string {
   }
 }
 
+type KYCQueueBucket = "draft" | "submitted" | "in_review" | "verified" | "rejected";
+
+function getKYCQueueBucket(documentStatus?: string, profileStatus?: string): KYCQueueBucket {
+  const doc = (documentStatus || "").trim().toLowerCase();
+  const profile = (profileStatus || "").trim().toLowerCase();
+  if (doc === "pending_upload") {
+    return "draft";
+  }
+  if (doc === "verified") {
+    return "verified";
+  }
+  if (doc === "rejected") {
+    return "rejected";
+  }
+  if (doc === "uploaded" && profile === "in_review") {
+    return "in_review";
+  }
+  if (doc === "uploaded") {
+    return "submitted";
+  }
+  return "submitted";
+}
+
+function kycQueueBucketLabel(bucket: KYCQueueBucket): string {
+  switch (bucket) {
+    case "draft":
+      return "Черновики";
+    case "submitted":
+      return "Отправлено на верификацию";
+    case "in_review":
+      return "Проходит проверку";
+    case "verified":
+      return "Подтверждено";
+    case "rejected":
+      return "Отклонено";
+    default:
+      return bucket;
+  }
+}
+
 function isReviewSubmissionLocked(status?: string): boolean {
   const value = (status || "").trim().toLowerCase();
   return value === "approved";
@@ -178,7 +283,20 @@ type Status = {
   description: string;
 };
 
-type OrganizationSection = "profile" | "uploads" | "kyc";
+type OrganizationSection = "profile" | "uploads" | "catalog" | "kyc" | "roles";
+
+type OrganizationRole = {
+  id: string;
+  organizationId: string;
+  code: string;
+  name: string;
+  description?: string;
+  baseRole: string;
+  isSystem: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+};
 
 const initialMyOrganizationsState: Status = {
   kind: "idle",
@@ -220,6 +338,18 @@ const initialPriceListUploadState: Status = {
   kind: "idle",
   title: "Прайс-лист",
   description: "Загрузите прайс-лист организации через `POST /v1/organizations/{id}/cooperation-application/price-list`.",
+};
+
+const initialCatalogState: Status = {
+  kind: "idle",
+  title: "Каталог",
+  description: "Списки категорий и продукции загружаются из `/v1/organizations/{id}/product-categories` и `/v1/organizations/{id}/products`.",
+};
+
+const initialPriceListsState: Status = {
+  kind: "idle",
+  title: "Прайс-листы",
+  description: "Список файлов организации читается из `/v1/organizations/{id}/files`.",
 };
 
 const initialKYCState: Status = {
@@ -277,6 +407,24 @@ function problemMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function downloadCSVTemplate(fileName: string, header: string[], rows: string[][]) {
+  const lines = [header.join(","), ...rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))];
+  const csv = "\uFEFF" + lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function hasCSVExtension(fileName: string): boolean {
+  return fileName.trim().toLowerCase().endsWith(".csv");
+}
+
 export default function OrganizationsPage() {
   const [name, setName] = useState("Acme Foods");
   const [slug, setSlug] = useState("acme-foods");
@@ -313,6 +461,24 @@ export default function OrganizationsPage() {
   const [categoriesUploadResult, setCategoriesUploadResult] = useState<unknown | null>(null);
   const [productsUploadResult, setProductsUploadResult] = useState<unknown | null>(null);
   const [priceListUploadResult, setPriceListUploadResult] = useState<unknown | null>(null);
+  const [catalogState, setCatalogState] = useState<Status>(initialCatalogState);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [priceListFiles, setPriceListFiles] = useState<OrganizationFileItem[]>([]);
+  const [priceListsState, setPriceListsState] = useState<Status>(initialPriceListsState);
+  const [cooperationApplication, setCooperationApplication] = useState<CooperationApplication | null>(null);
+  const [newCategoryCode, setNewCategoryCode] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryStatus, setNewCategoryStatus] = useState("draft");
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductCategoryId, setNewProductCategoryId] = useState("");
+  const [newProductPriceAmount, setNewProductPriceAmount] = useState("");
+  const [newProductCurrency, setNewProductCurrency] = useState("RUB");
+  const [newProductStatus, setNewProductStatus] = useState("draft");
+  const [editingCategory, setEditingCategory] = useState<Record<string, { code: string; name: string; sortOrder: number; status: string }>>({});
+  const [editingProduct, setEditingProduct] = useState<Record<string, { name: string; categoryId: string; status: string; priceAmount: string; currencyCode: string; isActive: boolean }>>(
+    {}
+  );
   const [kycState, setKYCState] = useState<Status>(initialKYCState);
   const [kycProfile, setKYCProfile] = useState<OrganizationKYCProfile | null>(null);
   const [kycDraft, setKYCDraft] = useState({
@@ -327,9 +493,25 @@ export default function OrganizationsPage() {
   const [kycDocumentTitle, setKYCDocumentTitle] = useState("");
   const [organizationSection, setOrganizationSection] = useState<OrganizationSection>("profile");
   const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [roles, setRoles] = useState<OrganizationRole[]>([]);
+  const [rolesState, setRolesState] = useState<{ kind: "idle" | "working" | "success" | "error"; title: string; description: string }>({
+    kind: "idle",
+    title: "",
+    description: "",
+  });
+  const [roleForm, setRoleForm] = useState<{ code: string; name: string; description: string; baseRole: string } | null>(null);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
 
   const accessToken = useMemo(() => readStoredTokens()?.accessToken || null, []);
   const selectedOrganization = myOrganizations.find((item) => item.id === selectedOrganizationId) || null;
+  const canManageCatalog = useMemo(() => {
+    const role = (selectedOrganization?.membershipRole || "").toLowerCase();
+    return role === "owner" || role === "admin" || role === "manager";
+  }, [selectedOrganization?.membershipRole]);
+  const canManageOrganization = useMemo(() => {
+    const role = (selectedOrganization?.membershipRole || "").toLowerCase();
+    return role === "owner" || role === "admin";
+  }, [selectedOrganization?.membershipRole]);
 
   useEffect(() => {
     setOrganizationSection("uploads");
@@ -408,6 +590,12 @@ export default function OrganizationsPage() {
       if (!selectedOrganizationId) {
         setProfile(null);
         setKYCProfile(null);
+        setCategories([]);
+        setProducts([]);
+        setPriceListFiles([]);
+        setCooperationApplication(null);
+        setCatalogState(initialCatalogState);
+        setPriceListsState(initialPriceListsState);
         setKYCState(initialKYCState);
         setProfileState(initialProfileState);
         setSaveState(initialSaveState);
@@ -452,6 +640,215 @@ export default function OrganizationsPage() {
       cancelled = true;
     };
   }, [accessToken, selectedOrganizationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCatalog() {
+      if (!accessToken || !selectedOrganizationId) {
+        return;
+      }
+      setCatalogState({
+        kind: "working",
+        title: "Каталог",
+        description: "Загружаем категории и продукцию организации...",
+      });
+      try {
+        const [categoriesPayload, productsPayload] = await Promise.all([
+          apiFetch<{ items?: ProductCategory[] }>(`/v1/organizations/${selectedOrganizationId}/product-categories`, { accessToken }),
+          apiFetch<{ items?: ProductItem[] }>(`/v1/organizations/${selectedOrganizationId}/products`, { accessToken }),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        const loadedCategories = Array.isArray(categoriesPayload.items) ? categoriesPayload.items : [];
+        const loadedProducts = Array.isArray(productsPayload.items) ? productsPayload.items : [];
+        setCategories(loadedCategories);
+        setProducts(loadedProducts);
+
+        setEditingCategory(
+          Object.fromEntries(
+            loadedCategories.map((item) => [item.id, { code: item.code || "", name: item.name || "", sortOrder: item.sortOrder || 0, status: item.status || "draft" }])
+          )
+        );
+        setEditingProduct(
+          Object.fromEntries(
+            loadedProducts.map((item) => [
+              item.id,
+              {
+                name: item.name || "",
+                categoryId: item.categoryId || "",
+                status: item.status || "draft",
+                priceAmount: item.priceAmount || "",
+                currencyCode: item.currencyCode || "RUB",
+                isActive: Boolean(item.isActive),
+              },
+            ])
+          )
+        );
+        setCatalogState({
+          kind: "success",
+          title: "Каталог",
+          description: `Загружено: категорий ${loadedCategories.length}, продукции ${loadedProducts.length}.`,
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setCatalogState({
+          kind: "error",
+          title: "Каталог",
+          description: problemMessage(error, "Не удалось загрузить категории и продукцию"),
+        });
+      }
+    }
+
+    void loadCatalog();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedOrganizationId, listRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRoles() {
+      if (!accessToken || !selectedOrganizationId || organizationSection !== "roles") {
+        setRoles([]);
+        setRolesState({ kind: "idle", title: "", description: "" });
+        return;
+      }
+      setRolesState({ kind: "working", title: "Роли", description: "Загружаем роли организации..." });
+      try {
+        const payload = await apiFetch<{ body?: { roles?: OrganizationRole[] }; roles?: OrganizationRole[] }>(
+          `/v1/organizations/${selectedOrganizationId}/roles`,
+          { accessToken }
+        );
+        if (cancelled) return;
+        const list = payload?.body?.roles ?? payload?.roles ?? [];
+        setRoles(Array.isArray(list) ? list : []);
+        setRolesState({ kind: "success", title: "Роли", description: `Загружено ролей: ${Array.isArray(list) ? list.length : 0}.` });
+      } catch (error) {
+        if (cancelled) return;
+        setRoles([]);
+        setRolesState({ kind: "error", title: "Роли", description: problemMessage(error, "Не удалось загрузить роли") });
+      }
+    }
+    void loadRoles();
+    return () => { cancelled = true; };
+  }, [accessToken, selectedOrganizationId, organizationSection, listRefreshKey]);
+
+  useEffect(() => {
+    if (organizationSection !== "roles") {
+      setRoleForm(null);
+      setEditingRoleId(null);
+    }
+  }, [organizationSection]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPriceLists() {
+      if (!accessToken || !selectedOrganizationId) {
+        setPriceListFiles([]);
+        setCooperationApplication(null);
+        setPriceListsState(initialPriceListsState);
+        return;
+      }
+
+      setPriceListsState({
+        kind: "working",
+        title: "Прайс-листы",
+        description: "Загружаем список прайс-листов организации...",
+      });
+
+      try {
+        const [filesPayload, cooperationPayload] = await Promise.all([
+          apiFetch<{ body?: { items?: OrganizationFileItem[] }; items?: OrganizationFileItem[] }>(
+            `/v1/organizations/${selectedOrganizationId}/files`,
+            { accessToken }
+          ),
+          apiFetch<{ body?: CooperationApplication }>(`/v1/organizations/${selectedOrganizationId}/cooperation-application`, { accessToken }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const fileItems = Array.isArray(filesPayload.body?.items) ? filesPayload.body.items : Array.isArray(filesPayload.items) ? filesPayload.items : [];
+        const onlyPriceLists = fileItems
+          .filter((item) => (item.sourceType || "").toLowerCase() === "cooperation_price_list")
+          .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+        const cooperation = cooperationPayload.body || null;
+
+        setPriceListFiles(onlyPriceLists);
+        setCooperationApplication(cooperation);
+        setPriceListsState({
+          kind: "success",
+          title: "Прайс-листы",
+          description: `Найдено прайс-листов: ${onlyPriceLists.length}.`,
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof APIError && error.status === 404) {
+          setPriceListFiles([]);
+          setCooperationApplication(null);
+          setPriceListsState({
+            kind: "success",
+            title: "Прайс-листы",
+            description: "Прайс-листы пока не загружены.",
+          });
+          return;
+        }
+        setPriceListFiles([]);
+        setCooperationApplication(null);
+        setPriceListsState({
+          kind: "error",
+          title: "Прайс-листы",
+          description: problemMessage(error, "Не удалось загрузить прайс-листы"),
+        });
+      }
+    }
+
+    void loadPriceLists();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, selectedOrganizationId, priceListUploadResult, listRefreshKey]);
+
+  async function refreshCatalog() {
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    const [categoriesPayload, productsPayload] = await Promise.all([
+      apiFetch<{ items?: ProductCategory[] }>(`/v1/organizations/${selectedOrganizationId}/product-categories`, { accessToken }),
+      apiFetch<{ items?: ProductItem[] }>(`/v1/organizations/${selectedOrganizationId}/products`, { accessToken }),
+    ]);
+    const loadedCategories = Array.isArray(categoriesPayload.items) ? categoriesPayload.items : [];
+    const loadedProducts = Array.isArray(productsPayload.items) ? productsPayload.items : [];
+    setCategories(loadedCategories);
+    setProducts(loadedProducts);
+    setEditingCategory(
+      Object.fromEntries(
+        loadedCategories.map((item) => [item.id, { code: item.code || "", name: item.name || "", sortOrder: item.sortOrder || 0, status: item.status || "draft" }])
+      )
+    );
+    setEditingProduct(
+      Object.fromEntries(
+        loadedProducts.map((item) => [
+          item.id,
+          {
+            name: item.name || "",
+            categoryId: item.categoryId || "",
+            status: item.status || "draft",
+            priceAmount: item.priceAmount || "",
+            currencyCode: item.currencyCode || "RUB",
+            isActive: Boolean(item.isActive),
+          },
+        ])
+      )
+    );
+  }
 
   function handleDraftChange(field: keyof ProfileDraft, value: string) {
     setProfileDraft((current) => ({ ...current, [field]: value }));
@@ -671,6 +1068,14 @@ export default function OrganizationsPage() {
       });
       return;
     }
+    if (!hasCSVExtension(categoriesFile.name)) {
+      setCategoriesUploadState({
+        kind: "error",
+        title: "Категории",
+        description: "Для импорта категорий нужен CSV-файл (.csv). Скачайте шаблон ниже и заполните его.",
+      });
+      return;
+    }
 
     setCategoriesUploadState({
       kind: "working",
@@ -716,6 +1121,14 @@ export default function OrganizationsPage() {
         kind: "error",
         title: "Продукция",
         description: "Выберите CSV-файл с продукцией перед отправкой.",
+      });
+      return;
+    }
+    if (!hasCSVExtension(productsFile.name)) {
+      setProductsUploadState({
+        kind: "error",
+        title: "Продукция",
+        description: "Для импорта продукции нужен CSV-файл (.csv). Используйте шаблон ниже.",
       });
       return;
     }
@@ -793,6 +1206,344 @@ export default function OrganizationsPage() {
         kind: "error",
         title: "Прайс-лист",
         description: problemMessage(error, "Не удалось загрузить прайс-лист"),
+      });
+    }
+  }
+
+  async function handleDownloadCurrentPriceList() {
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    setPriceListsState({
+      kind: "working",
+      title: "Прайс-листы",
+      description: "Готовим ссылку для скачивания текущего прайс-листа...",
+    });
+    try {
+      const payload = await apiFetch<{
+        downloadUrl?: string;
+        body?: { downloadUrl?: string };
+      }>(`/v1/organizations/${selectedOrganizationId}/cooperation-application/price-list/download`, { accessToken });
+      const downloadUrl = payload.downloadUrl || payload.body?.downloadUrl;
+      if (!downloadUrl) {
+        throw new Error("downloadUrl is empty");
+      }
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+      setPriceListsState({
+        kind: "success",
+        title: "Прайс-листы",
+        description: "Ссылка для скачивания открыта в новой вкладке.",
+      });
+    } catch (error) {
+      setPriceListsState({
+        kind: "error",
+        title: "Прайс-листы",
+        description: problemMessage(error, "Не удалось получить ссылку для скачивания прайс-листа"),
+      });
+    }
+  }
+
+  async function handleUpdatePriceListStatus(nextStatus: string) {
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    setPriceListsState({
+      kind: "working",
+      title: "Прайс-листы",
+      description: "Обновляем статус прайс-листа...",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/cooperation-application`, {
+        method: "PATCH",
+        accessToken,
+        bodyJSON: {
+          priceListStatus: nextStatus,
+        },
+      });
+      setCooperationApplication((current) => ({ ...(current || { organizationId: selectedOrganizationId }), priceListStatus: nextStatus }));
+      setPriceListsState({
+        kind: "success",
+        title: "Прайс-листы",
+        description: "Статус прайс-листа обновлен.",
+      });
+    } catch (error) {
+      setPriceListsState({
+        kind: "error",
+        title: "Прайс-листы",
+        description: problemMessage(error, "Не удалось обновить статус прайс-листа"),
+      });
+    }
+  }
+
+  const [publishAllState, setPublishAllState] = useState<Status>({ kind: "idle", title: "", description: "" });
+
+  const canAutoPublish = useMemo(() => {
+    if (!canManageCatalog) return false;
+    const allCategoriesVerified =
+      categories.length === 0 ||
+      categories.every((c) => {
+        const s = (c.status || "").toLowerCase();
+        return s === "verified" || s === "published";
+      });
+    const allProductsVerified =
+      products.length === 0 ||
+      products.every((p) => {
+        const s = (p.status || "").toLowerCase();
+        return s === "verified" || s === "published";
+      });
+    const priceListOk =
+      !cooperationApplication?.priceListObjectId ||
+      (() => {
+        const s = (cooperationApplication?.priceListStatus || "").toLowerCase();
+        return s === "verified" || s === "published";
+      })();
+    const hasSomething = categories.length > 0 || products.length > 0 || !!cooperationApplication?.priceListObjectId;
+    return hasSomething && allCategoriesVerified && allProductsVerified && priceListOk;
+  }, [canManageCatalog, categories, products, cooperationApplication]);
+
+  async function handlePublishAllCatalog() {
+    if (!accessToken || !selectedOrganizationId || !canManageCatalog) {
+      return;
+    }
+    setPublishAllState({
+      kind: "working",
+      title: "Автопубликация",
+      description: "Публикуем категории, продукцию и прайс-лист...",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/catalog/publish-all`, {
+        method: "POST",
+        accessToken,
+      });
+      setPublishAllState({
+        kind: "success",
+        title: "Автопубликация",
+        description: "Всё успешно опубликовано.",
+      });
+      setListRefreshKey((k) => k + 1);
+      void refreshCatalog();
+    } catch (error) {
+      setPublishAllState({
+        kind: "error",
+        title: "Автопубликация",
+        description: problemMessage(error, "Не удалось опубликовать каталог"),
+      });
+    }
+  }
+
+  function handleDownloadCategoriesTemplate() {
+    downloadCSVTemplate(
+      "categories_template.csv",
+      [
+        "categoryCode",
+        "categoryName",
+        "categoryParentCode",
+        "categorySortOrder",
+        "productName",
+        "description",
+        "sku",
+        "priceAmount",
+        "currencyCode",
+        "isActive",
+      ],
+      [
+        ["milk", "Молочная продукция", "", "10", "", "", "", "", "", ""],
+        ["cheese", "Сыры", "milk", "20", "", "", "", "", "", ""],
+      ]
+    );
+  }
+
+  function handleDownloadProductsTemplate() {
+    downloadCSVTemplate(
+      "products_template.csv",
+      [
+        "categoryCode",
+        "categoryName",
+        "categoryParentCode",
+        "categorySortOrder",
+        "productName",
+        "description",
+        "sku",
+        "priceAmount",
+        "currencyCode",
+        "isActive",
+      ],
+      [
+        ["milk", "Молочная продукция", "", "10", "Молоко 1л", "Пастеризованное 3.2%", "MILK-1L-32", "120.00", "RUB", "true"],
+        ["cheese", "Сыры", "milk", "20", "Сыр Гауда 200г", "Полутвердый", "CHEESE-GOUDA-200", "290.00", "RUB", "true"],
+      ]
+    );
+  }
+
+  function handleDownloadPriceListTemplate() {
+    downloadCSVTemplate(
+      "price_list_template.csv",
+      ["sku", "productName", "priceAmount", "currencyCode", "unit", "minBatch", "note"],
+      [
+        ["MILK-1L-32", "Молоко 1л", "120.00", "RUB", "шт", "10", "Цена с НДС"],
+        ["CHEESE-GOUDA-200", "Сыр Гауда 200г", "290.00", "RUB", "шт", "20", "Опт от 20 шт"],
+      ]
+    );
+  }
+
+  async function handleCreateCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    setCatalogState({
+      kind: "working",
+      title: "Каталог",
+      description: "Создаём категорию...",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/product-categories`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: {
+          code: newCategoryCode.trim(),
+          name: newCategoryName.trim(),
+          status: newCategoryStatus,
+          sortOrder: 0,
+        },
+      });
+      setNewCategoryCode("");
+      setNewCategoryName("");
+      setNewCategoryStatus("draft");
+      await refreshCatalog();
+      setCatalogState({
+        kind: "success",
+        title: "Каталог",
+        description: "Категория создана.",
+      });
+    } catch (error) {
+      setCatalogState({
+        kind: "error",
+        title: "Каталог",
+        description: problemMessage(error, "Не удалось создать категорию"),
+      });
+    }
+  }
+
+  async function handleUpdateCategory(categoryId: string) {
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    const current = editingCategory[categoryId];
+    if (!current) {
+      return;
+    }
+    setCatalogState({
+      kind: "working",
+      title: "Каталог",
+      description: "Сохраняем категорию...",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/product-categories/${categoryId}`, {
+        method: "PATCH",
+        accessToken,
+        bodyJSON: {
+          code: current.code,
+          name: current.name,
+          status: current.status,
+          sortOrder: current.sortOrder,
+        },
+      });
+      await refreshCatalog();
+      setCatalogState({
+        kind: "success",
+        title: "Каталог",
+        description: "Категория обновлена.",
+      });
+    } catch (error) {
+      setCatalogState({
+        kind: "error",
+        title: "Каталог",
+        description: problemMessage(error, "Не удалось обновить категорию"),
+      });
+    }
+  }
+
+  async function handleCreateProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    setCatalogState({
+      kind: "working",
+      title: "Каталог",
+      description: "Создаём продукцию...",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/products`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: {
+          name: newProductName.trim(),
+          categoryId: newProductCategoryId || undefined,
+          status: newProductStatus,
+          priceAmount: newProductPriceAmount.trim() || undefined,
+          currencyCode: newProductCurrency.trim() || undefined,
+          isActive: true,
+        },
+      });
+      setNewProductName("");
+      setNewProductCategoryId("");
+      setNewProductPriceAmount("");
+      setNewProductCurrency("RUB");
+      setNewProductStatus("draft");
+      await refreshCatalog();
+      setCatalogState({
+        kind: "success",
+        title: "Каталог",
+        description: "Продукция создана.",
+      });
+    } catch (error) {
+      setCatalogState({
+        kind: "error",
+        title: "Каталог",
+        description: problemMessage(error, "Не удалось создать продукцию"),
+      });
+    }
+  }
+
+  async function handleUpdateProduct(productId: string) {
+    if (!accessToken || !selectedOrganizationId) {
+      return;
+    }
+    const current = editingProduct[productId];
+    if (!current) {
+      return;
+    }
+    setCatalogState({
+      kind: "working",
+      title: "Каталог",
+      description: "Сохраняем продукцию...",
+    });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/products/${productId}`, {
+        method: "PATCH",
+        accessToken,
+        bodyJSON: {
+          name: current.name,
+          categoryId: current.categoryId || "",
+          status: current.status,
+          priceAmount: current.priceAmount || "",
+          currencyCode: current.currencyCode || "",
+          isActive: current.isActive,
+        },
+      });
+      await refreshCatalog();
+      setCatalogState({
+        kind: "success",
+        title: "Каталог",
+        description: "Продукция обновлена.",
+      });
+    } catch (error) {
+      setCatalogState({
+        kind: "error",
+        title: "Каталог",
+        description: problemMessage(error, "Не удалось обновить продукцию"),
       });
     }
   }
@@ -996,6 +1747,58 @@ export default function OrganizationsPage() {
     }
   }
 
+  async function handleCreateRole(e: FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !selectedOrganizationId || !roleForm) return;
+    setRolesState({ kind: "working", title: "Роли", description: "Создаём роль..." });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/roles`, {
+        method: "POST",
+        accessToken,
+        bodyJSON: { code: roleForm.code.trim(), name: roleForm.name.trim(), description: roleForm.description.trim() || undefined, baseRole: roleForm.baseRole },
+      });
+      setRoleForm(null);
+      setListRefreshKey((k) => k + 1);
+      setRolesState({ kind: "success", title: "Роль создана", description: "Роль успешно добавлена." });
+    } catch (error) {
+      setRolesState({ kind: "error", title: "Ошибка", description: problemMessage(error, "Не удалось создать роль") });
+    }
+  }
+
+  async function handleUpdateRole(e: FormEvent) {
+    e.preventDefault();
+    if (!accessToken || !selectedOrganizationId || !editingRoleId || !roleForm) return;
+    setRolesState({ kind: "working", title: "Роли", description: "Сохраняем изменения..." });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/roles/${editingRoleId}`, {
+        method: "PATCH",
+        accessToken,
+        bodyJSON: { name: roleForm.name.trim(), description: roleForm.description.trim() || undefined, baseRole: roleForm.baseRole },
+      });
+      setEditingRoleId(null);
+      setRoleForm(null);
+      setListRefreshKey((k) => k + 1);
+      setRolesState({ kind: "success", title: "Роль обновлена", description: "Изменения сохранены." });
+    } catch (error) {
+      setRolesState({ kind: "error", title: "Ошибка", description: problemMessage(error, "Не удалось обновить роль") });
+    }
+  }
+
+  async function handleDeleteRole(roleId: string) {
+    if (!accessToken || !selectedOrganizationId) return;
+    if (!confirm("Удалить роль? Участники с этой ролью должны быть переназначены до удаления.")) return;
+    setRolesState({ kind: "working", title: "Роли", description: "Удаляем роль..." });
+    try {
+      await apiFetch(`/v1/organizations/${selectedOrganizationId}/roles/${roleId}`, { method: "DELETE", accessToken });
+      setEditingRoleId(null);
+      setRoleForm(null);
+      setListRefreshKey((k) => k + 1);
+      setRolesState({ kind: "success", title: "Роль удалена", description: "Роль помечена как удалённая (soft-delete)." });
+    } catch (error) {
+      setRolesState({ kind: "error", title: "Ошибка", description: problemMessage(error, "Не удалось удалить роль") });
+    }
+  }
+
   return (
     <>
       <Panel title="Organizations workbench" eyebrow="Existing backend flows">
@@ -1057,12 +1860,28 @@ export default function OrganizationsPage() {
                 Категории / Прайс / Продукция
               </button>
               <button
+                className={`button ${organizationSection === "catalog" ? "primary" : "secondary"}`}
+                type="button"
+                onClick={() => setOrganizationSection("catalog")}
+              >
+                Списки каталога
+              </button>
+              <button
                 className={`button ${organizationSection === "kyc" ? "primary" : "secondary"}`}
                 type="button"
                 onClick={() => setOrganizationSection("kyc")}
               >
                 KYC
               </button>
+              {canManageOrganization ? (
+                <button
+                  className={`button ${organizationSection === "roles" ? "primary" : "secondary"}`}
+                  type="button"
+                  onClick={() => setOrganizationSection("roles")}
+                >
+                  Роли
+                </button>
+              ) : null}
             </div>
           }
         >
@@ -1205,7 +2024,7 @@ export default function OrganizationsPage() {
                 </div>
 
                 <div className="button-row">
-                  <button className="button primary" type="submit">
+                  <button className="button primary" type="submit" disabled={!canManageOrganization}>
                     Сохранить профиль
                   </button>
                 </div>
@@ -1223,7 +2042,7 @@ export default function OrganizationsPage() {
                   <input id="profile-logo-file" type="file" accept="image/*" onChange={handleLogoSelection} />
                 </div>
                 <div className="button-row">
-                  <button className="button secondary" type="submit">
+                  <button className="button secondary" type="submit" disabled={!canManageOrganization}>
                     Upload logo
                   </button>
                 </div>
@@ -1252,10 +2071,17 @@ export default function OrganizationsPage() {
                         <input id="categories-file" type="file" accept=".csv,text/csv" onChange={handleCategoriesSelection} />
                       </div>
                       <div className="button-row">
-                        <button className="button secondary" type="submit">
+                        <button className="button secondary" type="submit" disabled={!canManageCatalog}>
                           Загрузить категории
                         </button>
+                        <button className="button secondary" type="button" onClick={handleDownloadCategoriesTemplate}>
+                          Скачать шаблон CSV
+                        </button>
                       </div>
+                      <p className="muted">
+                        Колонки: <code>categoryCode</code> (обязательно для категории), <code>categoryName</code> (обязательно для новой категории),{" "}
+                        <code>categoryParentCode</code>, <code>categorySortOrder</code>. Поля продукции в этом же CSV можно оставить пустыми.
+                      </p>
                       {categoriesUploadResult ? <textarea className="code-block" readOnly value={JSON.stringify(categoriesUploadResult, null, 2)} /> : null}
                     </form>
 
@@ -1273,10 +2099,17 @@ export default function OrganizationsPage() {
                         <input id="products-file" type="file" accept=".csv,text/csv" onChange={handleProductsSelection} />
                       </div>
                       <div className="button-row">
-                        <button className="button secondary" type="submit">
+                        <button className="button secondary" type="submit" disabled={!canManageCatalog}>
                           Загрузить продукцию
                         </button>
+                        <button className="button secondary" type="button" onClick={handleDownloadProductsTemplate}>
+                          Скачать шаблон CSV
+                        </button>
                       </div>
+                      <p className="muted">
+                        Колонки: <code>productName</code> (обязательно), <code>categoryCode</code> (рекомендуется), <code>sku</code>, <code>description</code>,{" "}
+                        <code>priceAmount</code>, <code>currencyCode</code>, <code>isActive</code>.
+                      </p>
                       {productsUploadResult ? <textarea className="code-block" readOnly value={JSON.stringify(productsUploadResult, null, 2)} /> : null}
                     </form>
                   </div>
@@ -1300,12 +2133,346 @@ export default function OrganizationsPage() {
                       />
                     </div>
                     <div className="button-row">
-                      <button className="button secondary" type="submit">
+                      <button className="button secondary" type="submit" disabled={!canManageOrganization}>
                         Загрузить прайс-лист
                       </button>
+                      <button className="button secondary" type="button" onClick={handleDownloadPriceListTemplate}>
+                        Скачать шаблон прайс-листа
+                      </button>
                     </div>
+                    <p className="muted">
+                      Шаблон прайс-листа: <code>sku</code>, <code>productName</code>, <code>priceAmount</code>, <code>currencyCode</code>, <code>unit</code>,{" "}
+                      <code>minBatch</code>, <code>note</code>. Это вспомогательный шаблон для удобного обмена с организацией.
+                    </p>
                     {priceListUploadResult ? <textarea className="code-block" readOnly value={JSON.stringify(priceListUploadResult, null, 2)} /> : null}
                   </form>
+
+                  <div className={`status-card ${catalogState.kind === "error" ? "error" : catalogState.kind === "success" ? "success" : "info"}`}>
+                    <strong>{catalogState.title}</strong>
+                    <p className="status-copy">{catalogState.description}</p>
+                  </div>
+
+                  <div className="cards">
+                    <form className="form-grid" onSubmit={handleCreateCategory}>
+                      <h3>Категории</h3>
+                      <div className="form-row two">
+                        <div className="form-row">
+                          <label className="form-label">Код</label>
+                          <input className="text-input" value={newCategoryCode} onChange={(event) => setNewCategoryCode(event.target.value)} required />
+                        </div>
+                        <div className="form-row">
+                          <label className="form-label">Название</label>
+                          <input className="text-input" value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} required />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <label className="form-label">Статус категории</label>
+                        <select className="text-input" value={newCategoryStatus} onChange={(event) => setNewCategoryStatus(event.target.value)}>
+                          {CATALOG_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {catalogStatusLabel(status)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="button-row">
+                        <button className="button secondary" type="submit" disabled={!canManageCatalog}>
+                          Добавить категорию
+                        </button>
+                      </div>
+                      <div className="domain-list">
+                        {categories.map((item) => {
+                          const draft = editingCategory[item.id] || { code: item.code, name: item.name, sortOrder: item.sortOrder || 0, status: item.status || "draft" };
+                          return (
+                            <div key={item.id} className="inline-panel">
+                              <div className="form-row two">
+                                <input
+                                  className="text-input"
+                                  value={draft.code}
+                                  onChange={(event) =>
+                                    setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, code: event.target.value } }))
+                                  }
+                                />
+                                <input
+                                  className="text-input"
+                                  value={draft.name}
+                                  onChange={(event) =>
+                                    setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, name: event.target.value } }))
+                                  }
+                                />
+                              </div>
+                              <div className="form-row">
+                                <select
+                                  className="text-input"
+                                  value={draft.status}
+                                  onChange={(event) => setEditingCategory((prev) => ({ ...prev, [item.id]: { ...draft, status: event.target.value } }))}
+                                >
+                                  {CATALOG_STATUSES.map((status) => (
+                                    <option key={status} value={status}>
+                                      {catalogStatusLabel(status)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="button-row">
+                                <button className="button secondary" type="button" onClick={() => void handleUpdateCategory(item.id)} disabled={!canManageCatalog}>
+                                  Сохранить категорию
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </form>
+
+                    <form className="form-grid" onSubmit={handleCreateProduct}>
+                      <h3>Продукция</h3>
+                      <div className="form-row">
+                        <label className="form-label">Название</label>
+                        <input className="text-input" value={newProductName} onChange={(event) => setNewProductName(event.target.value)} required />
+                      </div>
+                      <div className="form-row">
+                        <label className="form-label">Статус продукции</label>
+                        <select className="text-input" value={newProductStatus} onChange={(event) => setNewProductStatus(event.target.value)}>
+                          {CATALOG_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {catalogStatusLabel(status)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-row two">
+                        <div className="form-row">
+                          <label className="form-label">Категория</label>
+                          <select className="text-input" value={newProductCategoryId} onChange={(event) => setNewProductCategoryId(event.target.value)}>
+                            <option value="">Без категории</option>
+                            {categories.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-row">
+                          <label className="form-label">Цена</label>
+                          <input className="text-input" value={newProductPriceAmount} onChange={(event) => setNewProductPriceAmount(event.target.value)} />
+                        </div>
+                      </div>
+                      <div className="button-row">
+                        <button className="button secondary" type="submit" disabled={!canManageCatalog}>
+                          Добавить продукцию
+                        </button>
+                      </div>
+                      <div className="domain-list">
+                        {products.map((item) => {
+                          const draft = editingProduct[item.id] || {
+                            name: item.name,
+                            categoryId: item.categoryId || "",
+                            status: item.status || "draft",
+                            priceAmount: item.priceAmount || "",
+                            currencyCode: item.currencyCode || "RUB",
+                            isActive: item.isActive,
+                          };
+                          return (
+                            <div key={item.id} className="inline-panel">
+                              <div className="form-row">
+                                <input
+                                  className="text-input"
+                                  value={draft.name}
+                                  onChange={(event) =>
+                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, name: event.target.value } }))
+                                  }
+                                />
+                              </div>
+                              <div className="form-row two">
+                                <select
+                                  className="text-input"
+                                  value={draft.categoryId}
+                                  onChange={(event) =>
+                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, categoryId: event.target.value } }))
+                                  }
+                                >
+                                  <option value="">Без категории</option>
+                                  {categories.map((category) => (
+                                    <option key={category.id} value={category.id}>
+                                      {category.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  className="text-input"
+                                  value={draft.priceAmount}
+                                  onChange={(event) =>
+                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, priceAmount: event.target.value } }))
+                                  }
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="form-row two">
+                                <select
+                                  className="text-input"
+                                  value={draft.status}
+                                  onChange={(event) => setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, status: event.target.value } }))}
+                                >
+                                  {CATALOG_STATUSES.map((status) => (
+                                    <option key={status} value={status}>
+                                      {catalogStatusLabel(status)}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  className="text-input"
+                                  value={draft.currencyCode}
+                                  onChange={(event) =>
+                                    setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, currencyCode: event.target.value.toUpperCase() } }))
+                                  }
+                                  placeholder="RUB"
+                                />
+                                <label className="muted">
+                                  <input
+                                    type="checkbox"
+                                    checked={draft.isActive}
+                                    onChange={(event) =>
+                                      setEditingProduct((prev) => ({ ...prev, [item.id]: { ...draft, isActive: event.target.checked } }))
+                                    }
+                                  />{" "}
+                                  active
+                                </label>
+                              </div>
+                              <div className="button-row">
+                                <button className="button secondary" type="button" onClick={() => void handleUpdateProduct(item.id)} disabled={!canManageCatalog}>
+                                  Сохранить продукцию
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
+
+              {organizationSection === "catalog" ? (
+                <div className="mini-card">
+                  <h3>Списки каталога организации</h3>
+                  <div className={`status-card ${catalogState.kind === "error" ? "error" : catalogState.kind === "success" ? "success" : "info"}`}>
+                    <strong>{catalogState.title}</strong>
+                    <p className="status-copy">{catalogState.description}</p>
+                  </div>
+                  {canManageCatalog && canAutoPublish ? (
+                    <div className={`status-card ${publishAllState.kind === "error" ? "error" : publishAllState.kind === "success" ? "success" : "info"}`}>
+                      <strong>{publishAllState.title || "Автопубликация"}</strong>
+                      <p className="status-copy">
+                        {publishAllState.kind === "idle"
+                          ? "Всё загружено корректно. Можно опубликовать категории, продукцию и прайс-лист одной кнопкой."
+                          : publishAllState.description}
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="button primary"
+                          type="button"
+                          onClick={() => void handlePublishAllCatalog()}
+                          disabled={publishAllState.kind === "working"}
+                        >
+                          {publishAllState.kind === "working" ? "Публикуем..." : "Опубликовать всё"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className={`status-card ${priceListsState.kind === "error" ? "error" : priceListsState.kind === "success" ? "success" : "info"}`}>
+                    <strong>{priceListsState.title}</strong>
+                    <p className="status-copy">{priceListsState.description}</p>
+                  </div>
+
+                  <div className="cards">
+                    <div className="mini-card">
+                      <h3>Категории ({categories.length})</h3>
+                      {categories.length > 0 ? (
+                        <div className="domain-list">
+                          {categories.map((item) => (
+                            <div key={item.id} className="inline-panel">
+                              <strong>{item.name}</strong>
+                              <p className="muted">
+                                <code>{item.code}</code> · {catalogStatusLabel(item.status)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="muted">Категорий пока нет.</p>
+                      )}
+                    </div>
+
+                    <div className="mini-card">
+                      <h3>Продукция ({products.length})</h3>
+                      {products.length > 0 ? (
+                        <div className="domain-list">
+                          {products.map((item) => (
+                            <div key={item.id} className="inline-panel">
+                              <strong>{item.name}</strong>
+                              <p className="muted">
+                                {item.priceAmount ? `${item.priceAmount} ${item.currencyCode || ""}` : "Цена не указана"} · {catalogStatusLabel(item.status)} ·{" "}
+                                {item.isActive ? "active" : "inactive"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="muted">Продукции пока нет.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mini-card">
+                    <h3>Прайс-листы ({priceListFiles.length})</h3>
+                    <p className="muted">
+                      Текущий прайс-лист:{" "}
+                      {cooperationApplication?.priceListObjectId ? <code>{cooperationApplication.priceListObjectId}</code> : "не назначен"}
+                    </p>
+                    <div className="form-row">
+                      <label className="form-label">Статус прайс-листа</label>
+                      <select
+                        className="text-input"
+                        value={cooperationApplication?.priceListStatus || "draft"}
+                        onChange={(event) => void handleUpdatePriceListStatus(event.target.value)}
+                        disabled={!cooperationApplication || !canManageOrganization}
+                      >
+                        {CATALOG_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {catalogStatusLabel(status)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="button-row">
+                      <button
+                        className="button secondary"
+                        type="button"
+                        onClick={() => void handleDownloadCurrentPriceList()}
+                        disabled={!cooperationApplication?.priceListObjectId}
+                      >
+                        Скачать текущий прайс-лист
+                      </button>
+                    </div>
+                    {priceListFiles.length > 0 ? (
+                      <div className="domain-list">
+                        {priceListFiles.map((item) => (
+                          <div key={item.objectId} className="inline-panel">
+                            <strong>{item.fileName}</strong>
+                            <p className="muted">
+                              <code>{item.objectId}</code>
+                            </p>
+                            <p className="muted">
+                              {Math.max(1, Math.round(item.sizeBytes / 1024))} KB · {formatTimestamp(item.createdAt)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted">Прайс-листы пока не загружались.</p>
+                    )}
+                  </div>
                 </div>
               ) : null}
 
@@ -1321,6 +2488,19 @@ export default function OrganizationsPage() {
                       </p>
                     ) : null}
                   </div>
+                  {kycProfile ? (
+                    <div className="cards">
+                      {(["draft", "submitted", "in_review", "verified", "rejected"] as KYCQueueBucket[]).map((bucket) => {
+                        const items = (kycProfile.documents || []).filter((item) => getKYCQueueBucket(item.status, kycProfile.status) === bucket);
+                        return (
+                          <div key={bucket} className="mini-card">
+                            <h3>{kycQueueBucketLabel(bucket)}</h3>
+                            <p className="muted">Документов: {items.length}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <form className="form-grid" onSubmit={handleSaveKYCProfile}>
                     <div className="form-row two">
                       <div className="form-row">
@@ -1399,18 +2579,18 @@ export default function OrganizationsPage() {
 
                   {kycProfile?.documents?.length ? (
                     <div className="domain-list">
-                      {["pending_upload", "uploaded", "verified", "rejected"]
-                        .map((status) => ({
-                          status,
+                      {(["draft", "submitted", "in_review", "verified", "rejected"] as KYCQueueBucket[])
+                        .map((bucket) => ({
+                          bucket,
                           items: kycProfile.documents
-                            .filter((item) => (item.status || "").toLowerCase() === status)
+                            .filter((item) => getKYCQueueBucket(item.status, kycProfile.status) === bucket)
                             .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
                         }))
                         .filter((group) => group.items.length > 0)
                         .map((group) => (
-                          <div key={group.status} className="mini-card">
+                          <div key={group.bucket} className="mini-card">
                             <p className="muted">
-                              <span className={kycDocumentStatusBadgeClass(group.status)}>{kycDocumentStatusLabel(group.status)}</span>{" "}
+                              <span className="status-badge">{kycQueueBucketLabel(group.bucket)}</span>{" "}
                               · {group.items.length} шт
                             </p>
                             <div className="domain-list">
@@ -1431,6 +2611,119 @@ export default function OrganizationsPage() {
                   ) : (
                     <div className="empty-state">Пока нет загруженных KYC документов.</div>
                   )}
+                </div>
+              ) : null}
+
+              {organizationSection === "roles" ? (
+                <div className="mini-card">
+                  <h3>Роли организации</h3>
+                  <div className={`status-card ${rolesState.kind === "error" ? "error" : rolesState.kind === "success" ? "success" : "info"}`}>
+                    <strong>{rolesState.title}</strong>
+                    <p className="status-copy">{rolesState.description}</p>
+                  </div>
+                  <div className="domain-list">
+                    {roles.map((r) => (
+                      <div key={r.id || r.code} className="inline-panel">
+                        <strong>{r.name}</strong>
+                        <p className="muted">
+                          <code>{r.code}</code>
+                          {r.isSystem ? " · системная" : " · базовая: " + r.baseRole}
+                          {r.deletedAt ? " · удалена" : ""}
+                        </p>
+                        {r.description ? <p className="muted">{r.description}</p> : null}
+                        {!r.isSystem && !r.deletedAt ? (
+                          <div className="button-row">
+                            <button
+                              className="button secondary"
+                              type="button"
+                              onClick={() => {
+                                setEditingRoleId(r.id);
+                                setRoleForm({ code: r.code, name: r.name, description: r.description || "", baseRole: r.baseRole });
+                              }}
+                            >
+                              Редактировать
+                            </button>
+                            <button className="button secondary" type="button" onClick={() => void handleDeleteRole(r.id)}>
+                              Удалить
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                  {!roleForm && !editingRoleId ? (
+                    <button className="button primary" type="button" onClick={() => setRoleForm({ code: "", name: "", description: "", baseRole: "member" })}>
+                      Добавить роль
+                    </button>
+                  ) : null}
+                  {roleForm ? (
+                    <form
+                      className="form-grid"
+                      onSubmit={editingRoleId ? handleUpdateRole : handleCreateRole}
+                      style={{ marginTop: "1rem" }}
+                    >
+                      <div className="form-row two">
+                        <div className="form-row">
+                          <label className="form-label">Код (латиница, lowercase)</label>
+                          <input
+                            className="text-input"
+                            value={roleForm.code}
+                            onChange={(e) => setRoleForm((f) => ({ ...f!, code: e.target.value }))}
+                            placeholder="project_manager"
+                            disabled={!!editingRoleId}
+                          />
+                        </div>
+                        <div className="form-row">
+                          <label className="form-label">Название</label>
+                          <input
+                            className="text-input"
+                            value={roleForm.name}
+                            onChange={(e) => setRoleForm((f) => ({ ...f!, name: e.target.value }))}
+                            placeholder="Менеджер проекта"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="form-row">
+                        <label className="form-label">Описание</label>
+                        <input
+                          className="text-input"
+                          value={roleForm.description}
+                          onChange={(e) => setRoleForm((f) => ({ ...f!, description: e.target.value }))}
+                          placeholder="Опционально"
+                        />
+                      </div>
+                      <div className="form-row">
+                        <label className="form-label">Базовая роль</label>
+                        <select
+                          className="text-input"
+                          value={roleForm.baseRole}
+                          onChange={(e) => setRoleForm((f) => ({ ...f!, baseRole: e.target.value }))}
+                        >
+                          <option value="owner">Owner</option>
+                          <option value="admin">Administrator</option>
+                          <option value="manager">Manager</option>
+                          <option value="member">Member</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                      </div>
+                      <div className="button-row">
+                        <button className="button primary" type="submit">
+                          {editingRoleId ? "Сохранить" : "Создать"}
+                        </button>
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => {
+                            setRoleForm(null);
+                            setEditingRoleId(null);
+                          }}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
                 </div>
               ) : null}
 

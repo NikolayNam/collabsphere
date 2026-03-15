@@ -9,6 +9,7 @@ import (
 	catalogaccess "github.com/NikolayNam/collabsphere/internal/catalog/application/access"
 	catalogerrors "github.com/NikolayNam/collabsphere/internal/catalog/application/errors"
 	"github.com/NikolayNam/collabsphere/internal/catalog/application/ports"
+	memberports "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 	"github.com/google/uuid"
 )
 
@@ -16,16 +17,18 @@ type Handler struct {
 	repo          ports.CatalogRepository
 	organizations ports.OrganizationReader
 	memberships   ports.MembershipReader
+	roleResolver  memberports.RoleResolver
 	clock         ports.Clock
 	storage       ports.ObjectStorage
 	bucket        string
 }
 
-func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, clock ports.Clock, storage ports.ObjectStorage, bucket string) *Handler {
+func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationReader, memberships ports.MembershipReader, roleResolver memberports.RoleResolver, clock ports.Clock, storage ports.ObjectStorage, bucket string) *Handler {
 	return &Handler{
 		repo:          repo,
 		organizations: organizations,
 		memberships:   memberships,
+		roleResolver:  roleResolver,
 		clock:         clock,
 		storage:       storage,
 		bucket:        strings.TrimSpace(bucket),
@@ -33,7 +36,7 @@ func NewHandler(repo ports.CatalogRepository, organizations ports.OrganizationRe
 }
 
 func (h *Handler) Handle(ctx context.Context, cmd Command) (*Result, error) {
-	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
+	if err := catalogaccess.RequireOrganizationAccess(ctx, h.organizations, h.memberships, h.roleResolver, cmd.OrganizationID, cmd.ActorAccountID, true); err != nil {
 		return nil, err
 	}
 	if h.storage == nil || h.bucket == "" {

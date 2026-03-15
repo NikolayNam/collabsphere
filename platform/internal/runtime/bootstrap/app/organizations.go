@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	catalogpg "github.com/NikolayNam/collabsphere/internal/catalog/repository/postgres"
+	membershipsApp "github.com/NikolayNam/collabsphere/internal/memberships/application"
 	memberspg "github.com/NikolayNam/collabsphere/internal/memberships/repository/postgres"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application"
 	orgports "github.com/NikolayNam/collabsphere/internal/organizations/application/ports"
@@ -23,7 +24,10 @@ import (
 func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) {
 	organizationRepo := orgpg.NewOrganizationRepo(db)
 	membershipRepo := memberspg.NewMembershipRepo(db)
+	roleRepo := memberspg.NewOrganizationRoleRepo(db)
+	roleResolver := membershipsApp.NewRoleResolverAdapter(roleRepo)
 	categoryRepo := catalogpg.NewProductCategoryRepo(db)
+	catalogRepo := catalogpg.NewCatalogRepo(db)
 	txManager := dbtx.New(db)
 	uploadRepo := uploadpg.NewRepo(db)
 	clk := clock.NewSystemClock()
@@ -48,7 +52,7 @@ func registerOrganzationsModule(api huma.API, db *gorm.DB, conf *config.Config) 
 		provider = conf.DocumentAnalysis.Provider
 	}
 
-	organizationService := application.New(organizationRepo, membershipRepo, categoryRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, analyzer, provider, uploadRepo)
+	organizationService := application.New(organizationRepo, membershipRepo, roleResolver, categoryRepo, catalogRepo, txManager, clk, objectStorage, conf.Storage.S3.Bucket, analyzer, provider, uploadRepo)
 	organizationHandler := orghttp.NewHandler(organizationService)
 
 	secret, err := conf.Auth.JWTSecretValue()

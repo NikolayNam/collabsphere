@@ -22,4 +22,8 @@ type MembershipRepository interface {
 	GetInvitationByTokenHash(ctx context.Context, tokenHash string) (*memberDomain.OrganizationInvitation, error)
 	ListInvitations(ctx context.Context, orgID orgDomain.OrganizationID) ([]memberDomain.OrganizationInvitation, error)
 	RevokeExpiredPendingInvitations(ctx context.Context, orgID orgDomain.OrganizationID, email accDomain.Email, actorAccountID uuid.UUID, now time.Time) error
+	CreateAccessRequest(ctx context.Context, req *memberDomain.OrganizationAccessRequest) error
+	SaveAccessRequest(ctx context.Context, req *memberDomain.OrganizationAccessRequest) error
+	GetAccessRequestByID(ctx context.Context, orgID orgDomain.OrganizationID, requestID uuid.UUID) (*memberDomain.OrganizationAccessRequest, error)
+	ListAccessRequests(ctx context.Context, orgID orgDomain.OrganizationID) ([]memberDomain.OrganizationAccessRequest, error)
 }

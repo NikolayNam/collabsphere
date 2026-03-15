@@ -14,6 +14,7 @@ type ProductCategory struct {
 	organizationID orgdomain.OrganizationID
 	parentID       *ProductCategoryID
 	templateID     *uuid.UUID
+	status         ProductCategoryStatus
 	code           string
 	name           string
 	sortOrder      int64
@@ -25,6 +26,7 @@ type NewProductCategoryParams struct {
 	ID             ProductCategoryID
 	OrganizationID orgdomain.OrganizationID
 	ParentID       *ProductCategoryID
+	Status         string
 	Code           string
 	Name           string
 	SortOrder      int64
@@ -36,6 +38,7 @@ type RehydrateProductCategoryParams struct {
 	OrganizationID orgdomain.OrganizationID
 	ParentID       *ProductCategoryID
 	TemplateID     *uuid.UUID
+	Status         string
 	Code           string
 	Name           string
 	SortOrder      int64
@@ -59,6 +62,10 @@ func NewProductCategory(p NewProductCategoryParams) (*ProductCategory, error) {
 	if err != nil {
 		return nil, err
 	}
+	status, err := normalizeCategoryStatusOrDefault(p.Status)
+	if err != nil {
+		return nil, err
+	}
 	if p.SortOrder < 0 {
 		return nil, ErrProductCategorySortInvalid
 	}
@@ -68,6 +75,7 @@ func NewProductCategory(p NewProductCategoryParams) (*ProductCategory, error) {
 		id:             p.ID,
 		organizationID: p.OrganizationID,
 		parentID:       cloneProductCategoryIDPtr(p.ParentID),
+		status:         status,
 		code:           code,
 		name:           name,
 		sortOrder:      p.SortOrder,
@@ -95,6 +103,10 @@ func RehydrateProductCategory(p RehydrateProductCategoryParams) (*ProductCategor
 	if err != nil {
 		return nil, err
 	}
+	status, err := normalizeCategoryStatusOrDefault(p.Status)
+	if err != nil {
+		return nil, err
+	}
 	if p.SortOrder < 0 {
 		return nil, ErrProductCategorySortInvalid
 	}
@@ -105,6 +117,7 @@ func RehydrateProductCategory(p RehydrateProductCategoryParams) (*ProductCategor
 		organizationID: p.OrganizationID,
 		parentID:       cloneProductCategoryIDPtr(p.ParentID),
 		templateID:     cloneUUIDPtr(p.TemplateID),
+		status:         status,
 		code:           code,
 		name:           name,
 		sortOrder:      p.SortOrder,
@@ -117,6 +130,7 @@ func (c *ProductCategory) ID() ProductCategoryID                    { return c.i
 func (c *ProductCategory) OrganizationID() orgdomain.OrganizationID { return c.organizationID }
 func (c *ProductCategory) ParentID() *ProductCategoryID             { return cloneProductCategoryIDPtr(c.parentID) }
 func (c *ProductCategory) TemplateID() *uuid.UUID                   { return cloneUUIDPtr(c.templateID) }
+func (c *ProductCategory) Status() ProductCategoryStatus            { return c.status }
 func (c *ProductCategory) Code() string                             { return c.code }
 func (c *ProductCategory) Name() string                             { return c.name }
 func (c *ProductCategory) SortOrder() int64                         { return c.sortOrder }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
+	catalogdomain "github.com/NikolayNam/collabsphere/internal/catalog/domain"
 	accesspolicy "github.com/NikolayNam/collabsphere/internal/iam/access"
 	memberPorts "github.com/NikolayNam/collabsphere/internal/memberships/application/ports"
 	"github.com/NikolayNam/collabsphere/internal/organizations/application/create_organization"
@@ -93,6 +94,7 @@ type UpdateCooperationApplicationCmd struct {
 	ContactLastName       *string
 	ContactJobTitle       *string
 	PriceListObjectID     *uuid.UUID
+	PriceListStatus       *string
 	ClearPriceList        bool
 	ContactEmail          *string
 	ContactPhone          *string
@@ -100,6 +102,11 @@ type UpdateCooperationApplicationCmd struct {
 }
 
 type SubmitCooperationApplicationCmd struct {
+	OrganizationID domain.OrganizationID
+	ActorAccountID uuid.UUID
+}
+
+type PublishAllCatalogCmd struct {
 	OrganizationID domain.OrganizationID
 	ActorAccountID uuid.UUID
 }
@@ -219,6 +226,8 @@ type Service struct {
 	getById                 *get_organization_by_id.Handler
 	repo                    ports.OrganizationRepository
 	memberships             memberPorts.MembershipRepository
+	roleResolver            memberPorts.RoleResolver
+	catalogPublisher        ports.CatalogPublisher
 	tx                      sharedtx.Manager
 	clock                   ports.Clock
 	storage                 ports.ObjectStorage
@@ -228,7 +237,9 @@ type Service struct {
 	legalDocumentAIProvider string
 }
 
-func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, categoryProvisioner ports.ProductCategoryProvisioner, txm sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, bucket string, analyzer ports.LegalDocumentAnalyzer, legalDocumentAIProvider string, uploads uploadports.Repository) *Service {
+const publicDirectoryKYCLevelCode = "public_directory_org_verified"
+
+func New(repo ports.OrganizationRepository, membershipRepo memberPorts.MembershipRepository, roleResolver memberPorts.RoleResolver, categoryProvisioner ports.ProductCategoryProvisioner, catalogPublisher ports.CatalogPublisher, txm sharedtx.Manager, clock ports.Clock, storage ports.ObjectStorage, bucket string, analyzer ports.LegalDocumentAnalyzer, legalDocumentAIProvider string, uploads uploadports.Repository) *Service {
 	creator := create_with_owner.New(txm, repo, membershipRepo, categoryProvisioner)
 
 	return &Service{
@@ -236,6 +247,8 @@ func New(repo ports.OrganizationRepository, membershipRepo memberPorts.Membershi
 		getById:                 get_organization_by_id.NewHandler(repo),
 		repo:                    repo,
 		memberships:             membershipRepo,
+		roleResolver:            roleResolver,
+		catalogPublisher:        catalogPublisher,
 		tx:                      txm,
 		clock:                   clock,
 		storage:                 storage,
@@ -284,6 +297,16 @@ func (s *Service) ListMyOrganizations(ctx context.Context, actorAccountID uuid.U
 		})
 	}
 	return out, nil
+}
+
+func (s *Service) ListPublicKYCDirectoryOrganizations(ctx context.Context, limit int) ([]ports.PublicKYCDirectoryOrganization, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	return s.repo.ListPublicKYCDirectoryOrganizations(ctx, publicDirectoryKYCLevelCode, limit)
 }
 
 func (s *Service) ListOrganizationDomains(ctx context.Context, organizationID domain.OrganizationID) ([]domain.OrganizationDomain, error) {
@@ -442,6 +465,7 @@ func (s *Service) UpdateCooperationApplication(ctx context.Context, cmd UpdateCo
 		ContactLastName:       cmd.ContactLastName,
 		ContactJobTitle:       cmd.ContactJobTitle,
 		PriceListObjectID:     cmd.PriceListObjectID,
+		PriceListStatus:       cmd.PriceListStatus,
 		ClearPriceList:        cmd.ClearPriceList,
 		ContactEmail:          cmd.ContactEmail,
 		ContactPhone:          cmd.ContactPhone,
@@ -475,6 +499,111 @@ func (s *Service) SubmitCooperationApplication(ctx context.Context, cmd SubmitCo
 		return nil, apperrors.InvalidInput(err.Error())
 	}
 	return s.repo.SaveCooperationApplication(ctx, application)
+}
+
+func (s *Service) PublishAllCatalog(ctx context.Context, cmd PublishAllCatalogCmd) error {
+	if err := s.requireOrganizationCatalogAccess(ctx, cmd.OrganizationID, cmd.ActorAccountID); err != nil {
+		return err
+	}
+
+	categories, err := s.catalogPublisher.ListProductCategories(ctx, cmd.OrganizationID)
+	if err != nil {
+		return fault.Internal("List product categories failed", fault.WithCause(err))
+	}
+	products, err := s.catalogPublisher.ListProducts(ctx, cmd.OrganizationID)
+	if err != nil {
+		return fault.Internal("List products failed", fault.WithCause(err))
+	}
+	cooperation, err := s.repo.GetCooperationApplication(ctx, cmd.OrganizationID)
+	if err != nil {
+		return err
+	}
+
+	hasPriceList := cooperation != nil && cooperation.PriceListObjectID() != nil
+	if len(categories) == 0 && len(products) == 0 && !hasPriceList {
+		return apperrors.InvalidInput("Nothing to publish: add categories, products, or a price list first")
+	}
+
+	now := s.clock.Now()
+	published := string(catalogdomain.ProductCategoryStatusPublished)
+	productPublished := string(catalogdomain.ProductStatusPublished)
+	priceListPublished := string(domain.CooperationPriceListStatusPublished)
+
+	for i := range categories {
+		c := &categories[i]
+		st := string(c.Status())
+		if st != "verified" && st != "published" {
+			return apperrors.InvalidInput("Not all categories are verified; cannot auto-publish")
+		}
+		updatedAt := now
+		if c.UpdatedAt() != nil {
+			updatedAt = *c.UpdatedAt()
+		}
+		updated, err := catalogdomain.RehydrateProductCategory(catalogdomain.RehydrateProductCategoryParams{
+			ID:             c.ID(),
+			OrganizationID: c.OrganizationID(),
+			ParentID:       c.ParentID(),
+			TemplateID:     c.TemplateID(),
+			Status:         published,
+			Code:           c.Code(),
+			Name:           c.Name(),
+			SortOrder:      c.SortOrder(),
+			CreatedAt:      c.CreatedAt(),
+			UpdatedAt:      updatedAt,
+		})
+		if err != nil {
+			return apperrors.InvalidInput(err.Error())
+		}
+		if err := s.catalogPublisher.UpdateProductCategory(ctx, updated); err != nil {
+			return fault.Internal("Update product category failed", fault.WithCause(err))
+		}
+	}
+
+	for i := range products {
+		p := &products[i]
+		st := string(p.Status())
+		if st != "verified" && st != "published" {
+			return apperrors.InvalidInput("Not all products are verified; cannot auto-publish")
+		}
+		updated, err := catalogdomain.RehydrateProduct(catalogdomain.RehydrateProductParams{
+			ID:             p.ID(),
+			OrganizationID: p.OrganizationID(),
+			CategoryID:     p.CategoryID(),
+			Status:         productPublished,
+			Name:           p.Name(),
+			Description:    p.Description(),
+			SKU:           p.SKU(),
+			PriceAmount:   p.PriceAmount(),
+			CurrencyCode:  p.CurrencyCode(),
+			IsActive:      p.IsActive(),
+			CreatedAt:     p.CreatedAt(),
+			UpdatedAt:     now,
+		})
+		if err != nil {
+			return apperrors.InvalidInput(err.Error())
+		}
+		if err := s.catalogPublisher.UpdateProduct(ctx, updated); err != nil {
+			return fault.Internal("Update product failed", fault.WithCause(err))
+		}
+	}
+
+	if hasPriceList {
+		plSt := string(cooperation.PriceListStatus())
+		if plSt != "verified" && plSt != "published" {
+			return apperrors.InvalidInput("Price list is not verified; cannot auto-publish")
+		}
+		if err := cooperation.ApplyPatch(domain.CooperationApplicationPatch{
+			PriceListStatus: &priceListPublished,
+			UpdatedAt:       now,
+		}); err != nil {
+			return apperrors.InvalidInput(err.Error())
+		}
+		if _, err := s.repo.SaveCooperationApplication(ctx, cooperation); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) CreateCooperationPriceListUpload(ctx context.Context, cmd CreateCooperationPriceListUploadCmd) (*CreateCooperationPriceListUploadResult, error) {
@@ -521,10 +650,12 @@ func (s *Service) UploadCooperationPriceList(ctx context.Context, cmd UploadCoop
 	if err := s.storage.PutObject(ctx, upload.Bucket, upload.ObjectKey, cmd.Body, cmd.SizeBytes, contentType); err != nil {
 		return nil, fault.Internal("Upload cooperation price list failed", fault.WithCause(err))
 	}
+	priceListStatus := string(domain.CooperationPriceListStatusValidating)
 	return s.UpdateCooperationApplication(ctx, UpdateCooperationApplicationCmd{
 		OrganizationID:    cmd.OrganizationID,
 		ActorAccountID:    cmd.ActorAccountID,
 		PriceListObjectID: &upload.ObjectID,
+		PriceListStatus:   &priceListStatus,
 	})
 }
 func (s *Service) CreateLegalDocumentUpload(ctx context.Context, cmd CreateLegalDocumentUploadCmd) (*CreateLegalDocumentUploadResult, error) {
@@ -746,8 +877,47 @@ func (s *Service) requireOrganizationAccess(ctx context.Context, organizationID 
 	if membership == nil || !membership.IsActive() || membership.IsRemoved() {
 		return fault.Forbidden("Organization access denied")
 	}
-	if requireOwner && !accesspolicy.HasOrganizationPermission(membership.Role(), accesspolicy.PermissionOrganizationManageProfile) {
+	resolved, err := s.roleResolver.ResolveRoleForPermissions(ctx, organizationID, string(membership.Role()))
+	if err != nil || resolved == "" {
+		return fault.Forbidden("Organization access denied")
+	}
+	if requireOwner && !accesspolicy.HasOrganizationPermission(resolved, accesspolicy.PermissionOrganizationManageProfile) {
 		return fault.Forbidden("Only organization owners or admins can manage organization profile")
+	}
+	return nil
+}
+
+func (s *Service) requireOrganizationCatalogAccess(ctx context.Context, organizationID domain.OrganizationID, actorAccountID uuid.UUID) error {
+	if organizationID.IsZero() {
+		return apperrors.InvalidInput("Organization is required")
+	}
+	if actorAccountID == uuid.Nil {
+		return fault.Unauthorized("Authentication required")
+	}
+	org, err := s.repo.GetByID(ctx, organizationID)
+	if err != nil {
+		return err
+	}
+	if org == nil {
+		return apperrors.OrganizationNotFound()
+	}
+	accountID, err := accdomain.AccountIDFromUUID(actorAccountID)
+	if err != nil {
+		return fault.Unauthorized("Authentication required")
+	}
+	membership, err := s.memberships.GetMemberByAccount(ctx, organizationID, accountID)
+	if err != nil {
+		return fault.Internal("Get organization membership failed", fault.WithCause(err))
+	}
+	if membership == nil || !membership.IsActive() || membership.IsRemoved() {
+		return fault.Forbidden("Organization access denied")
+	}
+	resolved, err := s.roleResolver.ResolveRoleForPermissions(ctx, organizationID, string(membership.Role()))
+	if err != nil || resolved == "" {
+		return fault.Forbidden("Organization access denied")
+	}
+	if !accesspolicy.HasOrganizationPermission(resolved, accesspolicy.PermissionOrganizationManageCatalog) {
+		return fault.Forbidden("Only organization owners, admins, or catalog managers can manage catalog")
 	}
 	return nil
 }

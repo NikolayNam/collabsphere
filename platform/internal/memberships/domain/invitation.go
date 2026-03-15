@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"time"
 
 	accdomain "github.com/NikolayNam/collabsphere/internal/accounts/domain"
@@ -74,7 +75,7 @@ type InvitationView struct {
 }
 
 func NewOrganizationInvitation(p NewOrganizationInvitationParams) (*OrganizationInvitation, error) {
-	if p.OrganizationID.IsZero() || p.Email.IsZero() || !p.Role.IsValid() || p.InviterAccountID == uuid.Nil || p.TokenHash == "" {
+	if p.OrganizationID.IsZero() || p.Email.IsZero() || strings.TrimSpace(string(p.Role)) == "" || p.InviterAccountID == uuid.Nil || p.TokenHash == "" {
 		return nil, ErrMembershipInvalid
 	}
 	if p.Now.IsZero() || p.ExpiresAt.IsZero() || !p.ExpiresAt.After(p.Now) {
@@ -95,7 +96,7 @@ func NewOrganizationInvitation(p NewOrganizationInvitationParams) (*Organization
 }
 
 func RehydrateOrganizationInvitation(p RehydrateOrganizationInvitationParams) (*OrganizationInvitation, error) {
-	if p.ID == uuid.Nil || p.OrganizationID.IsZero() || p.Email.IsZero() || !p.Role.IsValid() || p.InviterAccountID == uuid.Nil || p.TokenHash == "" {
+	if p.ID == uuid.Nil || p.OrganizationID.IsZero() || p.Email.IsZero() || strings.TrimSpace(string(p.Role)) == "" || p.InviterAccountID == uuid.Nil || p.TokenHash == "" {
 		return nil, ErrMembershipInvalid
 	}
 	if p.CreatedAt.IsZero() || p.ExpiresAt.IsZero() {

@@ -89,6 +89,12 @@ migrations:
   - iam/organization_access_audit_events.sql
   - kyc/profiles_documents_reviews.sql
   - kyc/levels.sql
+  - iam/organization_access_requests.sql
+  - tenant/tenants.sql
+  - kyc/public_directory_level.sql
+  - sales/board.sql
+  - catalog/catalog_statuses.sql
+  - org/organization_roles.sql
 
 
 

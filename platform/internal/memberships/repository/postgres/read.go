@@ -55,6 +55,7 @@ func (r *MembershipRepo) CountActiveMembersByRole(ctx context.Context, orgID org
 	return count, nil
 }
 
+
 func (r *MembershipRepo) ListMembers(ctx context.Context, orgID orgDomain.OrganizationID) ([]memberDomain.MemberView, error) {
 	type row struct {
 		ID             uuid.UUID

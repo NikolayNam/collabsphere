@@ -17,6 +17,7 @@ type Product struct {
 	id             ProductID
 	organizationID orgdomain.OrganizationID
 	categoryID     *ProductCategoryID
+	status         ProductStatus
 	name           string
 	description    *string
 	sku            *string
@@ -31,6 +32,7 @@ type NewProductParams struct {
 	ID             ProductID
 	OrganizationID orgdomain.OrganizationID
 	CategoryID     *ProductCategoryID
+	Status         string
 	Name           string
 	Description    *string
 	SKU            *string
@@ -44,6 +46,7 @@ type RehydrateProductParams struct {
 	ID             ProductID
 	OrganizationID orgdomain.OrganizationID
 	CategoryID     *ProductCategoryID
+	Status         string
 	Name           string
 	Description    *string
 	SKU            *string
@@ -75,6 +78,10 @@ func NewProduct(p NewProductParams) (*Product, error) {
 	if err != nil {
 		return nil, err
 	}
+	status, err := normalizeProductStatusOrDefault(p.Status)
+	if err != nil {
+		return nil, err
+	}
 	isActive := true
 	if p.IsActive != nil {
 		isActive = *p.IsActive
@@ -85,6 +92,7 @@ func NewProduct(p NewProductParams) (*Product, error) {
 		id:             p.ID,
 		organizationID: p.OrganizationID,
 		categoryID:     cloneProductCategoryIDPtr(p.CategoryID),
+		status:         status,
 		name:           name,
 		description:    description,
 		sku:            sku,
@@ -120,12 +128,17 @@ func RehydrateProduct(p RehydrateProductParams) (*Product, error) {
 	if err != nil {
 		return nil, err
 	}
+	status, err := normalizeProductStatusOrDefault(p.Status)
+	if err != nil {
+		return nil, err
+	}
 
 	updatedAt := p.UpdatedAt
 	return &Product{
 		id:             p.ID,
 		organizationID: p.OrganizationID,
 		categoryID:     cloneProductCategoryIDPtr(p.CategoryID),
+		status:         status,
 		name:           name,
 		description:    description,
 		sku:            sku,
@@ -140,6 +153,7 @@ func RehydrateProduct(p RehydrateProductParams) (*Product, error) {
 func (p *Product) ID() ProductID                            { return p.id }
 func (p *Product) OrganizationID() orgdomain.OrganizationID { return p.organizationID }
 func (p *Product) CategoryID() *ProductCategoryID           { return cloneProductCategoryIDPtr(p.categoryID) }
+func (p *Product) Status() ProductStatus                    { return p.status }
 func (p *Product) Name() string                             { return p.name }
 func (p *Product) Description() *string                     { return cloneStringPtr(p.description) }
 func (p *Product) SKU() *string                             { return cloneStringPtr(p.sku) }

@@ -28,6 +28,7 @@ func (r *CatalogRepo) CreateProductCategory(ctx context.Context, category *catal
 		"organization_id": category.OrganizationID().UUID(),
 		"parent_id":       nullableProductCategoryID(category.ParentID()),
 		"template_id":     category.TemplateID(),
+		"status":          string(category.Status()),
 		"code":            category.Code(),
 		"name":            category.Name(),
 		"sort_order":      category.SortOrder(),
@@ -57,6 +58,7 @@ func (r *CatalogRepo) UpdateProductCategory(ctx context.Context, category *catal
 	}
 	payload := map[string]any{
 		"parent_id":  nullableProductCategoryID(category.ParentID()),
+		"status":     string(category.Status()),
 		"code":       category.Code(),
 		"name":       category.Name(),
 		"sort_order": category.SortOrder(),
@@ -107,17 +109,18 @@ func (r *CatalogRepo) CreateProduct(ctx context.Context, product *catalogdomain.
 	}
 
 	payload := map[string]any{
-		"id":                           product.ID().UUID(),
-		"organization_id":              product.OrganizationID().UUID(),
-		"product_type_id":              nullableProductCategoryID(product.CategoryID()),
-		"name":                         product.Name(),
-		"description":                  product.Description(),
-		"sku":                          product.SKU(),
-		"price_amount":                 product.PriceAmount(),
-		"currency_code":                product.CurrencyCode(),
-		"is_active":                    product.IsActive(),
-		"created_at":                   product.CreatedAt(),
-		"updated_at":                   updatedAt,
+		"id":              product.ID().UUID(),
+		"organization_id": product.OrganizationID().UUID(),
+		"product_type_id": nullableProductCategoryID(product.CategoryID()),
+		"status":          string(product.Status()),
+		"name":            product.Name(),
+		"description":     product.Description(),
+		"sku":             product.SKU(),
+		"price_amount":    product.PriceAmount(),
+		"currency_code":   product.CurrencyCode(),
+		"is_active":       product.IsActive(),
+		"created_at":      product.CreatedAt(),
+		"updated_at":      updatedAt,
 	}
 
 	if err := r.dbFrom(ctx).WithContext(ctx).Table("catalog.products").Create(payload).Error; err != nil {
@@ -141,14 +144,15 @@ func (r *CatalogRepo) UpdateProduct(ctx context.Context, product *catalogdomain.
 		updatedAt = *product.UpdatedAt()
 	}
 	payload := map[string]any{
-		"product_type_id":              nullableProductCategoryID(product.CategoryID()),
-		"name":                         product.Name(),
-		"description":                  product.Description(),
-		"sku":                          product.SKU(),
-		"price_amount":                 product.PriceAmount(),
-		"currency_code":                product.CurrencyCode(),
-		"is_active":                    product.IsActive(),
-		"updated_at":                   updatedAt,
+		"product_type_id": nullableProductCategoryID(product.CategoryID()),
+		"status":          string(product.Status()),
+		"name":            product.Name(),
+		"description":     product.Description(),
+		"sku":             product.SKU(),
+		"price_amount":    product.PriceAmount(),
+		"currency_code":   product.CurrencyCode(),
+		"is_active":       product.IsActive(),
+		"updated_at":      updatedAt,
 	}
 	if err := r.dbFrom(ctx).WithContext(ctx).
 		Table("catalog.products").
@@ -294,4 +298,3 @@ func jsonbExpr(value map[string]any) any {
 	}
 	return gorm.Expr("?::jsonb", string(data))
 }
-

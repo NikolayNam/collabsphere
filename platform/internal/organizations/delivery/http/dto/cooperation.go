@@ -23,6 +23,7 @@ type CooperationApplicationBody struct {
 	ContactLastName       *string    `json:"contactLastName,omitempty"`
 	ContactJobTitle       *string    `json:"contactJobTitle,omitempty"`
 	PriceListObjectID     *uuid.UUID `json:"priceListObjectId,omitempty"`
+	PriceListStatus       string     `json:"priceListStatus"`
 	ContactEmail          *string    `json:"contactEmail,omitempty"`
 	ContactPhone          *string    `json:"contactPhone,omitempty"`
 	PartnerCode           *string    `json:"partnerCode,omitempty"`
@@ -162,6 +163,7 @@ type UpdateCooperationApplicationInput struct {
 		ContactLastName       *string    `json:"contactLastName,omitempty" maxLength:"128"`
 		ContactJobTitle       *string    `json:"contactJobTitle,omitempty" maxLength:"128"`
 		PriceListObjectID     *uuid.UUID `json:"priceListObjectId,omitempty"`
+		PriceListStatus       *string    `json:"priceListStatus,omitempty" maxLength:"24"`
 		ClearPriceList        bool       `json:"clearPriceList,omitempty"`
 		ContactEmail          *string    `json:"contactEmail,omitempty" maxLength:"320"`
 		ContactPhone          *string    `json:"contactPhone,omitempty" maxLength:"32"`
@@ -171,6 +173,14 @@ type UpdateCooperationApplicationInput struct {
 
 type SubmitCooperationApplicationInput struct {
 	ID string `path:"id" format:"uuid" doc:"Organization ID"`
+}
+
+type PublishAllCatalogInput struct {
+	ID string `path:"id" format:"uuid" doc:"Organization ID"`
+}
+
+type PublishAllCatalogResponse struct {
+	Status int `json:"-"`
 }
 
 type UploadCooperationPriceListForm struct {

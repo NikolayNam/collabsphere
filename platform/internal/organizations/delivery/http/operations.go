@@ -40,6 +40,15 @@ var resolveOrganizationByHostOp = huma.Operation{
 	Description: "Resolves a verified active hostname to its organization profile. Useful for tenant-aware routing based on subdomain or custom domain.",
 }
 
+var listPublicKYCDirectoryOp = huma.Operation{
+	OperationID: "list-public-kyc-directory-organizations",
+	Method:      "GET",
+	Path:        "/organizations/public/kyc-directory",
+	Tags:        []string{"Organizations"},
+	Summary:     "List public verified organizations",
+	Description: "Returns organizations eligible for public listing by a dedicated KYC level and additional publication requirements (verified founding document, legal name, and verified primary domain).",
+}
+
 var updateOrganizationOp = huma.Operation{
 	OperationID: "update-organization",
 	Method:      "PATCH",
@@ -84,6 +93,7 @@ var getCooperationApplicationOp = huma.Operation{OperationID: "get-organization-
 var updateCooperationApplicationOp = huma.Operation{OperationID: "update-organization-cooperation-application", Method: "PATCH", Path: "/organizations/{id}/cooperation-application", Tags: []string{"Organizations / Onboarding"}, Summary: "Upsert a cooperation application", Description: "Creates or updates the cooperation application payload for the organization, including commercial and contact information required for review.", Security: []map[string][]string{{"bearerAuth": {}}}}
 var submitCooperationApplicationOp = huma.Operation{OperationID: "submit-organization-cooperation-application", Method: "POST", Path: "/organizations/{id}/cooperation-application/submit", Tags: []string{"Organizations / Onboarding"}, Summary: "Submit a cooperation application", Description: "Moves the organization cooperation application from draft to review state after required data and supporting files are present.", Security: []map[string][]string{{"bearerAuth": {}}}}
 var uploadCooperationPriceListOp = huma.Operation{OperationID: "upload-organization-price-list", Method: "POST", Path: "/organizations/{id}/cooperation-application/price-list", Tags: []string{"Organizations / Files"}, Summary: "Upload a cooperation price list", Description: "Single-step cooperation price list upload using multipart/form-data. Send the file in the `file` field. The backend uploads the object to S3-compatible storage and immediately attaches it to the organization cooperation application.", Security: []map[string][]string{{"bearerAuth": {}}}}
+var publishAllCatalogOp = huma.Operation{OperationID: "publish-organization-catalog", Method: "POST", Path: "/organizations/{id}/catalog/publish-all", Tags: []string{"Organizations / Catalog"}, Summary: "Publish all catalog", Description: "Publishes all verified categories, products, and price list in one action. Requires all existing items to be in verified or published state. Only organization owners, admins, or catalog managers can perform this action.", Security: []map[string][]string{{"bearerAuth": {}}}}
 var uploadOrganizationLegalDocumentOp = huma.Operation{OperationID: "upload-organization-legal-document", Method: "POST", Path: "/organizations/{id}/legal-documents/file", Tags: []string{"Organizations / Files"}, Summary: "Upload a legal document", Description: "Single-step organization legal document upload using multipart/form-data. Send `documentType`, optional `title`, and the document file in the `file` field. The backend uploads the object to S3-compatible storage and immediately registers the legal document in the system.", Security: []map[string][]string{{"bearerAuth": {}}}}
 var listOrganizationLegalDocumentsOp = huma.Operation{OperationID: "list-organization-legal-documents", Method: "GET", Path: "/organizations/{id}/legal-documents", Tags: []string{"Organizations / Onboarding"}, Summary: "List legal documents", Description: "Returns the legal documents registered for the organization together with their current review or analysis status.", Security: []map[string][]string{{"bearerAuth": {}}}}
 var getOrganizationKYCRequirementsOp = huma.Operation{OperationID: "get-organization-kyc-requirements", Method: "GET", Path: "/organizations/{id}/kyc/requirements", Tags: []string{"Organizations / Onboarding"}, Summary: "Get organization KYC requirements", Description: "Returns the current internal KYC requirements snapshot for the organization, including items currently due, pending verification, and blocking errors.", Security: []map[string][]string{{"bearerAuth": {}}}}

@@ -10,6 +10,7 @@ type Command struct {
 	OrganizationID orgdomain.OrganizationID
 	ActorAccountID accdomain.AccountID
 	CategoryID     *catalogdomain.ProductCategoryID
+	Status         *string
 	Name           string
 	Description    *string
 	SKU            *string
